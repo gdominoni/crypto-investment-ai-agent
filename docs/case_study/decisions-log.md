@@ -29,6 +29,18 @@ Running log of non-obvious technical decisions, in chronological order. Each ent
 
 ---
 
+### 2026-08-17 — Freqtrade and Hummingbot run via Docker, not pip
+
+**Context:** Both frameworks depend on TA-Lib, a C library that must be compiled for the exact OS/chip/Python combination in use. In Phase 2, `pip install hummingbot` failed outright on this machine — a pinned Cython build dependency doesn't support Python 3.13.
+
+**Decision:** Run both frameworks via their official Docker images instead of installing them into the project's Python environment. A Docker image bundles the entire working environment (OS, Python version, compiled libraries) pre-built and pre-tested by the framework's maintainers, so using it sidesteps the version-matching problem entirely rather than trying to solve it by hand.
+
+**Why this matters beyond just "it installs":** the same container behaves identically in local development and on the Linux production server, removing an entire class of "works on my machine" bugs before they exist. It also isolates each module's dependencies from the others and from the lightweight Telegram daemon — valuable on a $0–5/month server where a remote dependency conflict is expensive to debug.
+
+**Impact:** `modules/module_b_trend_following/docker-compose.yml` (Module A will follow the same pattern in Phase 5). Verified in Phase 4: TA-Lib indicators (EMA, ADX, ATR) worked immediately inside the container with zero setup — the same category of dependency that failed under pip.
+
+---
+
 ### 2026-08-17 — Haiku JSON output needs defensive parsing
 
 **Context:** The first live test of `haiku_sentiment.py` failed `json.loads` despite a system prompt explicitly saying "no markdown fences." Haiku wrapped the array in ` ```json ... ``` ` anyway.

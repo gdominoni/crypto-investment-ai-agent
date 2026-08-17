@@ -2,7 +2,7 @@
 
 A 24/7 autonomous, cost-optimized AI agent system for crypto trading, controlled via Telegram, built as a public **"Vibe Coding" case study**: every phase of this repo was designed and implemented through a conversation with an AI coding assistant (Claude), with a human directing priorities and handling anything requiring real-world action (accounts, keys, servers). This README is written for **non-technical readers** — if you've never coded before, you should be able to follow along and understand *why* every decision was made.
 
-Status: 🚧 early build — currently in **Phase 0 (repo & project scaffold)**. Full roadmap below.
+Status: 🚧 early build — currently in **Phase 4 (Module B: trend-following)**. Full roadmap below.
 
 ---
 
@@ -45,6 +45,12 @@ The system is deliberately split across two environments to keep 24/7 operating 
 - Macro data: `yfinance` (SPX, Gold) and the FRED API (CPI, rates, unemployment) — both free.
 - News: CryptoCompare News API (free, structured JSON) + a curated RSS feed set (CoinDesk, Cointelegraph, The Block, Decrypt) as redundancy. *(Originally planned around CryptoPanic — replaced after CryptoPanic moved its API behind a paid plan; see [Technical Decisions Log](docs/case_study/decisions-log.md).)*
 
+**Trading frameworks run in Docker, not `pip install` — here's why it matters:**
+
+Freqtrade (Module B) and Hummingbot (Module A) both depend on **TA-Lib**, a technical-analysis library written in C that has to be *compiled* for the exact combination of operating system, chip, and Python version on the machine running it. Getting all of that to line up by hand is notoriously fragile — and this project hit that wall for real, not hypothetically: in an earlier phase, `pip install hummingbot` failed outright on this machine because one of its dependencies simply doesn't support the Python version already installed here.
+
+Docker sidesteps the whole problem. A Docker "image" is a complete, pre-built, pre-tested environment — operating system, exact Python version, every compiled library — assembled once by the framework's own maintainers and shared as a single ready-to-run unit. Using it means running that finished environment directly, instead of trying to reconstruct it by hand and hoping the versions cooperate. In practice this bought three things: the indicators Module B's strategy needs worked immediately with zero setup (the exact kind of install that failed under pip); the same container behaves identically on this Mac during development and on the Linux cloud server in production, so there's no "worked on my machine" surprise later; and each module runs in its own isolated container, so their dependencies can never collide with each other on a $0–5/month server where debugging that remotely would be a real headache. Full writeup in [Module B's README](modules/module_b_trend_following/README.md#why-docker-not-pip-for-this-module).
+
 ---
 
 ## 3. Repository Structure
@@ -80,8 +86,8 @@ crypto-investment-ai-agent/
 | 1 | Credentials & accounts (GitHub, Telegram, Anthropic, Binance testnet, FRED) | ✅ done |
 | 2 | Local data ingestion: market data, macro data, news sentiment | ✅ done |
 | 3 | Safety kernel: deterministic circuit breaker + hardcoded risk limits | ✅ done |
-| 4 | Module B (Freqtrade): strategies, IS/OOS backtesting, hyperopt, ranking | ⏳ next |
-| 5 | Module A (Hummingbot): funding-rate scanner, delta-neutral paper trading | ⏳ |
+| 4 | Module B (Freqtrade): strategies, IS/OOS backtesting, hyperopt, ranking | 🚧 in progress (pipeline built, no candidate passed yet) |
+| 5 | Module A (Hummingbot): funding-rate scanner, delta-neutral paper trading | ⏳ next |
 | 6 | Module C: ML volatility/regime model, gated by the safety kernel | ⏳ |
 | 7 | Dynamic capital allocator across A/B/C | ⏳ |
 | 8 | Telegram Orchestrator (Haiku-powered), explicit live-mode confirmation flow | ⏳ |
@@ -127,4 +133,5 @@ The full "vibe coding" process — exact prompts used, technical decisions and t
 - [Phase 2 (part 1): Macro & Cross-Asset Data Ingestion](docs/case_study/phase-2-macro-data.md)
 - [Phase 2 (part 2): Exchange Market Data & News Sentiment](docs/case_study/phase-2-market-and-news-data.md)
 - [Phase 3: Safety Kernel](docs/case_study/phase-3-safety-kernel.md)
+- [Phase 4: Module B Trend-Following](docs/case_study/phase-4-module-b-trend-following.md)
 - [Technical Decisions Log](docs/case_study/decisions-log.md)

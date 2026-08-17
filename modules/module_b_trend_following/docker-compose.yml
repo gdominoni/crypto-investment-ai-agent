@@ -1,0 +1,18 @@
+services:
+  freqtrade:
+    image: freqtradeorg/freqtrade:stable
+    container_name: module_b_freqtrade
+    restart: unless-stopped
+    volumes:
+      - ./user_data:/freqtrade/user_data
+    environment:
+      # Freqtrade's own env-override convention (FREQTRADE__<PATH>) --
+      # not strictly needed for backtesting (public data, no auth), but
+      # wired now for when this module reaches live/dry-run execution.
+      - FREQTRADE__EXCHANGE__KEY=${BINANCE_API_KEY}
+      - FREQTRADE__EXCHANGE__SECRET=${BINANCE_API_SECRET}
+    # No command by default -- invoked per-task via `docker compose run --rm freqtrade <subcommand>`
+    # (download-data, backtesting, etc.). See run_backtest.py.
+    #
+    # Always invoke with the repo-root .env so the ${...} vars above resolve:
+    #   docker compose --env-file ../../.env run --rm freqtrade <subcommand>
