@@ -7,18 +7,43 @@ low-volume fakeout breakout).
 Exit: RSI crosses into overbought territory, or price closes back below
 the Bollinger mid-band (the breakout failed/reverted).
 
-One of 8 combos in Module B's Phase 9 1h hyperopt harness -- see
-confluence_indicators.py for shared indicator logic and
-run_hyperopt_harness.py for how all 8 (x2 exit modes = 16 runs) are
-orchestrated. NOT YET RUN.
+One of 8 combos in Module B's Phase 9 1h hyperopt harness. Indicator
+logic is inlined here, not imported from a shared module -- Freqtrade's
+parallel hyperopt workers (joblib/loky subprocesses) don't inherit the
+main process's runtime sys.path modification, so a sibling import that
+works fine for a single-process backtest breaks under `-j` > 1 with a
+ModuleNotFoundError (found by actually running it, not anticipated).
+See decisions-log.md. run_hyperopt_harness.py orchestrates all 8 (x2 exit
+modes = 16 runs). NOT YET RUN.
 """
 
+import pandas_ta as pta
 from pandas import DataFrame
 
 from freqtrade.strategy import DecimalParameter, IntParameter, IStrategy
 
-from confluence_indicators import classic_rsi, price_bollinger_bands, volume_surge
 from dynamic_exit_mixin import NULL_ROI, NULL_STOPLOSS
+
+_PRICE_BB_PERIOD = 20
+_VOLUME_LOOKBACK = 20
+
+
+def classic_rsi(dataframe, rsi_period):
+    dataframe["rsi"] = pta.rsi(dataframe["close"], length=rsi_period)
+    return dataframe
+
+
+def price_bollinger_bands(dataframe, bb_std):
+    bb = pta.bbands(dataframe["close"], length=_PRICE_BB_PERIOD, std=bb_std)
+    dataframe["price_bb_mid"] = bb.iloc[:, 1]
+    dataframe["price_bb_upper"] = bb.iloc[:, 2]
+    return dataframe
+
+
+def volume_surge(dataframe, volume_surge_mult):
+    avg_volume = dataframe["volume"].rolling(_VOLUME_LOOKBACK).mean()
+    dataframe["volume_surge"] = dataframe["volume"] > (avg_volume * volume_surge_mult)
+    return dataframe
 
 
 class Combo1ClassicRsiPriceBBVolume(IStrategy):
@@ -33,8 +58,8 @@ class Combo1ClassicRsiPriceBBVolume(IStrategy):
     rsi_period = IntParameter(10, 25, default=15, space="buy", step=5)
     rsi_oversold = IntParameter(20, 40, default=30, space="buy", step=5)
     rsi_overbought = IntParameter(60, 80, default=70, space="sell", step=5)
-    bb_std = DecimalParameter(1.0, 3.0, default=2.0, space="buy", step=0.5)
-    volume_surge_mult = DecimalParameter(1.0, 2.5, default=1.5, space="buy", step=0.5)
+    bb_std = DecimalParameter(1.0, 3.0, default=2.0, decimals=None, space="buy", step=0.5)
+    volume_surge_mult = DecimalParameter(1.0, 2.5, default=1.5, decimals=None, space="buy", step=0.5)
 
     def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         dataframe = classic_rsi(dataframe, self.rsi_period.value)

@@ -58,6 +58,18 @@ logs/
 modules/module_b_trend_following/user_data/strategies/mean_reversion_bb_rsi.json
 modules/module_b_trend_following/user_data/strategies/volatility_breakout_kc_squeeze.json
 modules/module_b_trend_following/user_data/strategies/volume_driven_vwap_cmf.json
+# Same reasoning for the 8-combo hyperopt harness: run_hyperopt_harness.py
+# sets each combo's exit mode via this same file, then hyperopt overwrites
+# it with discovered params -- transient per-run state, not the harness's
+# real output (the printed IS-vs-OOS matrix is).
+modules/module_b_trend_following/user_data/strategies/combo1_classicrsi_pricebb_volume.json
+modules/module_b_trend_following/user_data/strategies/combo2_classicrsi_pricebb_cmf.json
+modules/module_b_trend_following/user_data/strategies/combo3_classicrsi_keltner_volume.json
+modules/module_b_trend_following/user_data/strategies/combo4_classicrsi_keltner_cmf.json
+modules/module_b_trend_following/user_data/strategies/combo5_rsibb_pricebb_volume.json
+modules/module_b_trend_following/user_data/strategies/combo6_rsibb_pricebb_cmf.json
+modules/module_b_trend_following/user_data/strategies/combo7_rsibb_keltner_volume.json
+modules/module_b_trend_following/user_data/strategies/combo8_rsibb_keltner_cmf.json
 
 # Hummingbot (Module A): conf/strategies/*.yml is hand-authored and tracked;
 # everything else under conf/ is generated locally (encrypted credentials,

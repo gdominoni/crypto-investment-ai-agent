@@ -6,12 +6,35 @@ volume surge. NOT YET RUN -- see combo1_classicrsi_pricebb_volume.py for
 the full harness description.
 """
 
+import pandas_ta as pta
 from pandas import DataFrame
 
 from freqtrade.strategy import DecimalParameter, IntParameter, IStrategy
 
-from confluence_indicators import chaikin_money_flow, classic_rsi, price_bollinger_bands
 from dynamic_exit_mixin import NULL_ROI, NULL_STOPLOSS
+
+_CMF_PERIOD = 20
+_PRICE_BB_PERIOD = 20
+
+
+def chaikin_money_flow(dataframe, cmf_threshold):
+    dataframe["cmf"] = pta.cmf(
+        dataframe["high"], dataframe["low"], dataframe["close"], dataframe["volume"], length=_CMF_PERIOD
+    )
+    dataframe["cmf_positive"] = dataframe["cmf"] > cmf_threshold
+    return dataframe
+
+
+def classic_rsi(dataframe, rsi_period):
+    dataframe["rsi"] = pta.rsi(dataframe["close"], length=rsi_period)
+    return dataframe
+
+
+def price_bollinger_bands(dataframe, bb_std):
+    bb = pta.bbands(dataframe["close"], length=_PRICE_BB_PERIOD, std=bb_std)
+    dataframe["price_bb_mid"] = bb.iloc[:, 1]
+    dataframe["price_bb_upper"] = bb.iloc[:, 2]
+    return dataframe
 
 
 class Combo2ClassicRsiPriceBBCmf(IStrategy):
@@ -26,8 +49,8 @@ class Combo2ClassicRsiPriceBBCmf(IStrategy):
     rsi_period = IntParameter(10, 25, default=15, space="buy", step=5)
     rsi_oversold = IntParameter(20, 40, default=30, space="buy", step=5)
     rsi_overbought = IntParameter(60, 80, default=70, space="sell", step=5)
-    bb_std = DecimalParameter(1.0, 3.0, default=2.0, space="buy", step=0.5)
-    cmf_threshold = DecimalParameter(-0.05, 0.15, default=0.05, space="buy", step=0.05)
+    bb_std = DecimalParameter(1.0, 3.0, default=2.0, decimals=None, space="buy", step=0.5)
+    cmf_threshold = DecimalParameter(-0.05, 0.15, default=0.05, decimals=None, space="buy", step=0.05)
 
     def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         dataframe = classic_rsi(dataframe, self.rsi_period.value)

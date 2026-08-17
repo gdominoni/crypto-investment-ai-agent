@@ -1,14 +1,23 @@
-"""Shared, pure indicator-computation helpers for the 8 multi-factor
-confluence combo strategies (Phase 9, 1h hyperopt harness). Each combo
-strategy calls exactly 3 of these (one per family) with its own
-hyperopted parameter values -- kept here once, not duplicated 8 times.
+"""NO LONGER IMPORTED by the combo1..8 strategy files -- kept as the
+canonical reference for this indicator logic, not deleted, per this
+project's practice of marking superseded approaches rather than erasing
+them. See decisions-log.md: Freqtrade's parallel hyperopt workers
+(joblib/loky subprocesses) don't inherit the main process's runtime
+sys.path modification, so this sibling-import pattern -- which works
+fine for a single-process backtest, and is used successfully elsewhere
+in this project (e.g. Module C's freqai_utils.py) -- breaks under
+`-j` > 1 with a ModuleNotFoundError. Found by actually running a
+5-epoch hyperopt sanity check, not anticipated in advance. Each combo
+file now inlines its own copy of the 3 functions it needs instead.
 
-Family 2 and Family 3 are now independent alternatives (Price BB *or*
-Keltner; Volume Surge *or* CMF), not combined as in the earlier squeeze/
-dual-volume design -- see decisions-log.md. Periods not listed as
-hyperopt dimensions in the spec (rsi_bb_period, bb_period, kc_period,
-volume lookback, cmf_period) are fixed constants here, matching the
-spec's explicit parameter list.
+Original docstring, still accurate as a description of the logic itself:
+shared, pure indicator-computation helpers for the 8 multi-factor
+confluence combo strategies (Phase 9, 1h hyperopt harness). Family 2 and
+Family 3 are independent alternatives (Price BB *or* Keltner; Volume
+Surge *or* CMF), not combined as in the earlier squeeze/dual-volume
+design. Periods not listed as hyperopt dimensions in the spec
+(rsi_bb_period, bb_period, kc_period, volume lookback, cmf_period) are
+fixed constants here, matching the spec's explicit parameter list.
 """
 
 import pandas_ta as pta

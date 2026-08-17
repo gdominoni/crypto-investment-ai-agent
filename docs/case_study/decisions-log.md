@@ -4,6 +4,22 @@ Running log of non-obvious technical decisions, in chronological order. Each ent
 
 ---
 
+### 2026-08-17 — Two real bugs on the harness's first actual launch
+
+**Context:** Launching the approved 8-combo hyperopt harness for real (not a review) hit two crashes before completing even Combo 1.
+
+**Bug 1 — `DecimalParameter(..., step=0.5)` crashed with "You can only set one of decimals or step".** Freqtrade's `DecimalParameter.__init__` defaults `decimals=3` internally, unconditionally -- passing `step=` without *also* explicitly overriding `decimals=None` leaves both set, and `get_space()` forwards both into `SKDecimal`, which rejects that combination. Confirmed by reading the actual constructor source rather than guessing at the fix. Every `DecimalParameter(..., step=...)` across all 8 combo files needed `decimals=None` added explicitly; `IntParameter` doesn't have a `decimals` concept at all, so a first, too-broad `sed` fix that added `decimals=None` there too had to be reverted immediately (caught by reading the source for `IntParameter` as well, not assuming it worked the same way).
+
+**Bug 2 — `confluence_indicators` (the shared sibling-import module) wasn't importable from hyperopt's parallel worker processes**, even after Bug 1 was fixed: `ModuleNotFoundError` inside a joblib/loky worker, at `-j` as low as 2. Root cause: Freqtrade's strategy loader adds `user_data/strategies/` to `sys.path` at runtime in the *main* process; hyperopt's parallel workers are separate subprocesses that don't inherit that runtime modification, only the environment and initial sys.path each subprocess starts with. This sibling-import pattern works fine for a single-process backtest (and is used successfully elsewhere in this project, e.g. Module C's `freqai_utils.py`, which is never run under Freqtrade's multiprocessing hyperopt) but silently cannot work under parallel hyperopt specifically.
+
+**Decision:** for Bug 2, inlined each combo's 3 needed indicator functions directly into its own strategy file rather than searching for a way to make the shared import work under multiprocessing (e.g. via `PYTHONPATH`) -- correctness and simplicity over DRY-ness here, since the alternative required relying on Freqtrade/joblib internals not designed for this kind of external control. `confluence_indicators.py` is kept as the canonical reference copy, marked as no longer imported, not deleted.
+
+**Why both are logged in detail:** both were caught by actually running the harness rather than trusting that a working design on paper would work in practice, and both are genuinely non-obvious Freqtrade/Python behaviors (a parameter class with a conflicting internal default; multiprocessing workers not inheriting runtime sys.path changes) worth remembering for any future hyperopt work in this project, not just this harness.
+
+**Impact:** all 8 `combo*.py` files (`decimals=None` on every `DecimalParameter`, indicator functions inlined instead of imported); `confluence_indicators.py`'s docstring.
+
+---
+
 ### 2026-08-17 — Three iterations on Module B's Phase 9 grid design, none run until the third
 
 **Context:** Module B's post-Phase-1 redesign went through three distinct architectures in one review cycle, none executed until the last was approved: (1) a hand-curated multi-factor confluence grid (2 options/family, 96 backtests), (2) an exhaustive 5,832-combination Cartesian product restricted to 1h after (1) was rejected as still using "hardcoded preset levels," and (3) an 8-combo Freqtrade-native hyperopt harness (16 runs) after (2)'s execution cost was flagged as impractical.

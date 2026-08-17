@@ -8,12 +8,37 @@ NOT YET RUN -- see combo1_classicrsi_pricebb_volume.py for the full
 harness description.
 """
 
+import pandas_ta as pta
 from pandas import DataFrame
 
 from freqtrade.strategy import DecimalParameter, IntParameter, IStrategy
 
-from confluence_indicators import price_bollinger_bands, rsi_bollinger_bands, volume_surge
 from dynamic_exit_mixin import NULL_ROI, NULL_STOPLOSS
+
+_PRICE_BB_PERIOD = 20
+_RSI_BB_PERIOD = 20
+_VOLUME_LOOKBACK = 20
+
+
+def price_bollinger_bands(dataframe, bb_std):
+    bb = pta.bbands(dataframe["close"], length=_PRICE_BB_PERIOD, std=bb_std)
+    dataframe["price_bb_mid"] = bb.iloc[:, 1]
+    dataframe["price_bb_upper"] = bb.iloc[:, 2]
+    return dataframe
+
+
+def rsi_bollinger_bands(dataframe, rsi_period, rsi_bb_std):
+    dataframe["rsi"] = pta.rsi(dataframe["close"], length=rsi_period)
+    bb = pta.bbands(dataframe["rsi"], length=_RSI_BB_PERIOD, std=rsi_bb_std)
+    dataframe["rsi_bb_lower"] = bb.iloc[:, 0]
+    dataframe["rsi_bb_upper"] = bb.iloc[:, 2]
+    return dataframe
+
+
+def volume_surge(dataframe, volume_surge_mult):
+    avg_volume = dataframe["volume"].rolling(_VOLUME_LOOKBACK).mean()
+    dataframe["volume_surge"] = dataframe["volume"] > (avg_volume * volume_surge_mult)
+    return dataframe
 
 
 class Combo5RsiBBPriceBBVolume(IStrategy):
@@ -26,9 +51,9 @@ class Combo5RsiBBPriceBBVolume(IStrategy):
     startup_candle_count = 60
 
     rsi_period = IntParameter(10, 25, default=15, space="buy", step=5)
-    rsi_bb_std = DecimalParameter(1.0, 3.0, default=2.0, space="buy", step=0.5)
-    bb_std = DecimalParameter(1.0, 3.0, default=2.0, space="buy", step=0.5)
-    volume_surge_mult = DecimalParameter(1.0, 2.5, default=1.5, space="buy", step=0.5)
+    rsi_bb_std = DecimalParameter(1.0, 3.0, default=2.0, decimals=None, space="buy", step=0.5)
+    bb_std = DecimalParameter(1.0, 3.0, default=2.0, decimals=None, space="buy", step=0.5)
+    volume_surge_mult = DecimalParameter(1.0, 2.5, default=1.5, decimals=None, space="buy", step=0.5)
 
     def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         dataframe = rsi_bollinger_bands(dataframe, self.rsi_period.value, self.rsi_bb_std.value)
