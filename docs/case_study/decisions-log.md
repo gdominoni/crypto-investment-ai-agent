@@ -4,6 +4,22 @@ Running log of non-obvious technical decisions, in chronological order. Each ent
 
 ---
 
+### 2026-08-17 — Combos 5-8 have no "sell"-space parameter; unconditional `--spaces buy sell` broke them
+
+**Context:** With the memory fix in place, the harness ran genuinely further this time -- Combos 1-4 (8 of 16 runs) completed successfully, confirming `-j 4` resolved the pressure issue. It then crashed on Combo 5 with "The 'sell' space is included into the hyperoptimization but no parameter for this space was found in your Strategy."
+
+**Root cause:** Combos 1-4 use the classic-RSI Family 1 variant, which has a real "sell"-space parameter (`rsi_overbought`, the fixed-threshold exit signal). Combos 5-8 use the RSI-BB variant, whose exit is fully data-driven (RSI crossing back above its own adaptive band) -- there's no separate scalar for that in the sell space at all. The harness requested `--spaces buy sell` unconditionally for every combo, which is correct for 1-4 and breaks 5-8.
+
+**Decision:** gave each entry in `COMBOS` its own `spaces` list (`["buy", "sell"]` for 1-4, `["buy"]` for 5-8) instead of a single hardcoded `--spaces buy sell` shared across all runs.
+
+**Also fixed in the same pass, prompted by losing Combos 1-4's in-memory results when the script crashed on Combo 5:** the harness now writes each run's result to `hyperopt_harness_results.csv` incrementally, immediately after each backtest loads, instead of holding everything in memory and only printing a final matrix at the end of `main()`. A future interruption -- and there have already been three in a row on this harness -- now loses at most the one run in progress, not everything completed before it.
+
+**Why this is logged as a distinct entry from the two "first launch" bugs above:** it's a different category of mistake -- not a Freqtrade API quirk, but this project's own strategy design (Combos 5-8 genuinely don't have a sell-space parameter, by design) not being reflected in the harness that drives them. The fix belongs in the orchestration script's data (`COMBOS`), not in Freqtrade or the strategy files.
+
+**Impact:** `modules/module_b_trend_following/run_hyperopt_harness.py` (per-combo `spaces`, incremental CSV output).
+
+---
+
 ### 2026-08-17 — `-j -1` caused genuine memory pressure, confirmed and fixed, not left hypothetical
 
 **Context:** After fixing the two launch bugs, the harness was relaunched at the originally specified `-j -1` (all 8 cores). This was already flagged as a risk when the harness was first reviewed ("each hyperopt worker holding its own copy of the loaded dataset in memory... may need falling back to fewer workers if memory pressure shows up in practice").
