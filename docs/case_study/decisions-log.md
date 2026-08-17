@@ -4,6 +4,20 @@ Running log of non-obvious technical decisions, in chronological order. Each ent
 
 ---
 
+### 2026-08-17 — `-j -1` caused genuine memory pressure, confirmed and fixed, not left hypothetical
+
+**Context:** After fixing the two launch bugs, the harness was relaunched at the originally specified `-j -1` (all 8 cores). This was already flagged as a risk when the harness was first reviewed ("each hyperopt worker holding its own copy of the loaded dataset in memory... may need falling back to fewer workers if memory pressure shows up in practice").
+
+**What happened:** checked swap usage directly rather than assuming the concern was moot -- `vm.swapusage` showed 3.77GB of 4GB used (92%), a real, current sign of memory pressure, not a theoretical one. Stopped the run before it could progress into a state where the OS might start killing processes unpredictably mid-sweep.
+
+**Decision:** dropped to `-j 4`. Not chosen because it's a "safe default" in the abstract -- chosen specifically because the earlier `TrendEmaAdx` hyperopt run in this project already used `-j 4` successfully (Phase 9, Module B hyperopt) on this same machine, so there's a concrete precedent it works rather than a second guess.
+
+**Why this is logged as its own entry, not folded into the bug-fix entry above:** it's a different kind of finding -- not a code bug, but a resource-planning risk that was named in advance and then verified true with real measurements before acting on it, which is the discipline worth preserving as a pattern (flag a risk, then actually check for it instead of either ignoring it or overreacting to it pre-emptively).
+
+**Impact:** `modules/module_b_trend_following/run_hyperopt_harness.py` (`JOBS = 4`).
+
+---
+
 ### 2026-08-17 — Two real bugs on the harness's first actual launch
 
 **Context:** Launching the approved 8-combo hyperopt harness for real (not a review) hit two crashes before completing even Combo 1.

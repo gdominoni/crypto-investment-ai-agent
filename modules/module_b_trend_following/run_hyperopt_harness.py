@@ -38,6 +38,12 @@ DATA_END = date(2026, 8, 17)
 
 EPOCHS = 200
 HYPEROPT_LOSS = "ProjectHierarchyLoss"
+# Spec said -j -1 (all cores); dropped to 4 after the first real launch
+# showed genuine memory pressure (swap at 92% usage, 3.77GB/4GB) with 8
+# parallel workers each holding their own copy of the loaded dataset --
+# the exact risk flagged when this harness was reviewed, confirmed with
+# real data rather than left as a hypothetical. See decisions-log.md.
+JOBS = 4
 
 # 8 base combos: (strategy class name, strategy filename)
 COMBOS = [
@@ -96,7 +102,7 @@ def _run_hyperopt(strategy_class: str, timerange: str) -> None:
             "-i", "1h",
             "--timerange", timerange,
             "-e", str(EPOCHS),
-            "-j", "-1",
+            "-j", str(JOBS),
         ],
         cwd=MODULE_DIR,
         check=True,
