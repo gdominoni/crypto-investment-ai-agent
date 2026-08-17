@@ -3,6 +3,7 @@
 -r requirements-server.txt
 yfinance
 fredapi
+pyarrow
 scikit-learn
 lightgbm
 pandas-ta

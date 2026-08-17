@@ -8,5 +8,9 @@ feedparser
 requests
 pandas
 SQLAlchemy
-freqtrade
-hummingbot
+
+# Freqtrade (Module B) and Hummingbot (Module A) are intentionally NOT listed
+# here. Both pin build dependencies (cython/numpy) that conflict across
+# Python versions and are officially distributed via Docker/conda installers
+# rather than plain pip. They'll be added as Docker services in Phase 9,
+# matching the deployment architecture rather than fighting pip for them.
