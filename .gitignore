@@ -28,6 +28,7 @@ env/
 data/**/*.csv
 data/**/*.parquet
 !data/.gitkeep
+safety/state/
 
 # --- Logs ---
 *.log
