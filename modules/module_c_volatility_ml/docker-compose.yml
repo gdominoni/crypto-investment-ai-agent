@@ -1,0 +1,20 @@
+services:
+  freqtrade:
+    # FreqAI needs its own image tag -- the plain :stable image (used by
+    # Module B) doesn't bundle scikit-learn/LightGBM/datasieve at all.
+    image: freqtradeorg/freqtrade:stable_freqai
+    container_name: module_c_freqtrade
+    restart: unless-stopped
+    volumes:
+      - ./user_data:/freqtrade/user_data
+      # Read-only access to Phase 2's curated macro data, so this module's
+      # strategy can merge in real cross-asset features (VIX, etc.)
+      # instead of duplicating a second data pipeline.
+      - ../../data/macro:/freqtrade/macro_data:ro
+    environment:
+      - FREQTRADE__EXCHANGE__KEY=${BINANCE_API_KEY}
+      - FREQTRADE__EXCHANGE__SECRET=${BINANCE_API_SECRET}
+    # No command by default -- invoked per-task, e.g.:
+    #   docker compose --env-file ../../.env run --rm freqtrade \
+    #     backtesting --config user_data/config.json --strategy VolatilityGateFreqAI \
+    #     --freqaimodel LightGBMRegressor --timerange 20260601-20260817

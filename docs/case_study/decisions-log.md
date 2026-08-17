@@ -29,6 +29,16 @@ Running log of non-obvious technical decisions, in chronological order. Each ent
 
 ---
 
+### 2026-08-17 — FreqAI needs a different Docker image tag than plain Freqtrade
+
+**Context:** Module B's Freqtrade Docker setup uses `freqtradeorg/freqtrade:stable`. Trying to use FreqAI (Module C) against that same image failed immediately: `list-freqaimodels` raised `ModuleNotFoundError: No module named 'datasieve'` — the base image doesn't bundle FreqAI's ML dependencies (scikit-learn, LightGBM, datasieve) at all.
+
+**Decision:** Module C uses `freqtradeorg/freqtrade:stable_freqai` instead — a separate image tag Freqtrade maintains specifically for FreqAI, confirmed via `list-freqaimodels` to have `LightGBMRegressor` and several other models working (PyTorch/RL-based models fail to load in this tag, which is expected and fine -- they need a further `stable_freqaitorch`/`stable_freqairl` tag this project doesn't need).
+
+**Impact:** `modules/module_c_volatility_ml/docker-compose.yml`. Worth remembering if any future module or a rebuild of Module B ever needs FreqAI-adjacent functionality.
+
+---
+
 ### 2026-08-17 — Hummingbot's `CONFIG_PASSWORD` env var breaks first-time setup
 
 **Context:** After the human director set `HUMMINGBOT_CONFIG_PASSWORD` in `.env` and ran the documented one-time interactive setup command, the container exited immediately with no visible output — even with `-it`. The default Docker image entrypoint (`docker-entrypoint.sh`) redirects the app's stderr into `logs/errors.log`, which is host-mounted, so the real error was recoverable: `FileNotFoundError` on `conf/.password_verification`, from `Security.login() -> validate_password()`.
