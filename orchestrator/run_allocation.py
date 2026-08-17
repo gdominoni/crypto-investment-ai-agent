@@ -33,7 +33,7 @@ def main() -> None:
         module_name="module_b_trend_following",
     )
     module_c_kpi = from_backtest_result(
-        load_backtest_result(_latest_backtest_zip("module_c_volatility_ml"), "VolatilityGateFreqAI"),
+        load_backtest_result(_latest_backtest_zip("module_c_volatility_ml"), "VolatilityGateSignal"),
         module_name="module_c_volatility_ml",
     )
 

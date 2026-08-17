@@ -2,7 +2,7 @@
 
 A 24/7 autonomous, cost-optimized AI agent system for crypto trading, controlled via Telegram, built as a public **"Vibe Coding" case study**: every phase of this repo was designed and implemented through a conversation with an AI coding assistant (Claude), with a human directing priorities and handling anything requiring real-world action (accounts, keys, servers). This README is written for **non-technical readers** — if you've never coded before, you should be able to follow along and understand *why* every decision was made.
 
-Status: 🚧 early build — Phase 8 complete, the system now has a working Telegram control surface. Full roadmap below.
+Status: 🚧 early build — in **Phase 9 (model training deep-dive)**: Module C rebuilt on a rigorous bespoke ML pipeline, Module B hyperopt next. Full roadmap below.
 
 ---
 
@@ -91,9 +91,10 @@ crypto-investment-ai-agent/
 | 6 | Module C: ML volatility/regime model, gated by the safety kernel | ✅ done — verified running end-to-end |
 | 7 | Dynamic capital allocator across A/B/C | ✅ done — verified against real module data |
 | 8 | Telegram Orchestrator (Haiku-powered), explicit live-mode confirmation flow | ✅ done — verified with a real Telegram delivery |
-| 9 | VPS deployment: Docker Compose, supervision, monitoring | ⏳ next |
-| 10 | Multi-week all-module dry-run soak test | ⏳ |
-| 11 | Go/no-go review before any live capital is ever committed | ⏳ |
+| 9 | Model training deep-dive: Module C bespoke ML pipeline, Module B hyperopt | 🚧 in progress (Module C done, Module B next) |
+| 10 | VPS deployment: Docker Compose, supervision, monitoring | ⏳ (deferred — the human director chose to prioritize Phase 9 first) |
+| 11 | Multi-week all-module dry-run soak test | ⏳ |
+| 12 | Go/no-go review before any live capital is ever committed | ⏳ |
 
 ---
 
@@ -138,4 +139,5 @@ The full "vibe coding" process — exact prompts used, technical decisions and t
 - [Phase 6: Module C Volatility Gate (FreqAI)](docs/case_study/phase-6-module-c-volatility-ml.md)
 - [Phase 7: Dynamic Capital Allocator](docs/case_study/phase-7-capital-allocator.md)
 - [Phase 8: Telegram Orchestrator](docs/case_study/phase-8-telegram-orchestrator.md)
+- [Phase 9: Model Training Deep-Dive](docs/case_study/phase-9-model-training-deep-dive.md)
 - [Technical Decisions Log](docs/case_study/decisions-log.md)

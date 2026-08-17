@@ -4,6 +4,46 @@ Running log of non-obvious technical decisions, in chronological order. Each ent
 
 ---
 
+### 2026-08-17 — Module C moved off FreqAI entirely (Phase 9)
+
+**Context:** The human director specified a significantly more rigorous ML methodology for Module C: dynamic per-fold threshold calibration (not a fixed 0.5 cutoff), purged expanding-window walk-forward CV, Triple Barrier labeling, class-imbalance handling, and SHAP-based feature selection. This is real, well-regarded quant ML practice (Lopez de Prado's purging and Triple Barrier method), but none of it fits FreqAI's walk-forward retraining without heavy, undocumented subclassing of `IFreqaiModel`/DataKitchen internals.
+
+**Decision:** Build the ML methodology as a bespoke local Python pipeline (plain pandas/lightgbm/shap, no Freqtrade dependency at all), and keep a thin Freqtrade strategy only to consume the resulting per-candle signal for realistic trade simulation (fees, ROI, stoploss) -- not to reinvent Freqtrade's backtester. This was proposed explicitly and confirmed by the human director before any code was written, precisely because it reverses the Phase 2 instruction that named FreqAI for Module C.
+
+**Also decided in the same conversation:** the target changed from Phase 6's continuous forward-volatility regression to a binary "high-risk" classification, since the new spec's vocabulary (probability threshold, precision-recall curve, F-beta, `scale_pos_weight`) is classification-specific -- confirmed with the human director before building, since it's a different model class and target definition, not an incremental tweak.
+
+**Why this is logged as a reconsideration, not hidden as if bespoke were the plan all along:** the original FreqAI choice was reasoned and correct for Phase 6's simpler requirements; the new requirements outgrew it. Both READMEs (Module C's, this log) keep the FreqAI-based Phase 6 code and its rationale intact rather than deleting it, specifically so a reader can see the requirements evolve rather than assume more foresight than there was.
+
+**Impact:** `modules/module_c_volatility_ml/` gained `labeling.py`, `threshold_calibration.py`, `feature_selection.py`, `walk_forward.py`, `train.py`, and a new thin strategy (`volatility_gate_signal.py`) alongside the untouched Phase 6 FreqAI strategy.
+
+---
+
+### 2026-08-17 — Triple Barrier calibration bug: 86% base rate from "textbook" defaults
+
+**Context:** First run of the new labeling pipeline, with a common default (2.0x ATR barriers, 24-candle/1-day vertical barrier), produced an 86% "high-risk" label rate -- the gate was flagging almost every candle.
+
+**Root cause:** first-passage-time math for a diffusive price process: a narrow barrier (2x ATR) is touched almost certainly given a long enough lookforward window (24 candles). The vertical barrier being "wide" relative to the horizontal barriers' width made the label degenerate into an almost-always-on flag, independent of anything the model could learn.
+
+**Decision:** swept the ATR multiple empirically (2.0 through 5.0) while holding the vertical barrier fixed at the previously-agreed 24 candles (since that value was specifically tied to the purge-buffer sizing agreement), and landed on 4.5x ATR, giving a ~41% base rate.
+
+**Why this is logged:** caught by actually inspecting the label distribution before running the full (expensive) walk-forward pipeline on it, not after. Worth remembering for any future barrier-based labeling: the ATR multiple and the vertical barrier length aren't independent choices, and a "reasonable-sounding" default for one can silently break the other.
+
+**Impact:** `modules/module_c_volatility_ml/train.py` (`BARRIER_ATR_MULTIPLE`).
+
+---
+
+### 2026-08-17 — Real classifier signal, but a naive directional strategy built on it loses money -- and those are two different findings
+
+**Context:** After fixing the base-rate bug, the full walk-forward pipeline produced a genuinely informative result: 0.51 precision against a 0.41 base rate, out-of-sample, across 57 folds -- modest but real predictive power. Translating that signal into a long-only Freqtrade strategy ("enter when calm, exit when high-risk") then lost 54% over a real, statistically meaningful 493-trade backtest.
+
+**Why this isn't a contradiction:** the classifier predicts *whether a large move is coming*, symmetrically in either direction -- it was never a directional signal. "Calm" doesn't mean "price will rise." Forcing it into "enter long when calm" is an arbitrary translation, done only so the result could be reported on the project's Win Rate -> Sortino -> Net Profit hierarchy like every other module, and the loss reflects the weakness of *that translation*, not proof the classifier has no value.
+
+**Decision:** report both findings honestly and separately in the README rather than letting the trade-level loss overshadow the classifier's real (if modest) signal, or letting the classifier's decent PR-curve numbers spin the trading loss as a near-miss. This also reinforces, empirically, the module's own stated purpose: Module C's value is as a *gate* on other modules' position-taking, not a standalone directional trader -- a conclusion this result actively supports.
+
+**Impact:** `modules/module_c_volatility_ml/README.md`. Also affects Phase 7's capital allocator: Module C is now excluded for non-positive net profit (a real economic judgment) rather than insufficient sample size (a statistical technicality) -- a qualitatively better rejection reason than before.
+
+---
+
 ### 2026-08-17 — News sentiment source: CryptoCompare News API + RSS, not CryptoPanic
 
 **Context:** The original spec named CryptoPanic's free tier as the news source for Haiku-driven sentiment extraction. By the time Phase 0 started, CryptoPanic had moved its API behind a paid plan.

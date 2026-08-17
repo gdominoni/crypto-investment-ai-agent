@@ -44,6 +44,10 @@ logs/
 **/user_data/hyperopt_results/
 **/user_data/models/
 
+# Module C's bespoke training pipeline output (train.py) -- regenerable by
+# running the training script; the signal it produces is data, not code.
+**/user_data/signal_output/
+
 # Hummingbot (Module A): conf/strategies/*.yml is hand-authored and tracked;
 # everything else under conf/ is generated locally (encrypted credentials,
 # client config, password-verification file) and must never be committed.

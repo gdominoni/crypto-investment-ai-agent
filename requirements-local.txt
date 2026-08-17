@@ -6,6 +6,7 @@ fredapi
 pyarrow
 scikit-learn
 lightgbm
+shap
 pandas-ta
 matplotlib
 jupyter

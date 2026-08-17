@@ -55,7 +55,7 @@ def _module_kpis() -> list[ModuleKPI]:
     if c_zip:
         kpis.append(
             from_backtest_result(
-                load_backtest_result(c_zip, "VolatilityGateFreqAI"), module_name="module_c_volatility_ml"
+                load_backtest_result(c_zip, "VolatilityGateSignal"), module_name="module_c_volatility_ml"
             )
         )
 
