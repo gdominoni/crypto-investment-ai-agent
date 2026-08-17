@@ -78,8 +78,8 @@ crypto-investment-ai-agent/
 |---|---|---|
 | 0 | Repo scaffold, `.gitignore`, README, folder structure | ✅ in progress |
 | 1 | Credentials & accounts (GitHub, Telegram, Anthropic, Binance testnet, FRED) | ✅ done |
-| 2 | Local data ingestion: market data, macro data, news sentiment | 🚧 in progress (macro data done) |
-| 3 | Safety kernel: deterministic circuit breaker + hardcoded risk limits | ⏳ |
+| 2 | Local data ingestion: market data, macro data, news sentiment | ✅ done |
+| 3 | Safety kernel: deterministic circuit breaker + hardcoded risk limits | ⏳ next |
 | 4 | Module B (Freqtrade): strategies, IS/OOS backtesting, hyperopt, ranking | ⏳ |
 | 5 | Module A (Hummingbot): funding-rate scanner, delta-neutral paper trading | ⏳ |
 | 6 | Module C: ML volatility/regime model, gated by the safety kernel | ⏳ |
@@ -118,4 +118,5 @@ These are hardcoded in [`safety/`](safety/) and cannot be altered by the LLM or 
 The full "vibe coding" process — exact prompts used, technical decisions and their rationale, and dead ends — is documented in [`docs/case_study/`](docs/case_study/):
 - [Phase 0: Repo Bootstrap](docs/case_study/phase-0-repo-bootstrap.md)
 - [Phase 2 (part 1): Macro & Cross-Asset Data Ingestion](docs/case_study/phase-2-macro-data.md)
+- [Phase 2 (part 2): Exchange Market Data & News Sentiment](docs/case_study/phase-2-market-and-news-data.md)
 - [Technical Decisions Log](docs/case_study/decisions-log.md)

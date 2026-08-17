@@ -29,6 +29,16 @@ Running log of non-obvious technical decisions, in chronological order. Each ent
 
 ---
 
+### 2026-08-17 — Haiku JSON output needs defensive parsing
+
+**Context:** The first live test of `haiku_sentiment.py` failed `json.loads` despite a system prompt explicitly saying "no markdown fences." Haiku wrapped the array in ` ```json ... ``` ` anyway.
+
+**Decision:** Strip markdown code fences from Haiku's response before parsing, rather than trying to prompt-engineer away 100% of formatting variance. Applies to every future Haiku JSON-extraction call in this project (Telegram status formatting, etc.) — never assume a clean, fenceless response just because the prompt asked for one.
+
+**Impact:** `data_ingestion/news_sentiment/haiku_sentiment.py` (`_strip_markdown_fences`). Any new Haiku JSON call site should reuse this pattern.
+
+---
+
 ### 2026-08-17 — Repo name diverges from local folder name
 
 **Context:** Spec required the GitHub repo name to exactly match the local project folder. Local folder is `Crypto investment AI Agent` (contains spaces), which is not a valid GitHub repository name.
