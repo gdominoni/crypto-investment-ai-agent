@@ -61,5 +61,8 @@ modules/module_a_cash_carry/logs/
 .vscode/
 *.swp
 
+# --- Claude Code session/tooling state ---
+.claude/
+
 # --- Docker ---
 docker-compose.override.yml

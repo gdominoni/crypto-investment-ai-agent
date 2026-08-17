@@ -23,7 +23,7 @@ def _isolated_state_file(tmp_path, monkeypatch):
 
 def _fake_update(text: str) -> SimpleNamespace:
     message = SimpleNamespace(text=text, reply_text=AsyncMock())
-    return SimpleNamespace(message=message)
+    return SimpleNamespace(message=message, effective_chat=SimpleNamespace(id=123456))
 
 
 def test_exact_phrase_switches_to_live():

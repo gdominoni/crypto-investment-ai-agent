@@ -29,6 +29,24 @@ Running log of non-obvious technical decisions, in chronological order. Each ent
 
 ---
 
+### 2026-08-17 — httpx's default logging leaked the live Telegram bot token
+
+**Context:** After Phase 8 shipped, the human director tried `/status` against the bot and nothing happened -- because the bot had never actually been run as a standing polling process, only exercised via one-off scripts. Starting it for the first time (`python -m orchestrator.telegram_bot`, redirected to a log file for inspection) surfaced a more serious problem: `telegram_bot.py`'s `logging.basicConfig(level=logging.INFO)` also raised the `httpx` library's logger to INFO, and httpx logs the full URL of every HTTP request it makes. The Telegram Bot API embeds the bot token directly in the URL path (`api.telegram.org/bot<TOKEN>/<method>`), so every single API call -- `getMe`, `getUpdates`, `sendMessage` -- logged the live token in plaintext. That log file was then displayed while diagnosing the original issue, putting the token in this chat transcript.
+
+**Immediate response:** stopped the process, deleted the local log file, and flagged the exposure to the human director directly rather than quietly patching around it -- a leaked credential is the user's to decide how to handle (rotate or accept the risk), not something to paper over.
+
+**First fix, and why it wasn't quite right either:** set `logging.getLogger("httpx").setLevel(logging.WARNING)` to silence the token-bearing request logs. This worked for the token, but silenced *all* httpx-level visibility, including the routine `getUpdates` polling that would have shown whether a message was even received. The next verification attempt produced an empty log with no way to distinguish "no message arrived" from "arrived but now invisible."
+
+**Second, complete fix:** added explicit `logger.info(...)` calls inside each command handler itself (`start`, `status`, `dry_run`, `handle_text`) -- logging the chat_id and, for free-text messages, only the *length* of the text (not its content, since that's exactly the channel the live-mode confirmation phrase travels over). This restored real observability without reintroducing the token leak, and immediately confirmed the fix worked: the next `/status` attempt showed `Received /status from chat_id=...` and `Replied to /status` in the log.
+
+**Recommendation given to the user:** rotate the bot token via BotFather's `/token` command as a precaution, since it appeared in plaintext in a conversation transcript. Low severity (bot-control only, no funds or exchange access), but cheap to rotate and the right default reaction to any credential that leaks outside its intended storage, regardless of severity.
+
+**Why this whole sequence is logged, not just the final state:** the first fix looked complete and wasn't -- it traded one real problem (secret exposure) for a different real problem (no observability), which only surfaced on the very next verification attempt. Worth remembering for any future "silence this logger" fix: check what else that logger was the only source of visibility into before calling it done.
+
+**Impact:** `orchestrator/telegram_bot.py`.
+
+---
+
 ### 2026-08-17 — No open-ended Haiku chat fallback in the Telegram bot
 
 **Context:** Building the Telegram bot (Phase 8), the natural design for an "unrecognized message" fallback would route it to Haiku for a conversational reply -- friendlier than a static error message.

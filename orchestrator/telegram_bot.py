@@ -26,10 +26,16 @@ from orchestrator.status_formatter import format_status_message
 from safety.execution_mode import LIVE_CONFIRMATION_PHRASE, get_mode, request_live_mode, revert_to_dry_run
 
 logging.basicConfig(level=logging.INFO)
+# httpx logs full request URLs at INFO, and the Telegram Bot API embeds the
+# bot token directly in the URL path (api.telegram.org/bot<TOKEN>/method) --
+# left at INFO, every request logs the live token in plaintext. Silence it
+# specifically rather than lowering the whole app's log level.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    logger.info("Received /start from chat_id=%s", update.effective_chat.id)
     await update.message.reply_text(
         "Crypto Investment AI Agent online.\n"
         f"Current mode: {get_mode().upper()}\n"
@@ -38,18 +44,22 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    logger.info("Received /status from chat_id=%s", update.effective_chat.id)
     system_status = gather_system_status()
     message = format_status_message(system_status)
     await update.message.reply_text(message)
+    logger.info("Replied to /status")
 
 
 async def dry_run(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    logger.info("Received /dry_run from chat_id=%s", update.effective_chat.id)
     revert_to_dry_run()
     await update.message.reply_text("Reverted to DRY-RUN mode. No confirmation needed to go safer.")
 
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = update.message.text or ""
+    logger.info("Received text message from chat_id=%s (%d chars)", update.effective_chat.id, len(text))
 
     if text.strip() == LIVE_CONFIRMATION_PHRASE:
         switched = request_live_mode(text)

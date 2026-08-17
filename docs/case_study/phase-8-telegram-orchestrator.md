@@ -26,8 +26,15 @@
 - `tests/test_orchestrator_cost_model.py` — 2 tests enforcing the Haiku-only claim concretely.
 - **Real Telegram delivery**: built the actual Haiku-formatted status message from the real system state and sent it through the real bot token to the human director's real chat — confirmed delivered (`message_id: 3`), not just "the code should work."
 
+## Update: inbound testing surfaced a real credential leak
+
+The human director tried `/status` right after this phase shipped and got no response — because the bot had only ever been exercised through one-off scripts, never actually run as a standing polling process. Starting it for real to diagnose that surfaced a more serious issue: `logging.basicConfig(level=logging.INFO)` also raised `httpx`'s logger to INFO, and httpx logs full request URLs — which, for the Telegram Bot API, embed the live bot token directly in the path. Every API call logged the token in plaintext, and that log was displayed while debugging, putting the token in the conversation transcript.
+
+The first fix (silencing `httpx`'s logger entirely) traded one real problem for another: it also removed the only visibility into whether messages were being received at all, which surfaced immediately on the next verification attempt (an empty log, no way to tell "nothing arrived" from "arrived but now invisible"). The complete fix added explicit handler-level logging (chat_id, and message *length* rather than content, since free text is exactly the channel the live-mode confirmation phrase travels over) — restoring observability without the token ever appearing in a log again. Confirmed working immediately after: the next `/status` attempt logged `Received /status from chat_id=...` and `Replied to /status`.
+
+Full incident writeup in [decisions-log.md](decisions-log.md). The human director was advised to rotate the bot token via BotFather as a precaution.
+
 ## Still pending
 
-- Inbound command testing (actually sending `/status` from a phone and confirming the bot replies) needs the human director's participation, the same category of verification Module A's Hummingbot setup needed — outbound delivery is proven, inbound round-trip is not yet.
-- Scheduled/periodic checks, and running this as an actual always-on daemon rather than an invoked script — both Phase 9 territory.
+- Scheduled/periodic checks, and running this as an actual always-on daemon rather than an invoked script — Phase 9 territory.
 - No news-sentiment integration into the bot yet, despite `data_ingestion/news_sentiment/` existing since Phase 2 — a natural addition once there's a concrete alerting use case for it, not added speculatively here.
