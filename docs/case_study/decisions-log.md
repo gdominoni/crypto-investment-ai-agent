@@ -4,6 +4,22 @@ Running log of non-obvious technical decisions, in chronological order. Each ent
 
 ---
 
+### 2026-08-17 — Three iterations on Module B's Phase 9 grid design, none run until the third
+
+**Context:** Module B's post-Phase-1 redesign went through three distinct architectures in one review cycle, none executed until the last was approved: (1) a hand-curated multi-factor confluence grid (2 options/family, 96 backtests), (2) an exhaustive 5,832-combination Cartesian product restricted to 1h after (1) was rejected as still using "hardcoded preset levels," and (3) an 8-combo Freqtrade-native hyperopt harness (16 runs) after (2)'s execution cost was flagged as impractical.
+
+**Why (2) replaced (1):** hand-picking "logical" preset combinations, however reasoned, isn't the same as actually searching the parameter space -- a fair critique, and the fix was a real, verified full enumeration (`full_grid_1h.py`, checked programmatically to total exactly 5,832, not just arithmetically).
+
+**Why (3) replaced (2):** (2)'s exhaustive grid was real and correct, but running each of 5,832 combinations as an individual `docker compose run` invocation -- the mechanism already proven out in Phase 1 -- would have cost hours to tens of hours in pure container/Python startup overhead, on top of actual backtest compute, once IS+OOS doubled it to 11,664 runs. Flagged before building any execution harness for it. (3) resolves this by using Freqtrade's own hyperopt engine, which loads data once per run and evaluates many parameter sets in one persistent process, instead of one container launch per parameter combination -- true grid coverage traded for efficient heuristic search over a coarse, stepped space, which is what "hyperopt" is actually for.
+
+**A useful side effect of (3), not the reason for it:** restructuring Family 2 (breakout) and Family 3 (volume) from *combined* conditions (a squeeze requires BB-inside-KC together; the earlier volume filter required surge-and-CMF together) into *independent alternatives* (BB *or* KC; surge *or* CMF) also raises trade frequency, since compound/rare trigger events are no longer required -- directly helping the trade-count significance risk flagged when (1) was proposed, without that being the reason the change was made.
+
+**Why all three designs stay in the README, in order, not just the last:** each was a real, reasoned engineering step given what was known at the time, not a mistake to erase once a better one was found -- the case study is the sequence of corrections, not just the final answer.
+
+**Impact:** `modules/module_b_trend_following/multi_factor_grid.py` + `multi_factor_confluence.py` (design 1), `full_grid_1h.py` (design 2), `confluence_indicators.py` + `combo1..8_*.py` + `run_hyperopt_harness.py` (design 3, current). None of the three has had a single backtest or hyperopt epoch executed as of this entry.
+
+---
+
 ### 2026-08-17 — Multi-factor confluence replaces isolated single-family testing (Module B)
 
 **Context:** After reviewing Phase 1's coarse-grid results (216 backtests, zero genuine OOS wins across three isolated strategy families), the human director identified the actual methodological gap: the families were never tested *in isolation* by design intent, but the Phase 1 build had done exactly that -- each family alone, never combined. A breakout entry with nothing confirming real volume behind it can't distinguish a genuine move from chop; a mean-reversion entry with nothing confirming the reversal is real can't distinguish a bounce from a falling knife.

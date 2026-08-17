@@ -106,7 +106,11 @@ Full 216-row matrix in [`coarse_grid_results.csv`](coarse_grid_results.csv).
 
 Status: 🚧 Phase 1 coarse-grid screening complete and honestly reported (Phase 9). Superseded by the multi-factor confluence redesign below.
 
-## Multi-Factor Confluence — proposed design, pending approval, NOT YET RUN
+## ⚠️ SUPERSEDED: hand-curated multi-factor grid, and the exhaustive 5,832-combo grid that followed it (both kept, neither ever run)
+
+The design below (hand-curated presets, 2 options per family, 96 backtests) was replaced before it ran: reviewing it, the human director wanted a true parameter sweep rather than hand-picked "logical" presets. That became `full_grid_1h.py` — an exhaustive Cartesian product (36 x 9 x 9 x 2 = 5,832 combinations, verified programmatically), scoped to 1h only. That in turn was replaced before running either: executing 5,832 combinations (11,664 with OOS) as individual Docker/CLI backtests — the mechanism proven out in Phase 1 — would have cost hours to tens of hours in pure container-startup overhead, a concern raised at the time. The final design (below, "8-Combo Hyperopt Harness") resolves this by using Freqtrade's own hyperopt engine (one persistent process per run, not one container launch per parameter combination) and restructuring Family 2/3 from combined conditions into independent alternatives — which also, as a side effect, raises trade frequency versus the rarer "squeeze release" trigger the multi-factor design depended on. All three designs are kept in this README, in order, because each one was a real, reasoned step -- not a mistake to hide.
+
+## Multi-Factor Confluence — hand-curated grid (superseded, never run)
 
 Two findings from the isolated-family screening directly drove this redesign:
 1. **15m dropped entirely.** Every family lost heavily there (-24% to -73% mean OOS profit), consistent with fee drag from hundreds of trades at ~0.1% taker fee per side. Only **1h, 4h, and 1d** remain in scope.
@@ -131,4 +135,26 @@ Full literal matrix (all 48 unique configs, no execution): `python -m modules.mo
 
 **A risk worth naming before running anything**: requiring 3-way confluence will trade less often than any single-family version, and Phase 1 already showed 4h struggling to clear the significance floor even for single-factor entries. 1d is untested territory entirely (no data downloaded yet). If this grid returns too few trades to be significant anywhere, the honest fallback would be loosening the "all three" requirement to "any two of three," not quietly abandoning the significance filter — a decision to make with real data in hand, not now.
 
-**Status: specification only.** `multi_factor_confluence.py` has not had even a sanity-check backtest run against it, unlike every other strategy file in this project up to this point — that verification, and the 1d data download it requires, are both pending explicit approval to proceed.
+**Status: specification only, never run.**
+
+## ⚠️ SUPERSEDED: exhaustive 5,832-combo grid (never run)
+
+`full_grid_1h.py` defined a true, hand-verified Cartesian product for 1h only: Family 1 (RSI length x threshold pairs x RSI-BB std = 3x3x4=36) x Family 2 (BB std x KC ATR mult = 3x3=9) x Family 3 (volume surge mult x CMF threshold = 3x3=9) x exit variants (2) = **5,832 combinations exactly**, confirmed by generating and counting them programmatically, not just checking the arithmetic. Replaced before running: at 5,832 combos (11,664 with IS+OOS), running each as an individual `docker compose run` invocation -- the mechanism proven out in Phase 1 -- would cost hours to tens of hours in pure Docker/Python startup overhead alone, on top of actual backtest compute. That concern, raised at review time, led directly to the current design.
+
+## 8-Combo Hyperopt Harness (current design, pending approval to launch)
+
+Resolves the exhaustive-grid's efficiency problem by using **Freqtrade's own hyperopt engine** — one persistent process per run, loading data once and evaluating many parameter sets internally — instead of one Docker container launch per combination. Restricted to **1h only**.
+
+**Family 2 and Family 3 are now independent alternatives, not combined conditions.** Earlier designs required Bollinger-inside-Keltner (a "squeeze") for Family 2 and volume-surge-and-CMF together for Family 3 — both comparatively rare, compound events. Now each family offers two standalone options (Price BB *or* Keltner as the breakout trigger; Volume Surge *or* CMF as the confirming filter), which trade independently more often — directly addressing the trade-frequency risk flagged in the multi-factor design above, as a side effect of a change made for a different reason (execution efficiency).
+
+**8 base architectures** (`user_data/strategies/combo1..8_*.py`, sharing indicator logic via `confluence_indicators.py`): every combination of Family 1 (classic RSI *or* RSI-Bollinger-Bands) x Family 2 (Price BB *or* Keltner) x Family 3 (Volume Surge *or* CMF) = 2x2x2 = 8. Each combo declares *only* its own relevant hyperopt parameters (e.g. Combo 1 never sees `rsi_bb_std` or `kc_atr_mult`, since it doesn't use RSI-BB or Keltner) — keeping each run's search space scoped to what actually affects that combo's behavior.
+
+**Coarse, stepped parameter spaces** (`step=5` for integer lengths/thresholds, `step=0.5` for stddevs/multipliers) — deliberately discretizing what would otherwise be a continuous search, so hyperopt can't report false precision (e.g. `rsi_period=17.3`) that isn't really distinguishable from noise at this sample size.
+
+**16 total hyperopt runs** (8 combos x 2 exit modes — `null` vs a flat -15%/+15% SL/TP), each using `ProjectHierarchyLoss` (reused unchanged from the earlier `TrendEmaAdx` hyperopt work — no changes needed, since it already implements this project's Win Rate → Sortino → Net Profit hierarchy generically) with `--spaces buy sell`, 200 epochs, `-j -1`. Exit mode is fixed per run (not searched) via the same auto-loaded parameter-file mechanism used throughout this project — confirmed in earlier work that a space excluded from `--spaces` is preserved from the loaded file through to hyperopt's own exported "best params," not reset to a class default.
+
+After each of the 16 runs: the discovered best parameters are re-backtested cleanly on IS (for a parseable result) and validated against the untouched OOS period — all 16, not a filtered top-K, since 16 runs is cheap enough to validate exhaustively (unlike the 5,832-combo design, where that distinction mattered). `run_hyperopt_harness.py` orchestrates all of this and prints one consolidated IS-vs-OOS matrix at the end.
+
+**Estimated runtime, not yet empirically confirmed**: roughly 4-8 minutes per hyperopt run at `-j -1` (8 cores) x 16 runs ≈ 1-2 hours, plus ~30 minutes for the 32 quick IS/OOS re-backtests. **A real risk worth flagging**: `-j -1` uses all 8 CPU cores, each hyperopt worker holding its own copy of the loaded dataset in memory — on this machine's 8GB RAM (see Phase 9's model-training-feasibility discussion), this may need falling back to fewer workers if memory pressure shows up in practice, not assumed away in advance.
+
+**Status: harness built and import-verified (no Docker/backtest execution). Awaiting approval to launch.**
