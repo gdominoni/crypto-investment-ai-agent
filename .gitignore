@@ -1,0 +1,51 @@
+# --- Secrets & credentials ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials.json
+token.json
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+venv/
+.venv/
+env/
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- Databases & runtime state ---
+*.sqlite3
+*.db
+*.db-journal
+data/*.csv
+data/*.parquet
+!data/.gitkeep
+
+# --- Logs ---
+*.log
+logs/
+freqtrade/user_data/logs/
+hummingbot/logs/
+
+# --- Framework runtime dirs (large / instance-specific) ---
+freqtrade/user_data/backtest_results/
+freqtrade/user_data/notebooks/.ipynb_checkpoints/
+hummingbot/conf/
+hummingbot/data/
+
+# --- OS / editor ---
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# --- Docker ---
+docker-compose.override.yml

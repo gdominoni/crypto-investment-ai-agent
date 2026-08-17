@@ -1,0 +1,11 @@
+# Local-only: heavy backtesting, hyperopt sweeps, and ML training.
+# Never installed on the VPS — keeps the server footprint (and bill) minimal.
+-r requirements-server.txt
+yfinance
+fredapi
+scikit-learn
+lightgbm
+pandas-ta
+matplotlib
+jupyter
+pytest

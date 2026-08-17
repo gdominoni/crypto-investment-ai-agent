@@ -1,0 +1,12 @@
+# Runs 24/7 on the VPS. Kept minimal — no heavy ML/backtesting deps here.
+anthropic
+ccxt
+python-telegram-bot
+APScheduler
+python-dotenv
+feedparser
+requests
+pandas
+SQLAlchemy
+freqtrade
+hummingbot
