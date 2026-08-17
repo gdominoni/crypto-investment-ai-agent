@@ -58,4 +58,46 @@ docker compose --env-file ../../.env run --rm freqtrade hyperopt \
   --timerange 20230820-20250822 -e 150 -j 4
 ```
 
-Status: 🚧 infrastructure built and verified end-to-end (Phase 4); hyperopt built and run with a project-consistent objective (Phase 9). No candidate has cleared both the significance filter and profitability yet — more candidate strategy *families* (not just parameter sweeps of this one) are the natural next step.
+## Phase 9 continued: three new strategy families, coarse-grid screened (hyperopt strictly deferred)
+
+Rather than keep tuning EMA/ADX crossover, the human director directed a deliberate diversification into three structurally different families, each with its own timeframe-tailored coarse grid — **hand-curated discrete parameter sets, not a search**. A "Phase 2" hyperopt/fine-tuning pass was explicitly deferred until these raw results could be reviewed first.
+
+**Three families**, sharing `dynamic_exit_mixin.py` for what "null" SL/TP means (Freqtrade has no native "disabled" stoploss/ROI state, so null is emulated as -99% stoploss / 10,000%-required-profit ROI — one shared definition, not three slightly different approximations):
+- `mean_reversion_bb_rsi.py` — Bollinger Bands + RSI + rolling Z-score. Enter on oversold confluence; exit on reversion to the mid-band or RSI > 50.
+- `volatility_breakout_kc_squeeze.py` — Keltner Channels + TTM Squeeze momentum. Enter when a low-volatility squeeze releases with positive momentum; exit on momentum reversal or a close back inside the channel.
+- `volume_driven_vwap_cmf.py` — rolling VWAP (a lookback-window approximation of a true anchored VWAP) + volume-surge detection + Chaikin Money Flow. Enter on a VWAP cross-up with a volume surge and positive CMF; exit on a cross back below VWAP or CMF turning negative.
+
+Each family provides a genuine indicator-based exit — required so the grid's "null" SL/TP presets still have *some* way to close a position, rather than riding forever.
+
+**The grid**, per `coarse_grid.py`: 3 entry presets **per family per timeframe** (15m/1h/4h; each timeframe's presets are independently tailored — a 15m mean-reversion RSI threshold and a 4h one aren't scaled versions of each other, they're separately reasoned about) × 4 shared per-timeframe exit presets (null/null, tight, wide, and an SL-only + trailing variant), run across both the In-Sample and true Out-of-Sample periods. 108 combinations × 2 periods = 216 real Docker backtests, `run_coarse_grid.py`.
+
+### Two real bugs caught before trusting any result
+
+1. **A silent no-op.** The first version named each combo's auto-loaded parameter file after the strategy *class* (`MeanReversionBBRSI.json`). Freqtrade actually resolves it from the strategy *file's own path* (`mean_reversion_bb_rsi.json`) — confirmed by reading `freqtrade/strategy/hyper.py` directly, not assumed. Caught because two deliberately different exit presets produced bit-for-bit identical results, which had no innocent explanation — every "different" combo had silently been running on the class defaults the whole time.
+2. **A process-tracking mistake, not a code bug.** The first launch attempt double-backgrounded the sweep (shell `&` *and* the tool's own background-execution flag), so the ~90-minute job was only tracked for the few seconds its outer wrapper took to return, then ran on, orphaned and unmonitored. Fixed by relaunching with only the tool's own background tracking, which then correctly reported real progress and completion.
+
+### The result: 216 backtests, zero genuine wins
+
+| Family | Timeframe | Mean OOS net profit | Mean OOS win rate |
+|---|---|---|---|
+| Mean Reversion (BB+RSI) | 15m | -38.2% | 51% |
+| Mean Reversion (BB+RSI) | 1h | -33.2% | 47% |
+| Mean Reversion (BB+RSI) | 4h | -15.6% | 53% |
+| Volatility Breakout (KC+Squeeze) | 15m | -72.8% | 26% |
+| Volatility Breakout (KC+Squeeze) | 1h | -32.5% | 32% |
+| Volatility Breakout (KC+Squeeze) | 4h | -15.9% | 45% |
+| Volume-Driven (VWAP+CMF) | 15m | -23.8% | 20% |
+| Volume-Driven (VWAP+CMF) | 1h | -11.6% | 27% |
+| Volume-Driven (VWAP+CMF) | 4h | -6.7% | 29% |
+
+Full 216-row matrix in [`coarse_grid_results.csv`](coarse_grid_results.csv).
+
+**Only 3 of 216 combinations were both statistically significant and profitable — all 3 In-Sample only, and all 3 reversed to clear losses Out-of-Sample.** The starkest: `VolatilityBreakoutKCSqueeze` at 4h looked excellent In-Sample (+91.9% profit, Sortino 1.47, 107 trades) and lost -38.4% on the exact same parameters Out-of-Sample. This is the textbook overfitting/noise signature this project's IS/OOS discipline exists to catch — and it caught it, cleanly, across all three "hits."
+
+**15m is uniformly the worst timeframe across every family** (-24% to -73% mean OOS profit), consistent with a real, predictable mechanism: high trade frequency (400-1,000+ trades per combo) means Binance's ~0.1% spot taker fee is paid far more often, and these strategies' edges (such as they are) aren't large enough to clear that fee drag.
+
+**An unexpected, genuinely interesting finding**: averaged across every family/timeframe/period, the `null_null` exit preset (pure indicator-driven exit, no SL/TP at all) had the *least bad* mean result (-16.7%) of all four exit presets — beating `wide` (-24.7%), `tight` (-26.9%), and especially `sl_only_trailing` (-35.5%, the worst). This suggests the hand-designed indicator-reversal exits aren't the weak point in these strategies; the arbitrary percentage-based emergency exits may be doing more harm than good, cutting winners short or exiting on noise the indicator logic itself would have ridden through correctly.
+
+**Conclusion: none of these three strategy families, in this coarse parameterization, show genuine, OOS-validated edge on BTC/ETH spot.** Consistent with `TrendEmaAdx`'s Phase 4/9 result — this is now the fourth and fifth and sixth strategy shape (nine family×timeframe combinations, really) tested rigorously and found wanting, not a first attempt that just needs more tuning.
+
+Status: 🚧 Phase 1 coarse-grid screening complete and honestly reported (Phase 9). Phase 2 (fine-tuning/hyperopt) remains explicitly deferred pending the human director's review of these results — not started, and not assumed to be the right next step just because it's available.

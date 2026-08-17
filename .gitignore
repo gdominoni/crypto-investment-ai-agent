@@ -49,6 +49,16 @@ logs/
 # running the training script; the signal it produces is data, not code.
 **/user_data/signal_output/
 
+# Module B's coarse-grid sweep (run_coarse_grid.py) overwrites each
+# strategy's auto-loaded parameter file once per combo -- whatever's left
+# on disk after a run is just the last combo tested, not a meaningful
+# artifact (unlike trend_ema_adx.json, hyperopt's deliberate "best
+# params" output, which stays tracked). The real output is
+# coarse_grid_results.csv, which is tracked.
+modules/module_b_trend_following/user_data/strategies/mean_reversion_bb_rsi.json
+modules/module_b_trend_following/user_data/strategies/volatility_breakout_kc_squeeze.json
+modules/module_b_trend_following/user_data/strategies/volume_driven_vwap_cmf.json
+
 # Hummingbot (Module A): conf/strategies/*.yml is hand-authored and tracked;
 # everything else under conf/ is generated locally (encrypted credentials,
 # client config, password-verification file) and must never be committed.

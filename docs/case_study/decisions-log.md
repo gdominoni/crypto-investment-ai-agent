@@ -4,6 +4,34 @@ Running log of non-obvious technical decisions, in chronological order. Each ent
 
 ---
 
+### 2026-08-17 — Freqtrade resolves a strategy's parameter file from its .py path, not the class name
+
+**Context:** Building Module B's coarse-grid sweep (Phase 9, Phase 1 of the new strategy-family screening), the orchestration script wrote each combination's parameters to `<StrategyClassName>.json` (e.g. `MeanReversionBBRSI.json`), mirroring what looked like the pattern from hyperopt's own auto-exported `trend_ema_adx.json`.
+
+**What went wrong:** every combination silently ran on the strategy's class-level defaults, because Freqtrade actually resolves the parameter file as `Path(self.__file__).with_suffix(".json")` -- the strategy's own **file** path (`mean_reversion_bb_rsi.json`, matching the .py filename), not the class name. `trend_ema_adx.json` had looked like a class-name match purely because that strategy's filename and class name both reduce to the same snake_case/PascalCase pair by coincidence.
+
+**How it was caught:** two deliberately different exit presets (a permissive "null" stoploss/ROI and a tight one) produced bit-for-bit identical backtest results. That has no innocent explanation, so it was investigated immediately rather than accepted -- confirmed by reading `freqtrade/strategy/hyper.py`'s `load_params_from_file()` directly rather than guessing again.
+
+**Decision:** added an explicit `STRATEGY_FILENAMES` mapping (class name -> file basename) in `run_coarse_grid.py`, rather than trying to derive one from the other programmatically -- explicit and easy to verify beats a naming-convention assumption that already failed once.
+
+**Impact:** `modules/module_b_trend_following/run_coarse_grid.py`. Worth remembering for any future script that writes a Freqtrade strategy parameter file programmatically.
+
+---
+
+### 2026-08-17 — Double-backgrounding orphaned a long-running sweep from its own tracking
+
+**Context:** Launching the ~90-minute, 216-backtest coarse-grid sweep, the first attempt combined a shell `&` (to background the python process within the command) with the tool's own background-execution flag (also meant to background the whole command).
+
+**What went wrong:** the tool's tracking followed the *outer* command, which returned almost immediately once the `&`-backgrounded process was launched and its PID echoed -- so the harness reported the task "completed" within seconds, while the actual 216-backtest sweep kept running, undetected and unmonitored, as an orphaned process outside the tracked job.
+
+**How it was caught:** the "completed" task's output log had only one progress line where ~216 were expected, and a process listing showed the real python process still alive well past when the tracked task had supposedly finished.
+
+**Decision:** killed the orphan, discarded its partial (1-row) output, and relaunched using only the tool's own background flag, with no shell `&` inside the command -- letting the harness track the actual long-running process directly, which then correctly reported completion at the real end of the sweep.
+
+**Impact:** operational only, no code changed. Worth remembering for any future long-running background command: background it exactly one way, not two.
+
+---
+
 ### 2026-08-17 — Custom Freqtrade hyperopt loss forgot the project's own significance filter
 
 **Context:** Building Module B's hyperopt (Phase 9), wrote a custom `IHyperOptLoss` (`project_hierarchy_loss.py`) so the search would optimize the project's actual Win Rate -> Sortino -> Net Profit hierarchy instead of one of Freqtrade's single-metric built-ins. First 100-epoch run's reported "best" result had exactly 1 trade -- a single lucky win claiming a perfect 100% win rate, which the composite score (win rate dominates by scale) rated above every larger, more realistic sample.
