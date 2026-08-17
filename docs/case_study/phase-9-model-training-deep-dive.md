@@ -41,5 +41,24 @@ Fed into Phase 7's capital allocator, Module C is now excluded for **non-positiv
 
 ## Still pending
 
-- Module B hyperopt — the second half of this phase, not yet started.
 - Module C's real conclusion (it should function as a *gate*, not a scored fourth strategy) isn't wired into the orchestrator yet — it's still being evaluated as if it were a standalone trader, which this phase's own result argues against. A natural Phase 10+ question once the orchestrator's rebalancing logic is revisited.
+
+## Part 2: Module B hyperopt
+
+The second half of "both, Module C first." Freqtrade ships several built-in hyperopt loss functions, each optimizing a single metric (Sharpe, Sortino, Calmar, ...). None reflect this project's specific Win Rate → Sortino → Net Profit lexicographic priority — the same hierarchy `candidate_ranking.py` already applies everywhere else. Rather than accept that mismatch (tuning Module B against one standard while judging it by another), wrote a custom `IHyperOptLoss` (`project_hierarchy_loss.py`) whose composite score mirrors `candidate_ranking.py`'s sort key directly, verified against the exact `IHyperOptLoss` interface for the installed Freqtrade version (read from the actual source inside the Docker image, not assumed from memory or older documentation) before writing any code against it.
+
+### A second real bug, same category as the first, one layer earlier
+
+The first 100-epoch hyperopt run's reported "best" result had exactly **one trade** — a single lucky win, 100% win rate, rated above every larger, more realistic sample because the composite score let win rate dominate by scale with no floor on sample size. This is precisely the overfitting failure mode Module B's own `dynamic_min_trade_count` filter was built in Phase 4 to catch during candidate *selection* — reproduced, undetected, one layer earlier, inside the *search* itself. Caught by reading the actual "best" result's trade count rather than trusting the optimizer's reported objective value. Fixed by porting the same significance formula into the loss function (duplicated, not imported, due to the same Docker/`user_data`-mount boundary that led to `data_ingestion/macro_data/loaders.py` existing separately from Module C's `freqai_utils.py` in Part 1) — any candidate below the dynamic trade-count floor now scores as the worst possible outcome.
+
+Logged as its own decisions-log entry specifically because it's the *same class of mistake* as Module C's barrier-calibration bug, in a different part of the codebase: a check that already existed elsewhere in the project didn't automatically apply itself in a new context, and had to be re-added deliberately. Worth carrying forward as a general habit: whenever a new consumer of backtest-style results gets built, ask explicitly whether it needs its own copy of the significance filter.
+
+### The honest result, after the fix
+
+150 properly-filtered epochs found: `adx_trend_threshold=20, ema_fast_period=27, ema_slow_period=96` — 139 trades, 50.4% win rate, but **still a net loss** (-19.05% over the In-Sample period, Sortino -0.46). Backtested against the genuine Out-of-Sample holdout (Phase 4's split, never touched during the search): 71 trades, 46.5% win rate, -9.28% loss, Sortino -0.56 — consistent with the IS result rather than sharply worse, which is itself informative: a large IS/OOS performance gap is the signature of overfitting, and its absence here suggests the search found this strategy family's genuine characteristics rather than fitting noise.
+
+**Conclusion: rigorous hyperopt, run correctly, could not find a profitable EMA/ADX-crossover parameterization for BTC/ETH on this timeframe.** A real, informative negative result about this specific strategy family — not a tooling failure, and not hidden or softened to make Phase 9 look more successful than it was. The natural next step for Module B isn't more parameter search on this same strategy shape; it's new candidate strategy *families*.
+
+## Phase 9 status: both parts complete
+
+Module C: rebuilt on a rigorous bespoke pipeline, real (if modest) classifier signal found, honestly reported as economically unprofitable when naively translated into trades. Module B: hyperopt built with a project-consistent objective, a real bug in that objective caught and fixed, and a clear negative result on this strategy family after a proper search. Neither module has a profitable, statistically significant candidate yet — Phase 9 was about building rigorous *methodology*, and the methodology is now trustworthy enough to believe its negative results, which is its own kind of progress.

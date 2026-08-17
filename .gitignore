@@ -43,6 +43,7 @@ logs/
 **/user_data/notebooks/.ipynb_checkpoints/
 **/user_data/hyperopt_results/
 **/user_data/models/
+**/user_data/hyperopt.lock
 
 # Module C's bespoke training pipeline output (train.py) -- regenerable by
 # running the training script; the signal it produces is data, not code.

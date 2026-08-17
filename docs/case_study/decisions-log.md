@@ -4,6 +4,20 @@ Running log of non-obvious technical decisions, in chronological order. Each ent
 
 ---
 
+### 2026-08-17 — Custom Freqtrade hyperopt loss forgot the project's own significance filter
+
+**Context:** Building Module B's hyperopt (Phase 9), wrote a custom `IHyperOptLoss` (`project_hierarchy_loss.py`) so the search would optimize the project's actual Win Rate -> Sortino -> Net Profit hierarchy instead of one of Freqtrade's single-metric built-ins. First 100-epoch run's reported "best" result had exactly 1 trade -- a single lucky win claiming a perfect 100% win rate, which the composite score (win rate dominates by scale) rated above every larger, more realistic sample.
+
+**Root cause:** the loss function scored every candidate on the hierarchy directly, with no floor on sample size -- exactly the overfitting failure mode `candidate_ranking.py`'s `dynamic_min_trade_count` filter was built in Phase 4 to catch during candidate *selection*, now silently reproduced inside the *search* itself, one layer earlier than where the project had already solved it once.
+
+**Decision:** ported the same significance-floor formula into the loss function (duplicated rather than imported, since this file runs inside the Freqtrade Docker container which only has `user_data/` mounted -- the identical boundary that led to `data_ingestion/macro_data/loaders.py` existing separately from Module C's `freqai_utils.py`). Any candidate below the dynamic trade-count floor now scores as the worst possible outcome, same treatment as zero trades.
+
+**Why this is logged:** a concrete instance of a rule existing in one place in a codebase not automatically applying itself everywhere it's needed -- the project had already solved "don't trust a thin sample" once, and it had to be solved again, explicitly, at a different layer. Worth remembering whenever a new consumer of backtest-style results gets added: check whether it needs its own copy of the significance filter, don't assume filtering happens downstream.
+
+**Impact:** `modules/module_b_trend_following/user_data/hyperopts/project_hierarchy_loss.py`.
+
+---
+
 ### 2026-08-17 — Module C moved off FreqAI entirely (Phase 9)
 
 **Context:** The human director specified a significantly more rigorous ML methodology for Module C: dynamic per-fold threshold calibration (not a fixed 0.5 cutoff), purged expanding-window walk-forward CV, Triple Barrier labeling, class-imbalance handling, and SHAP-based feature selection. This is real, well-regarded quant ML practice (Lopez de Prado's purging and Triple Barrier method), but none of it fits FreqAI's walk-forward retraining without heavy, undocumented subclassing of `IFreqaiModel`/DataKitchen internals.
