@@ -46,8 +46,25 @@ class FundingYieldReport:
     positive_funding_pct: float  # fraction of periods with rate > 0
     annualized_yield_gross_pct: float
     annualized_yield_net_of_fees_pct: float
+    sortino_ratio: float  # annualized, computed on the raw per-period funding rate series
     is_currently_attractive: bool  # last N days' annualized yield still clears the cost
     suggested_min_opening_arbitrage_pct: float
+
+
+def _annualized_sortino_ratio(returns: pd.Series, periods_per_year: int) -> float:
+    """Sortino on the funding-rate series itself, treating each 8h funding
+    payment as a "return". Used so Module A can be ranked on the exact same
+    Win Rate -> Sortino -> Net Profit hierarchy as Modules B and C
+    (orchestrator/capital_allocator.py), despite being a fundamentally
+    different (yield-harvesting, not directional) strategy.
+    """
+    mean_return = returns.mean()
+    downside = returns.clip(upper=0)
+    downside_deviation = (downside**2).mean() ** 0.5
+    if downside_deviation == 0:
+        return 0.0
+    period_sortino = mean_return / downside_deviation
+    return float(period_sortino * (periods_per_year**0.5))
 
 
 def load_funding_history(symbol: str) -> pd.DataFrame:
@@ -72,6 +89,8 @@ def _compute_report(df: pd.DataFrame, symbol: str, recent_window_days: int) -> F
     recent_annualized_gross = recent["fundingRate"].mean() * FUNDING_PERIODS_PER_YEAR if len(recent) else 0.0
     is_attractive = bool(recent_annualized_gross - ROUND_TRIP_COST_PCT > 0)
 
+    sortino = _annualized_sortino_ratio(df["fundingRate"], FUNDING_PERIODS_PER_YEAR)
+
     return FundingYieldReport(
         symbol=symbol,
         periods=len(df),
@@ -79,6 +98,7 @@ def _compute_report(df: pd.DataFrame, symbol: str, recent_window_days: int) -> F
         positive_funding_pct=positive_pct,
         annualized_yield_gross_pct=annualized_gross * 100,
         annualized_yield_net_of_fees_pct=annualized_net * 100,
+        sortino_ratio=sortino,
         is_currently_attractive=is_attractive,
         suggested_min_opening_arbitrage_pct=ROUND_TRIP_COST_PCT * _OPENING_THRESHOLD_SAFETY_MULTIPLIER * 100,
     )
@@ -91,5 +111,6 @@ if __name__ == "__main__":
         print(f"  positive funding: {report.positive_funding_pct:.1%}")
         print(f"  annualized yield (gross): {report.annualized_yield_gross_pct:.2f}%")
         print(f"  annualized yield (net of round-trip fees): {report.annualized_yield_net_of_fees_pct:.2f}%")
+        print(f"  sortino ratio: {report.sortino_ratio:.2f}")
         print(f"  currently attractive (last 30d): {report.is_currently_attractive}")
         print(f"  suggested min_opening_arbitrage_pct: {report.suggested_min_opening_arbitrage_pct:.3f}")

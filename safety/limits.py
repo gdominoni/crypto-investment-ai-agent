@@ -20,3 +20,7 @@ ATR_SPIKE_MULTIPLIER = 2.5  # current ATR > multiplier x baseline -> trigger
 # Macro-event blackout window (safety/macro_calendar.py)
 MACRO_BLACKOUT_MINUTES_BEFORE = 30
 MACRO_BLACKOUT_MINUTES_AFTER = 60
+
+# Dynamic capital allocation (orchestrator/capital_allocator.py)
+MAX_MODULE_ALLOCATION_PCT = 0.60  # no single module ever gets more than this, however good it looks
+MIN_CASH_RESERVE_PCT = 0.10       # always keep at least this much in USDT, never fully deployed

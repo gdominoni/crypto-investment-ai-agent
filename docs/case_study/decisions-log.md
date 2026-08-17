@@ -29,6 +29,20 @@ Running log of non-obvious technical decisions, in chronological order. Each ent
 
 ---
 
+### 2026-08-17 — Capital allocation weighted by rank, not raw Sortino magnitude
+
+**Context:** Building the cross-module capital allocator (Phase 7), the initial plan was to weight each module's capital share proportionally to its raw Sortino ratio -- a reasonable-sounding idea, since Sortino is already a risk-adjusted-return measure.
+
+**What real data caught before that plan was implemented:** adding a Sortino calculation to Module A's funding-yield analysis (needed so Module A could be ranked on the same hierarchy as B/C) and running it against real funding-rate history produced Sortino values of 103-136 -- because funding-rate "returns" are tiny, low-variance, near-fixed-yield numbers, and annualizing a ratio of mean/downside-deviation blows up fast at that scale. Module B and C's Sortino, computed on trade-level P&L, sit in the -2 to +2 range typical of a trading strategy. Seeing the real 103-136 numbers before writing the allocator's weighting formula made it obvious that weighting by raw magnitude would let Module A swamp everything else by two orders of magnitude -- not because it's genuinely that much better, but because the two Sortino calculations aren't measuring comparable things.
+
+**Decision:** Weight by rank position within the eligible, hierarchy-sorted list (Win Rate -> Sortino -> Net Profit) instead of by raw metric magnitude. This only ever asks "who's better, by the spec's own ordering," never "how many times better" -- sidestepping the cross-scale comparability problem entirely rather than trying to normalize incompatible units.
+
+**Why this is logged:** it's a real instance of a common multi-strategy portfolio construction pitfall (comparing Sharpe/Sortino ratios computed on structurally different return series without normalization) -- avoided here specifically *because* real numbers were checked before finalizing the design, not because it was anticipated in the abstract.
+
+**Impact:** `orchestrator/capital_allocator.py`. Applies to any future module whose "returns" aren't directly comparable in kind to a trading strategy's per-trade P&L.
+
+---
+
 ### 2026-08-17 — FreqAI needs a different Docker image tag than plain Freqtrade
 
 **Context:** Module B's Freqtrade Docker setup uses `freqtradeorg/freqtrade:stable`. Trying to use FreqAI (Module C) against that same image failed immediately: `list-freqaimodels` raised `ModuleNotFoundError: No module named 'datasieve'` — the base image doesn't bundle FreqAI's ML dependencies (scikit-learn, LightGBM, datasieve) at all.

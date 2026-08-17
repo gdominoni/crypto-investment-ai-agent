@@ -2,7 +2,7 @@
 
 A 24/7 autonomous, cost-optimized AI agent system for crypto trading, controlled via Telegram, built as a public **"Vibe Coding" case study**: every phase of this repo was designed and implemented through a conversation with an AI coding assistant (Claude), with a human directing priorities and handling anything requiring real-world action (accounts, keys, servers). This README is written for **non-technical readers** — if you've never coded before, you should be able to follow along and understand *why* every decision was made.
 
-Status: 🚧 early build — Phase 6 complete, all three strategy modules now built. Full roadmap below.
+Status: 🚧 early build — Phase 7 complete, capital allocator now combines all three modules into one decision. Full roadmap below.
 
 ---
 
@@ -89,8 +89,8 @@ crypto-investment-ai-agent/
 | 4 | Module B (Freqtrade): strategies, IS/OOS backtesting, hyperopt, ranking | 🚧 in progress (pipeline built, no candidate passed yet) |
 | 5 | Module A (Hummingbot): funding-rate scanner, delta-neutral paper trading | ✅ done — verified running end-to-end |
 | 6 | Module C: ML volatility/regime model, gated by the safety kernel | ✅ done — verified running end-to-end |
-| 7 | Dynamic capital allocator across A/B/C | ⏳ next |
-| 8 | Telegram Orchestrator (Haiku-powered), explicit live-mode confirmation flow | ⏳ |
+| 7 | Dynamic capital allocator across A/B/C | ✅ done — verified against real module data |
+| 8 | Telegram Orchestrator (Haiku-powered), explicit live-mode confirmation flow | ⏳ next |
 | 9 | VPS deployment: Docker Compose, supervision, monitoring | ⏳ |
 | 10 | Multi-week all-module dry-run soak test | ⏳ |
 | 11 | Go/no-go review before any live capital is ever committed | ⏳ |
@@ -136,4 +136,5 @@ The full "vibe coding" process — exact prompts used, technical decisions and t
 - [Phase 4: Module B Trend-Following](docs/case_study/phase-4-module-b-trend-following.md)
 - [Phase 5: Module A Cash & Carry](docs/case_study/phase-5-module-a-cash-carry.md)
 - [Phase 6: Module C Volatility Gate (FreqAI)](docs/case_study/phase-6-module-c-volatility-ml.md)
+- [Phase 7: Dynamic Capital Allocator](docs/case_study/phase-7-capital-allocator.md)
 - [Technical Decisions Log](docs/case_study/decisions-log.md)
