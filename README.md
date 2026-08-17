@@ -2,7 +2,7 @@
 
 A 24/7 autonomous, cost-optimized AI agent system for crypto trading, controlled via Telegram, built as a public **"Vibe Coding" case study**: every phase of this repo was designed and implemented through a conversation with an AI coding assistant (Claude), with a human directing priorities and handling anything requiring real-world action (accounts, keys, servers). This README is written for **non-technical readers** — if you've never coded before, you should be able to follow along and understand *why* every decision was made.
 
-Status: 🚧 early build — currently in **Phase 4 (Module B: trend-following)**. Full roadmap below.
+Status: 🚧 early build — currently in **Phase 5 (Module A: cash & carry)**. Full roadmap below.
 
 ---
 
@@ -87,7 +87,7 @@ crypto-investment-ai-agent/
 | 2 | Local data ingestion: market data, macro data, news sentiment | ✅ done |
 | 3 | Safety kernel: deterministic circuit breaker + hardcoded risk limits | ✅ done |
 | 4 | Module B (Freqtrade): strategies, IS/OOS backtesting, hyperopt, ranking | 🚧 in progress (pipeline built, no candidate passed yet) |
-| 5 | Module A (Hummingbot): funding-rate scanner, delta-neutral paper trading | ⏳ next |
+| 5 | Module A (Hummingbot): funding-rate scanner, delta-neutral paper trading | 🚧 in progress (funding analysis attractive, blocked on human credential setup) |
 | 6 | Module C: ML volatility/regime model, gated by the safety kernel | ⏳ |
 | 7 | Dynamic capital allocator across A/B/C | ⏳ |
 | 8 | Telegram Orchestrator (Haiku-powered), explicit live-mode confirmation flow | ⏳ |
@@ -134,4 +134,5 @@ The full "vibe coding" process — exact prompts used, technical decisions and t
 - [Phase 2 (part 2): Exchange Market Data & News Sentiment](docs/case_study/phase-2-market-and-news-data.md)
 - [Phase 3: Safety Kernel](docs/case_study/phase-3-safety-kernel.md)
 - [Phase 4: Module B Trend-Following](docs/case_study/phase-4-module-b-trend-following.md)
+- [Phase 5: Module A Cash & Carry](docs/case_study/phase-5-module-a-cash-carry.md)
 - [Technical Decisions Log](docs/case_study/decisions-log.md)

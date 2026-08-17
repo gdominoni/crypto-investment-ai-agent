@@ -29,6 +29,18 @@ Running log of non-obvious technical decisions, in chronological order. Each ent
 
 ---
 
+### 2026-08-17 — Module A's "paper trade" spans two different mechanisms
+
+**Context:** Hummingbot's built-in paper-trade simulator (`connector/exchange/paper_trade/`) only wraps spot exchange connectors — there's no simulated equivalent under `connector/derivative/`. Module A's strategy needs a spot leg *and* a perpetual leg.
+
+**Decision:** Spot leg uses Hummingbot's `binance_paper_trade` simulator (fully fake, no keys). Perpetual leg uses `binance_perpetual_testnet` — Binance's own dedicated Futures Testnet sandbox, a separate site and separate account from Spot Testnet, requiring its own API keys from testnet.binancefuture.com.
+
+**Why this is worth logging:** both are zero-real-money, consistent with the project's dry-run-by-default rule, but they get there through genuinely different mechanisms (a local simulator vs. a real exchange's sandbox environment) — worth knowing explicitly rather than assuming "paper trade" is one uniform thing across every connector.
+
+**Impact:** `modules/module_a_cash_carry/conf/strategies/conf_spot_perpetual_arbitrage_btc.yml` and `.env.example` (`BINANCE_FUTURES_TESTNET_API_KEY`, distinct from `BINANCE_API_KEY`).
+
+---
+
 ### 2026-08-17 — Freqtrade and Hummingbot run via Docker, not pip
 
 **Context:** Both frameworks depend on TA-Lib, a C library that must be compiled for the exact OS/chip/Python combination in use. In Phase 2, `pip install hummingbot` failed outright on this machine — a pinned Cython build dependency doesn't support Python 3.13.

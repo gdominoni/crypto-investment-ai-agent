@@ -1,0 +1,42 @@
+##########################################
+###   Spot-Perpetual Arbitrage strategy config -- Module A, BTC   ###
+##########################################
+
+template_version: 3
+strategy: spot_perpetual_arbitrage
+
+# Spot leg: Hummingbot's built-in paper-trade simulator (no real order flow,
+# no API key needed). See README.md -- paper_trade only covers spot
+# connectors, which is why the perpetual leg below uses a real (testnet)
+# connector instead.
+spot_connector: binance_paper_trade
+spot_market: BTC-USDT
+
+# Perpetual leg: Binance's own Futures Testnet -- a separate sandbox
+# environment with its own dedicated API keys (see README.md, Human Action
+# needed before this can actually run).
+perpetual_connector: binance_perpetual_testnet
+perpetual_market: BTC-USDT
+
+# Notional size per leg (BTC). Kept small and matched between spot and
+# perpetual to stay delta-neutral by construction.
+order_amount: 0.01
+
+# 1x -- this is a yield-harvesting strategy, not a leveraged directional
+# bet. Leverage only affects margin efficiency here, not exposure, but 1x
+# keeps the position easiest to reason about. Well within the hardcoded
+# safety-kernel ceiling (safety/limits.py: MAX_LEVERAGE = 3.0).
+perpetual_leverage: 1
+
+# Derived from modules/module_a_cash_carry/funding_analysis.py: the
+# round-trip trading cost (open + close, one spot leg + one futures leg
+# each way) with a 1.5x safety margin. See that module's docstring for the
+# exact calculation.
+min_opening_arbitrage_pct: 0.42
+min_closing_arbitrage_pct: 0.20
+
+spot_market_slippage_buffer: 0.05
+perpetual_market_slippage_buffer: 0.05
+
+# Cooldown between arbitrage cycles, in seconds.
+next_arbitrage_opening_delay: 120

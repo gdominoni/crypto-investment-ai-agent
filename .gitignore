@@ -43,8 +43,16 @@ logs/
 **/user_data/notebooks/.ipynb_checkpoints/
 **/user_data/hyperopt_results/
 **/user_data/models/
-hummingbot/conf/
-hummingbot/data/
+
+# Hummingbot (Module A): conf/strategies/*.yml is hand-authored and tracked;
+# everything else under conf/ is generated locally (encrypted credentials,
+# client config, password-verification file) and must never be committed.
+modules/module_a_cash_carry/conf/connectors/
+modules/module_a_cash_carry/conf/.password_verification
+modules/module_a_cash_carry/conf/conf_client.yml
+modules/module_a_cash_carry/conf/conf_fee_overrides.yml
+modules/module_a_cash_carry/data/
+modules/module_a_cash_carry/logs/
 
 # --- OS / editor ---
 .DS_Store

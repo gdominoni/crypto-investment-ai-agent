@@ -1,0 +1,18 @@
+services:
+  hummingbot:
+    image: hummingbot/hummingbot:latest
+    container_name: module_a_hummingbot
+    restart: unless-stopped
+    volumes:
+      - ./conf:/home/hummingbot/conf
+      - ./logs:/home/hummingbot/logs
+      - ./data:/home/hummingbot/data
+    environment:
+      - CONFIG_PASSWORD=${HUMMINGBOT_CONFIG_PASSWORD}
+      - BINANCE_PERPETUAL_TESTNET_API_KEY=${BINANCE_FUTURES_TESTNET_API_KEY}
+      - BINANCE_PERPETUAL_TESTNET_API_SECRET=${BINANCE_FUTURES_TESTNET_API_SECRET}
+    # No command by default -- invoked per-task, e.g.:
+    #   docker compose --env-file ../../.env run --rm hummingbot \
+    #     python bin/hummingbot_quickstart.py --headless \
+    #     --config-file-name conf_spot_perpetual_arbitrage_btc.yml \
+    #     --config-password "$CONFIG_PASSWORD"
