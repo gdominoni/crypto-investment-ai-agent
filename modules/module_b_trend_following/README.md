@@ -157,4 +157,24 @@ After each of the 16 runs: the discovered best parameters are re-backtested clea
 
 **Estimated runtime, not yet empirically confirmed**: roughly 4-8 minutes per hyperopt run at `-j -1` (8 cores) x 16 runs ≈ 1-2 hours, plus ~30 minutes for the 32 quick IS/OOS re-backtests. **A real risk worth flagging**: `-j -1` uses all 8 CPU cores, each hyperopt worker holding its own copy of the loaded dataset in memory — on this machine's 8GB RAM (see Phase 9's model-training-feasibility discussion), this may need falling back to fewer workers if memory pressure shows up in practice, not assumed away in advance.
 
-**Status: harness built and import-verified (no Docker/backtest execution). Awaiting approval to launch.**
+**Status: run to completion. Real bugs caught and fixed along the way — full sequence in decisions-log.md**: a `DecimalParameter` conflict between its internally-defaulted `decimals=3` and the spec's `step=`; a shared indicator module that worked for a plain backtest but wasn't importable from hyperopt's parallel worker subprocesses (they don't inherit Freqtrade's runtime `sys.path` change); confirmed real memory pressure at the spec'd `-j -1` (swap at 92%) and dropped to `-j 4`; and Combos 5-8 (RSI-BB) having no "sell"-space parameter at all, breaking the harness's originally-unconditional `--spaces buy sell`. The harness also gained incremental CSV output partway through, after losing 8 completed runs' in-memory results to the third crash.
+
+### The result: 16 runs, zero combos validated in both periods
+
+Full 32-row matrix in [`hyperopt_harness_results.csv`](hyperopt_harness_results.csv). Headline: **not one of the 16 combo/exit-mode configurations was both statistically significant and profitable in both In-Sample and Out-of-Sample.**
+
+| Combo | Exit | IS: trades / sig? / profit | OOS: trades / sig? / profit |
+|---|---|---|---|
+| 1 Classic+PriceBB+Volume | wide | 413 / ✅ / **-39.6%** | 191 / ✅ / **-22.6%** |
+| 2 Classic+PriceBB+CMF | wide | 824 / ✅ / **-31.0%** | 364 / ✅ / **-17.9%** |
+| 5 RSI-BB+PriceBB+Volume | null | 893 / ✅ / +3.2% | 444 / ✅ / **-43.5%** |
+| 5 RSI-BB+PriceBB+Volume | wide | 412 / ✅ / +0.3% | 187 / ✅ / **-29.8%** |
+| 6 RSI-BB+PriceBB+CMF | null | 454 / ✅ / **+22.5%** | 217 / ✅ / **-41.7%** |
+| 8 RSI-BB+Keltner+CMF | null | 287 / ✅ / **+29.1%** | 135 / ✅ / **-29.1%** |
+| 8 RSI-BB+Keltner+CMF | wide | 254 / ✅ / **+33.9%** | 112 / ✅ / **-20.7%** |
+
+(Only the 7 of 16 configs that clear the significance floor in *both* periods are shown — Combos 3, 4, and 7 never traded enough in any configuration to be statistically meaningful at all, in either period, regardless of exit mode.)
+
+**A genuinely interesting, specific finding, not just "everything lost": the two RSI approaches fail in different ways.** The classic fixed-threshold RSI combos that clear significance (1, 2) are **consistently negative in both periods** — a real, replicable loss, the same honest kind of negative result `TrendEmaAdx` produced earlier in Phase 9, not overfitting. The RSI-Bollinger-Bands combos (5, 6, 8) show the opposite pattern: **strong, exciting-looking In-Sample numbers (up to Sortino 1.37, +33.9% profit) that collapse or fully invert Out-of-Sample** — Combo 8's best IS result (+33.9%) becomes -20.7% OOS on the identical discovered parameters; Combo 6's +22.5% becomes -41.7%. This is the textbook overfitting signature, and it's specifically concentrated in the *adaptive* RSI-BB variant, not the classic one — plausible explanation: a band fitted to a small in-sample RSI distribution captures that period's idiosyncrasies rather than a genuine, stable pattern, more so than a fixed threshold does. Worth remembering if RSI-BB is used again elsewhere in this project.
+
+**Conclusion: this is now the third rigorous, independent attempt at Module B that has found no validated edge** — Phase 1's three isolated families, `TrendEmaAdx`'s hyperopt, and now this 8-combo confluence hyperopt. Consistent, cumulative negative evidence, not three unlucky first tries.

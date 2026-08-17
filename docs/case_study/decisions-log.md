@@ -4,6 +4,20 @@ Running log of non-obvious technical decisions, in chronological order. Each ent
 
 ---
 
+### 2026-08-17 — RSI-Bollinger-Bands overfits more than classic fixed-threshold RSI, at least here
+
+**Context:** The 8-combo hyperopt harness finally completed all 16 runs after four real issues were found and fixed across three launch attempts. The result itself contains a specific, non-obvious finding worth recording on its own, separate from "nothing worked."
+
+**What the data showed:** of the 7 combo/exit-mode configurations that cleared the statistical significance floor in both IS and OOS, the two using classic fixed-threshold RSI (Combos 1, 2) were consistently negative in *both* periods -- a real, replicable loss, not overfitting. The three using the adaptive RSI-Bollinger-Bands variant (Combos 5, 6, 8) showed the opposite pattern: strong In-Sample results (up to Sortino 1.37, +33.9% profit) that collapsed or fully inverted Out-of-Sample (Combo 8's +33.9% IS became -20.7% OOS on the identical discovered parameters; Combo 6's +22.5% became -41.7%).
+
+**Why this is plausible, not just noise:** an adaptive band fitted to a small In-Sample RSI distribution can capture that specific period's idiosyncrasies rather than a genuine, stable pattern, more readily than a fixed threshold can -- the adaptivity that makes RSI-BB appealing (per the original instruction to test it instead of only fixed RSI) is also exactly what makes it more prone to fitting noise when the underlying edge is weak or absent, which every prior test in this project's Module B history suggests it is.
+
+**Why this is logged as its own entry:** it's a genuine, specific, actionable finding about a design choice made explicitly in this project (RSI-BB was added per direct instruction, not incidentally) -- worth remembering if RSI-BB, or any other adaptive-band indicator, is used again: it may need either more In-Sample data than a fixed-threshold equivalent, or an explicit penalty for the search converging on it, to be trusted.
+
+**Impact:** none to code -- an empirical finding, recorded for future strategy design. See [Module B's README](../../modules/module_b_trend_following/README.md#the-result-16-runs-zero-combos-validated-in-both-periods) for the full result table.
+
+---
+
 ### 2026-08-17 — Combos 5-8 have no "sell"-space parameter; unconditional `--spaces buy sell` broke them
 
 **Context:** With the memory fix in place, the harness ran genuinely further this time -- Combos 1-4 (8 of 16 runs) completed successfully, confirming `-j 4` resolved the pressure issue. It then crashed on Combo 5 with "The 'sell' space is included into the hyperoptimization but no parameter for this space was found in your Strategy."
