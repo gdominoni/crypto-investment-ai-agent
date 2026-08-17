@@ -51,6 +51,7 @@ modules/module_a_cash_carry/conf/connectors/
 modules/module_a_cash_carry/conf/.password_verification
 modules/module_a_cash_carry/conf/conf_client.yml
 modules/module_a_cash_carry/conf/conf_fee_overrides.yml
+modules/module_a_cash_carry/conf/hummingbot_logs.yml
 modules/module_a_cash_carry/data/
 modules/module_a_cash_carry/logs/
 

@@ -28,3 +28,13 @@ Unlike every prior phase, this one can't be fully verified end-to-end without th
 2. A one-time **interactive** Hummingbot session (`docker compose run --rm -it hummingbot`) to set the local config password and connect the Futures Testnet credentials — instructions are in [Module A's README](../../modules/module_a_cash_carry/README.md#human-action-needed-before-this-can-actually-run).
 
 After that one-time step, headless paper-trade runs should work using the command already written into `docker-compose.yml`'s comments.
+
+## Update: completed and verified end-to-end
+
+The human director ran the one-time interactive setup and hit a second, more subtle blocker: the container exited instantly on every attempt, even with `-it`, showing nothing. Root-caused (not guessed) by reading `bin/hummingbot_quickstart.py`'s `main()` directly: it checks for a `CONFIG_PASSWORD` environment variable *before* deciding whether to show the interactive password-creation screen or skip straight to validating a password file that's assumed to already exist. Since `docker-compose.yml` always injects `CONFIG_PASSWORD` from `.env` (correct and necessary for headless runs later), the moment `HUMMINGBOT_CONFIG_PASSWORD` had a real value, *every* run — including the genuine first one — skipped the creation flow and crashed. The actual crash was recoverable from `logs/errors.log`, which the image's default entrypoint silently redirects stderr into; that log was the key piece of evidence, not the empty-looking terminal output.
+
+Fix: override the variable to empty for just the one-time interactive call (`-e CONFIG_PASSWORD=`), forcing the real first-run flow. `docker-compose.yml` itself needed no change.
+
+With that fix, the human completed the interactive setup (`connect binance_perpetual_testnet`), and a real headless run authenticated against both connectors and reached a live trading loop — confirmed by a genuine listen key obtained from Binance's Futures Testnet, not just a locally-accepted config. Two test containers were left running in the background afterward (headless mode is a persistent daemon, not a one-shot command like Freqtrade's `backtesting`) and had to be stopped manually — a reminder to always account for that when testing this module, and now documented in Module A's README.
+
+Module A is the first module in this project verified running end-to-end against a real (sandboxed) exchange connection, not just validated in isolation.

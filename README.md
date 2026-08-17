@@ -2,7 +2,7 @@
 
 A 24/7 autonomous, cost-optimized AI agent system for crypto trading, controlled via Telegram, built as a public **"Vibe Coding" case study**: every phase of this repo was designed and implemented through a conversation with an AI coding assistant (Claude), with a human directing priorities and handling anything requiring real-world action (accounts, keys, servers). This README is written for **non-technical readers** — if you've never coded before, you should be able to follow along and understand *why* every decision was made.
 
-Status: 🚧 early build — currently in **Phase 5 (Module A: cash & carry)**. Full roadmap below.
+Status: 🚧 early build — Phase 5 complete, starting **Phase 6 (Module C: volatility/ML gate)**. Full roadmap below.
 
 ---
 
@@ -87,7 +87,7 @@ crypto-investment-ai-agent/
 | 2 | Local data ingestion: market data, macro data, news sentiment | ✅ done |
 | 3 | Safety kernel: deterministic circuit breaker + hardcoded risk limits | ✅ done |
 | 4 | Module B (Freqtrade): strategies, IS/OOS backtesting, hyperopt, ranking | 🚧 in progress (pipeline built, no candidate passed yet) |
-| 5 | Module A (Hummingbot): funding-rate scanner, delta-neutral paper trading | 🚧 in progress (funding analysis attractive, blocked on human credential setup) |
+| 5 | Module A (Hummingbot): funding-rate scanner, delta-neutral paper trading | ✅ done — verified running end-to-end |
 | 6 | Module C: ML volatility/regime model, gated by the safety kernel | ⏳ |
 | 7 | Dynamic capital allocator across A/B/C | ⏳ |
 | 8 | Telegram Orchestrator (Haiku-powered), explicit live-mode confirmation flow | ⏳ |

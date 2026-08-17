@@ -46,12 +46,26 @@ Traced Hummingbot's headless startup all the way to its real blocker: a brand-ne
    The `-e CONFIG_PASSWORD=` override matters: `docker-compose.yml` normally injects `CONFIG_PASSWORD` from `.env` for headless runs, but Hummingbot's own startup script (`bin/hummingbot_quickstart.py`) skips its interactive password-creation screen entirely whenever that variable is present — it assumes a password already exists and jumps straight to validating it, which fails on a brand-new `conf/` directory (confirmed by reading `hummingbot_quickstart.py`'s `main()` directly, and by inspecting the actual crash in the container's `logs/errors.log`, which the default entrypoint silently redirects stderr into). Clearing it for just this one call forces the real first-time flow to run.
 
    When prompted, set the password to match `HUMMINGBOT_CONFIG_PASSWORD`, then inside the Hummingbot CLI run `connect binance_perpetual_testnet` and paste in the Futures Testnet key/secret. Exit with `exit`.
-3. After that one-time setup, this will run headless:
+3. After that one-time setup, this runs headless:
    ```
    docker compose --env-file ../../.env run --rm hummingbot \
      python bin/hummingbot_quickstart.py --headless \
      --config-file-name conf_spot_perpetual_arbitrage_btc.yml \
      --config-password "$HUMMINGBOT_CONFIG_PASSWORD"
    ```
+   **This is a long-running daemon, not a one-shot command** — like the live/paper bot it's meant to become, it runs forever until stopped. When testing it manually, stop it with `docker stop <container-name>` (`docker ps` to find it) rather than just closing the terminal, or it keeps running detached in the background.
 
-Status: 🚧 funding analysis complete and genuinely attractive; Docker/strategy config built; blocked on the one-time interactive credential setup above (Phase 5).
+## Verified running end-to-end (2026-08-17)
+
+A real headless run authenticated successfully against both connectors and reached a live trading loop:
+```
+Created connector: binance_paper_trade
+Created connector: binance_perpetual_testnet
+Leverage for BTC-USDT successfully set to 1.
+Successfully obtained listen key ...
+'spot_perpetual_arbitrage' strategy execution started.
+Trading started.
+```
+The listen key confirms the Futures Testnet credentials are genuinely authenticated, not just accepted locally. The only warnings in the log are repeated `MQTT bridge disconnected: Connection refused` messages — expected and harmless: headless mode always tries to reach a remote-control MQTT broker, which isn't set up yet (that's Phase 8's Telegram/remote-control territory), and Hummingbot just keeps retrying in the background without it affecting the strategy loop.
+
+Status: ✅ built and verified (Phase 5) — funding analysis attractive for both pairs, Hummingbot authenticates and trades in paper/testnet mode end-to-end. No live capital ever at risk (spot leg simulated, perpetual leg on Binance's own sandbox).
