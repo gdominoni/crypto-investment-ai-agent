@@ -38,11 +38,13 @@ Leverage is fixed at 1x in the config, well inside the hardcoded safety-kernel c
 Traced Hummingbot's headless startup all the way to its real blocker: a brand-new `conf/` directory has never had a local encryption password set, so headless mode has nothing to validate against on first run — and entering that password (and connecting exchange credentials) for the first time is an inherently interactive step that can't be safely scripted around. This is a one-time setup, not a recurring one:
 
 1. Get Binance Futures Testnet API keys from **testnet.binancefuture.com** (separate from your existing Spot Testnet keys) and add them to `.env` as `BINANCE_FUTURES_TESTNET_API_KEY` / `_SECRET`. Also set `HUMMINGBOT_CONFIG_PASSWORD` in `.env` to any password you choose (it encrypts local files only, it's not an exchange credential).
-2. Run the one-time interactive setup:
+2. Run the one-time interactive setup, with `CONFIG_PASSWORD` explicitly overridden to empty:
    ```
    cd modules/module_a_cash_carry
-   docker compose --env-file ../../.env run --rm -it hummingbot
+   docker compose --env-file ../../.env run --rm -it -e CONFIG_PASSWORD= hummingbot
    ```
+   The `-e CONFIG_PASSWORD=` override matters: `docker-compose.yml` normally injects `CONFIG_PASSWORD` from `.env` for headless runs, but Hummingbot's own startup script (`bin/hummingbot_quickstart.py`) skips its interactive password-creation screen entirely whenever that variable is present — it assumes a password already exists and jumps straight to validating it, which fails on a brand-new `conf/` directory (confirmed by reading `hummingbot_quickstart.py`'s `main()` directly, and by inspecting the actual crash in the container's `logs/errors.log`, which the default entrypoint silently redirects stderr into). Clearing it for just this one call forces the real first-time flow to run.
+
    When prompted, set the password to match `HUMMINGBOT_CONFIG_PASSWORD`, then inside the Hummingbot CLI run `connect binance_perpetual_testnet` and paste in the Futures Testnet key/secret. Exit with `exit`.
 3. After that one-time setup, this will run headless:
    ```

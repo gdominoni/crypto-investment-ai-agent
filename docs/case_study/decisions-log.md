@@ -29,6 +29,18 @@ Running log of non-obvious technical decisions, in chronological order. Each ent
 
 ---
 
+### 2026-08-17 — Hummingbot's `CONFIG_PASSWORD` env var breaks first-time setup
+
+**Context:** After the human director set `HUMMINGBOT_CONFIG_PASSWORD` in `.env` and ran the documented one-time interactive setup command, the container exited immediately with no visible output — even with `-it`. The default Docker image entrypoint (`docker-entrypoint.sh`) redirects the app's stderr into `logs/errors.log`, which is host-mounted, so the real error was recoverable: `FileNotFoundError` on `conf/.password_verification`, from `Security.login() -> validate_password()`.
+
+**Root cause, found by reading `bin/hummingbot_quickstart.py` directly:** `main()` checks for a `CONFIG_PASSWORD` env var *before* deciding whether to show the interactive password-creation screen (`login_prompt()`) or skip straight to validating a password that's assumed to already exist. Since `docker-compose.yml` always injects `CONFIG_PASSWORD` from `.env` (needed for headless runs later), as soon as `HUMMINGBOT_CONFIG_PASSWORD` had a real value, every run -- including the very first one, before any password had ever been created -- skipped the creation flow and crashed trying to validate a file that couldn't exist yet.
+
+**Decision:** For the one-time interactive bootstrap only, override the variable to empty on the command line: `docker compose run --rm -it -e CONFIG_PASSWORD= hummingbot`. This forces the real first-run flow. `docker-compose.yml` itself is unchanged and correct for every run after that.
+
+**Impact:** `modules/module_a_cash_carry/README.md`'s setup instructions. Worth remembering for Module C or any other Hummingbot instance set up later in this project -- the same override will be needed for its first run too.
+
+---
+
 ### 2026-08-17 — Module A's "paper trade" spans two different mechanisms
 
 **Context:** Hummingbot's built-in paper-trade simulator (`connector/exchange/paper_trade/`) only wraps spot exchange connectors — there's no simulated equivalent under `connector/derivative/`. Module A's strategy needs a spot leg *and* a perpetual leg.
