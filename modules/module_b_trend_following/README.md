@@ -58,6 +58,10 @@ docker compose --env-file ../../.env run --rm freqtrade hyperopt \
   --timerange 20230820-20250822 -e 150 -j 4
 ```
 
+## ⚠️ SUPERSEDED: isolated single-family testing (kept for the record, not deleted)
+
+**This section describes an approach that was replaced, not extended.** Testing the three families *in isolation* (each alone, never combined) was a methodological gap the human director caught after reviewing these results: a breakout strategy tested alone will buy into chop with no volume confirmation to filter it out; a mean-reversion strategy tested alone will buy a falling knife with nothing to confirm the reversal is real. The combined design that replaced this (below, "Multi-Factor Confluence") requires all three families to agree before entering — see [decisions-log.md](../../docs/case_study/decisions-log.md) for the full reasoning. The section below is left intact because the negative result it found (no single family, alone, at any timeframe up to 4h, shows OOS edge) is still real, still true, and directly motivated the redesign — a case study should show the wrong turn, not just the corrected one.
+
 ## Phase 9 continued: three new strategy families, coarse-grid screened (hyperopt strictly deferred)
 
 Rather than keep tuning EMA/ADX crossover, the human director directed a deliberate diversification into three structurally different families, each with its own timeframe-tailored coarse grid — **hand-curated discrete parameter sets, not a search**. A "Phase 2" hyperopt/fine-tuning pass was explicitly deferred until these raw results could be reviewed first.
@@ -100,4 +104,31 @@ Full 216-row matrix in [`coarse_grid_results.csv`](coarse_grid_results.csv).
 
 **Conclusion: none of these three strategy families, in this coarse parameterization, show genuine, OOS-validated edge on BTC/ETH spot.** Consistent with `TrendEmaAdx`'s Phase 4/9 result — this is now the fourth and fifth and sixth strategy shape (nine family×timeframe combinations, really) tested rigorously and found wanting, not a first attempt that just needs more tuning.
 
-Status: 🚧 Phase 1 coarse-grid screening complete and honestly reported (Phase 9). Phase 2 (fine-tuning/hyperopt) remains explicitly deferred pending the human director's review of these results — not started, and not assumed to be the right next step just because it's available.
+Status: 🚧 Phase 1 coarse-grid screening complete and honestly reported (Phase 9). Superseded by the multi-factor confluence redesign below.
+
+## Multi-Factor Confluence — proposed design, pending approval, NOT YET RUN
+
+Two findings from the isolated-family screening directly drove this redesign:
+1. **15m dropped entirely.** Every family lost heavily there (-24% to -73% mean OOS profit), consistent with fee drag from hundreds of trades at ~0.1% taker fee per side. Only **1h, 4h, and 1d** remain in scope.
+2. **Exit presets simplified to 2 per timeframe** (`null` and one `wide` SL+TP pair, materially wider than Phase 1's tightest tiers) — the `null_null` indicator-driven exit was the *least bad* of Phase 1's four exit presets on average, meaning arbitrary fixed-percentage stops were plausibly cutting real winners short more than they were protecting against real losers.
+
+**The bigger change: `MultiFactorConfluence` (`user_data/strategies/multi_factor_confluence.py`) combines all three families on every candle, in asymmetric roles**, rather than testing them in isolation:
+- **Family 2 (volatility breakout) is the timing trigger** — a squeeze release is a naturally rare, punctual event, well suited to being the thing that actually opens a trade.
+- **Family 1 (RSI) is a confirming filter**: RSI must not already be overbought at the trigger, guarding against chasing an already-extended move.
+- **Family 3 (volume) is a confirming filter**: real volume + positive Chaikin Money Flow must be present at the trigger, guarding against a low-volume fakeout — directly targeting "breakouts buy into chop."
+
+A flat AND of all three families' *original*, full multi-part conditions was considered and rejected: that would multiply 3+3+3 sub-conditions together, likely firing so rarely (especially at 4h/1d, where trade counts were already thin in Phase 1) that no combination would ever clear the statistical significance floor. The trigger/filter split keeps the entry bar high without making it nearly unreachable.
+
+**New indicator, per instruction**: Family 1 offers two variants — `classic` (RSI below a fixed overbought threshold) and `rsi_bb` (Bollinger Bands applied to the **RSI series itself**, not price — RSI below its own upper band, adaptive to how volatile RSI has recently been rather than a fixed level regardless of regime). Verified locally that `pandas_ta.bbands` works correctly on any series, RSI included, before writing this into strategy code.
+
+**Exit is intentionally looser than entry**, not a mirror of the strict confluence required to open a position: exits on *any* of breakout momentum fading, price closing back below VWAP, or the RSI-based signal (matching whichever Family 1 variant is active) crossing back into overbought — protecting a position should be faster than the bar for opening one.
+
+### The proposed grid (per `multi_factor_grid.py`)
+
+2 Family-1 options × 2 Family-2 options × 2 Family-3 options × 2 exit presets = **16 configs per timeframe**, × 3 timeframes × 2 periods (IS+OOS) = **96 backtests total** — fewer than Phase 1's 216, despite testing a combined (not isolated) signal, because each family's own option count was deliberately shrunk from 3 to 2 specifically to keep a 3-way Cartesian product from exploding.
+
+Full literal matrix (all 48 unique configs, no execution): `python -m modules.module_b_trend_following.print_multi_factor_matrix`.
+
+**A risk worth naming before running anything**: requiring 3-way confluence will trade less often than any single-family version, and Phase 1 already showed 4h struggling to clear the significance floor even for single-factor entries. 1d is untested territory entirely (no data downloaded yet). If this grid returns too few trades to be significant anywhere, the honest fallback would be loosening the "all three" requirement to "any two of three," not quietly abandoning the significance filter — a decision to make with real data in hand, not now.
+
+**Status: specification only.** `multi_factor_confluence.py` has not had even a sanity-check backtest run against it, unlike every other strategy file in this project up to this point — that verification, and the 1d data download it requires, are both pending explicit approval to proceed.

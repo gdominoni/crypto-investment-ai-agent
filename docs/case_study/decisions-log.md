@@ -4,6 +4,24 @@ Running log of non-obvious technical decisions, in chronological order. Each ent
 
 ---
 
+### 2026-08-17 — Multi-factor confluence replaces isolated single-family testing (Module B)
+
+**Context:** After reviewing Phase 1's coarse-grid results (216 backtests, zero genuine OOS wins across three isolated strategy families), the human director identified the actual methodological gap: the families were never tested *in isolation* by design intent, but the Phase 1 build had done exactly that -- each family alone, never combined. A breakout entry with nothing confirming real volume behind it can't distinguish a genuine move from chop; a mean-reversion entry with nothing confirming the reversal is real can't distinguish a bounce from a falling knife.
+
+**Decision:** replaced isolated testing with `MultiFactorConfluence`, a single strategy combining all three families on every candle in asymmetric roles -- Family 2 (breakout) as the timing trigger, Family 1 (RSI) and Family 3 (volume) as confirming filters -- rather than a flat AND of all three families' original full conditions (which would multiply 3+3+3 sub-conditions together and likely never fire at a statistically meaningful rate, especially at 4h/1d where Phase 1 already showed thin trade counts). This is a judgment call about *how* to combine, not fully specified by the instruction to "cross" the three families, and is presented for approval alongside the grid itself rather than assumed correct.
+
+**Also decided in the same redesign:**
+- 15m dropped entirely (Phase 1: uniformly worst timeframe across every family, consistent with fee-drag from high trade frequency).
+- Exit grid narrowed from 4 presets to 2 (null + one wide SL+TP pair) -- Phase 1's finding that the null/indicator-only exit outperformed every fixed-percentage exit on average directly motivated both the narrowing and weighting the new strategy's own exit logic toward indicator/trend-reversal signals.
+- Added an RSI-Bollinger-Bands variant (Bollinger Bands applied to the RSI series itself, not price) as a second Family-1 option, per explicit instruction not to test only fixed-threshold RSI. Verified `pandas_ta.bbands` works correctly on an arbitrary series before committing it to strategy code.
+- Per-family option counts shrunk from 3 (Phase 1) to 2, specifically because this grid multiplies three dimensions together (Cartesian product) rather than testing them separately -- keeping the combined grid a genuine coarse screen rather than letting the product size balloon.
+
+**Why the old section stays in the README, marked superseded rather than removed:** the negative result Phase 1 found (no isolated family shows OOS edge) is still true and is the direct cause of this redesign -- a case study should show the wrong turn, not just the corrected one.
+
+**Impact:** `modules/module_b_trend_following/multi_factor_grid.py`, `user_data/strategies/multi_factor_confluence.py`. Not yet run -- explicitly deferred pending approval of the grid itself, printed via `print_multi_factor_matrix.py` (pure enumeration, no Docker execution).
+
+---
+
 ### 2026-08-17 — Freqtrade resolves a strategy's parameter file from its .py path, not the class name
 
 **Context:** Building Module B's coarse-grid sweep (Phase 9, Phase 1 of the new strategy-family screening), the orchestration script wrote each combination's parameters to `<StrategyClassName>.json` (e.g. `MeanReversionBBRSI.json`), mirroring what looked like the pattern from hyperopt's own auto-exported `trend_ema_adx.json`.
