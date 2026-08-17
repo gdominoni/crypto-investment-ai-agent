@@ -1,6 +1,6 @@
 # Orchestrator
 
-Cross-module coordination layer: the dynamic capital allocator (built, Phase 7), and — still to come — the Telegram bot (Haiku-powered NLP/status formatting) and the live/dry-run switch (Phase 8). The system always boots in dry-run, and only an explicit human-issued Telegram confirmation command will be able to move any module to live execution.
+Cross-module coordination layer: the dynamic capital allocator (Phase 7) and the Telegram bot + live/dry-run switch (Phase 8). The system always boots in dry-run, and only an explicit human-issued Telegram confirmation command can move any module to live execution.
 
 ## Dynamic capital allocator
 
@@ -28,4 +28,18 @@ Capital freed up by the per-module cap returns to cash, not to other modules —
 
 Cash reserve: 40.0%. This is an honest, non-cherry-picked result that ties together every prior phase's real findings: Module A's genuinely attractive funding yield (Phase 5) earns it the maximum allowed allocation, while Modules B and C are correctly excluded for the exact reasons already surfaced in Phases 4 and 6 — not enough validated trades to trust yet, not a flaw in the allocator.
 
-Status: ✅ built and verified against real data (Phase 7). Telegram bot and live/dry-run switch are Phase 8.
+## Telegram bot
+
+`status.py` gathers everything into one `SystemStatus` (execution mode, module KPIs, allocation decision, and a live circuit-breaker check against Phase 2's cached BTC/USDT OHLC data) — the single source of truth used by both the CLI and the bot's `/status` command, so they can never drift into reporting different numbers for the same underlying state.
+
+`status_formatter.py` turns that structured status into a Telegram-ready message using **Claude Haiku** — the only place the orchestrator calls the Anthropic API, and the cost model's namesake claim (README Section 2: the server exclusively uses Haiku, never Sonnet/Opus) is enforced concretely by `tests/test_orchestrator_cost_model.py`, not just documented.
+
+**The live/dry-run switch never goes through Haiku.** `telegram_bot.py`'s message handler checks the raw incoming text against `safety.execution_mode.LIVE_CONFIRMATION_PHRASE` *before* anything else runs — an exact string match, not an LLM's judgment call. There's deliberately no open-ended Haiku chat fallback for arbitrary messages either: Haiku here only ever *formats* already-computed, already-safe data, never interprets free text into a decision. That keeps the LLM's role strictly read-only with respect to system state — the same "architectural isolation over access control" principle the Phase 3 safety kernel established, applied here to the bot layer instead of the risk-limit layer.
+
+Commands: `/start`, `/status` (full Haiku-formatted report), `/dry_run` (always allowed, no confirmation needed). Live mode requires sending the exact phrase as a plain message, not a command.
+
+**Verified for real**: a live, Haiku-formatted status message (built from the real allocation result above) was sent through the actual bot token to the human director's real Telegram chat and confirmed delivered. The exact-phrase safety check is locked in by `tests/test_telegram_bot.py` — exact match switches to live, wrong case doesn't, the phrase embedded in a longer sentence doesn't, unrecognized text gets a static instruction rather than an LLM-generated reply.
+
+Periodic/scheduled status checks (APScheduler) are deferred to Phase 9, where they naturally belong alongside making this run continuously on a VPS rather than being invoked by hand.
+
+Status: ✅ built and verified (Phase 7-8) — capital allocation, status reporting, and the live-mode gate all confirmed against real data and a real Telegram delivery.

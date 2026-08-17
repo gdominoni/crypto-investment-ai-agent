@@ -29,6 +29,32 @@ Running log of non-obvious technical decisions, in chronological order. Each ent
 
 ---
 
+### 2026-08-17 — No open-ended Haiku chat fallback in the Telegram bot
+
+**Context:** Building the Telegram bot (Phase 8), the natural design for an "unrecognized message" fallback would route it to Haiku for a conversational reply -- friendlier than a static error message.
+
+**Decision:** Didn't build it. Haiku's only role in `orchestrator/` is formatting already-computed, already-safe structured data (`status_formatter.py`) into text -- it never receives free-form user text and produces a response that could be mistaken for, or accidentally influence, a system decision. Unrecognized messages get a static instruction string instead.
+
+**Why:** this is the same "architectural isolation over access control" principle the Phase 3 safety kernel established (the LLM has no code path to a risk parameter, not just an instruction not to touch one) applied one layer up, at the bot itself. An open-ended chat handler sitting next to the exact-phrase live-mode check would be a standing invitation to eventually let Haiku's interpretation influence that check "just this once" -- easier to never build the temptation than to police it later.
+
+**Impact:** `orchestrator/telegram_bot.py`'s `handle_text()`. Locked in by `tests/test_telegram_bot.py`.
+
+---
+
+### 2026-08-17 — A cost-model test's own docstring tripped its own check
+
+**Context:** Wrote `test_orchestrator_never_references_sonnet_or_opus` (mirroring `test_safety_isolation.py`'s pattern) to enforce the Haiku-only cost model concretely. It failed immediately on the first run.
+
+**What actually happened:** the failure wasn't a real Sonnet/Opus usage -- it was `status_formatter.py`'s own module docstring, which *explains* the Haiku-only policy in prose ("never Sonnet/Opus"), tripping a naive substring search for the bare words "sonnet"/"opus".
+
+**Decision:** Narrowed the check to the actual model-id prefixes that would indicate real usage (`claude-sonnet`, `claude-opus`) instead of the bare English words, which legitimately appear in policy-explaining comments without being a violation of that policy.
+
+**Why this is logged:** a small, concrete example of a broader pattern worth remembering for any future "scan the code for forbidden string X" test: forbidding the *word* often isn't the same as forbidding the *usage*, especially once the code has grown enough documentation explaining why the word matters.
+
+**Impact:** `tests/test_orchestrator_cost_model.py`.
+
+---
+
 ### 2026-08-17 — Capital allocation weighted by rank, not raw Sortino magnitude
 
 **Context:** Building the cross-module capital allocator (Phase 7), the initial plan was to weight each module's capital share proportionally to its raw Sortino ratio -- a reasonable-sounding idea, since Sortino is already a risk-adjusted-return measure.
