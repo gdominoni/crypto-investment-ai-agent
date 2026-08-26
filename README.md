@@ -12,7 +12,7 @@ Full build plan: [`docs/case_study/PLAN.md`](docs/case_study/PLAN.md). This proj
 
 ---
 
-## Phase 1: Historical Research & Backtesting Methodology
+<h1 align="center">Phase 1: Historical Research & Backtesting Methodology</h1>
 
 Before any live component was built, this project ran a systematic historical study of whether deterministic market triggers predict tradeable price moves in crypto — the foundation everything downstream is built on, and honest about what it did and didn't find.
 
@@ -70,9 +70,13 @@ A coin's short-term realized volatility is z-scored against its own longer trail
 
 </details>
 
-**The honest finding.** Applying this methodology across the full candidate battery, static deterministic rule sets did not produce a statistically persistent, cross-coin, cross-year edge. That's the pessimistic baseline this project's live architecture is built to test against — not a result to argue away, and not one this project re-litigates by re-running the same static candidates hoping for a different answer.
+<h3 align="center">The honest finding.</h3>
 
-**The Dynamic Agent Thesis.** Given that a fixed rule set doesn't hold up, this project's central bet is architectural rather than statistical: a system that (1) treats every historical finding as perishable, re-validating the full candidate battery weekly against live data rather than fitting once and trusting it indefinitely; (2) escalates genuinely novel market conditions — by definition, the ones a fixed rule set cannot anticipate — to an LLM judgment layer and a human decision-maker, instead of silently misclassifying them; and (3) writes a structured post-mortem on every closed trade, feeding recognized failure patterns back into what the system already treats as known, rather than repeating the same mistake indefinitely. This doesn't guarantee a different live outcome than the static study found — it's a mechanistically different hypothesis (adaptive judgment plus continuous re-validation, versus one rule set fit once), and this project exists to test it for real rather than assume it inherits the static result.
+Applying this methodology across the full candidate battery, static deterministic rule sets did not produce a statistically persistent, cross-coin, cross-year edge. That's the pessimistic baseline this project's live architecture is built to test against — not a result to argue away, and not one this project re-litigates by re-running the same static candidates hoping for a different answer.
+
+<h3 align="center">The Dynamic Agent Thesis.</h3>
+
+Given that a fixed rule set doesn't hold up, this project's central bet is architectural rather than statistical: a system that (1) treats every historical finding as perishable, re-validating the full candidate battery weekly against live data rather than fitting once and trusting it indefinitely; (2) escalates genuinely novel market conditions — by definition, the ones a fixed rule set cannot anticipate — to an LLM judgment layer and a human decision-maker, instead of silently misclassifying them; and (3) writes a structured post-mortem on every closed trade, feeding recognized failure patterns back into what the system already treats as known, rather than repeating the same mistake indefinitely. This doesn't guarantee a different live outcome than the static study found — it's a mechanistically different hypothesis (adaptive judgment plus continuous re-validation, versus one rule set fit once), and this project exists to test it for real rather than assume it inherits the static result.
 
 ---
 
