@@ -89,7 +89,9 @@ Two cooperating components, running continuously:
 | **B — Execution Engine (Freqtrade)** | Places and manages trades on the duration-bucketed, anchor-based ladder from Phase 1 — never a flat barrier, and refit on the same weekly schedule as the battery (Phase 3). | ✅ Live (`execution/strategies/sentiment_agent_strategy.py`, `execution/config_live.json`), `trading_mode: "futures"` / `margin_mode: "isolated"` so both long and short can actually execute (spot alone can't hold a short), running on the daily timeframe to match the battery's own validation granularity. Dry-run by default, per the safety guardrails below. |
 | **C — Signal Layer** | The candidate battery (Phase 3) plus the Haiku Scout → Sonnet Strategist judgment pipeline. | ✅ Live (`candidates/`, `llm_pipeline/`). |
 
-**Haiku Scout → Sonnet Strategist**, the adaptive layer at the center of the Dynamic Agent Thesis:
+<h3 align="center">Haiku Scout → Sonnet Strategist</h3>
+
+The adaptive layer at the center of the Dynamic Agent Thesis:
 
 - **Haiku (always-on, cheap):** reads news and market data continuously, extracts asset/sentiment/magnitude/event type, and checks whether current conditions match a known candidate or a logged, already-rejected condition. Routine matches are logged, not escalated — Sonnet's attention is reserved for genuine judgment calls. (`llm_pipeline/haiku_sonnet_pipeline.py`.)
 - **Sonnet (escalated, judgment):** given a Haiku escalation, a live read of Freqtrade's actual open-trade state (`llm_pipeline/context_builder.py`, queries the real trade database directly — never a static snapshot) and the live candidate battery status (rebuilt fresh from `live_battery_state.json` on every call, never a hand-maintained file that can drift out of date), proposes one of: no action, watch, propose a trade (reasoning only — TP/SL always comes from the anchor methodology, never a number Sonnet invents), propose a novel-condition test, or exit an open position. Every proposal, and the exact data behind it, is logged in full and traceable.
