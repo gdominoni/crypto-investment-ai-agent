@@ -18,13 +18,42 @@ Before any live component was built, this project ran a systematic historical st
 
 **What was tested.** A battery of trigger categories tied to scheduled financial releases and market-structure signals — FOMC/CPI macro-event reactions, futures/perpetual funding-rate crowding, Kaufman Efficiency-Ratio trend continuation, and volume-delta surges — across BTC, ETH, BNB, XRP, DOGE, ADA, and LTC, using daily and hourly data spanning 2019 through 2026.
 
-**Why the methodology is built the way it is** — five requirements, each chosen for a specific, verifiable reason rather than as boilerplate rigor:
+**Why the methodology is built the way it is** — five requirements, each chosen for a specific, verifiable reason rather than as boilerplate rigor. Click any one for the reasoning behind it:
 
-- **Strict causality lag, enforced structurally, not by convention.** Several trigger definitions are only knowable once the period they describe is fully over — "the day closes bearish" cannot be evaluated before the day closes. Entry is therefore always the *next* period's open following the period a trigger condition reads, with no code path that allows an earlier fill. This matters because the alternative — filling at a price from before that information existed — silently inflates a backtest with information no live system could ever have had.
-- **Duration-bucketed, anchor-based exits, never a flat barrier.** Take-profit and stop-loss levels are derived from each horizon's own empirically observed Maximum Favorable/Adverse Excursion (MFE/MAE) at 1, 3, 7, 14, and 21 days, refit walk-forward on each fold's training window only. A flat, arbitrary percentage barrier — the simpler alternative — doesn't reflect how far price actually tends to move before reversing at each horizon, and materially understates or overstates a real trade's risk depending on the coin's own volatility.
-- **Purged walk-forward validation with mandatory concentration checks.** Anchors and multipliers are refit on an expanding window using only prior data, and every candidate's out-of-sample result is checked for concentration: is the pooled result actually carried by one coin or one calendar year? A result that doesn't diversify across both is not treated as validated, regardless of its headline number — a single strong year or a single strong coin is not evidence of a general, repeatable pattern.
-- **Win rate is always reported with a strict counterpart and a Sortino ratio, never alone.** A headline win rate computed only on decisively-resolved trades can look strong while a large population of inconclusive, loss-leaning timeouts sits outside that denominator. Reporting the strict version (timeouts counted as non-wins) alongside Sortino removes that blind spot.
-- **Extreme historical shocks are statistically isolated from the static battery's fitting, not blended in.** A coin's short-term realized volatility is z-scored against its own longer trailing distribution; events where that z-score crosses an extreme threshold are excluded from the anchors and multipliers a fixed rule set is fit and graded against, so a handful of crash days can't distort the barriers applied to ordinary conditions. These excluded events aren't discarded — they're the population Phase 2's live shock-detection pathway is built and validated on instead (see the collapsible section below).
+<details>
+<summary><b>Strict causality lag, enforced structurally, not by convention.</b></summary>
+
+Several trigger definitions are only knowable once the period they describe is fully over — "the day closes bearish" cannot be evaluated before the day closes. Entry is therefore always the *next* period's open following the period a trigger condition reads, with no code path that allows an earlier fill. This matters because the alternative — filling at a price from before that information existed — silently inflates a backtest with information no live system could ever have had.
+
+</details>
+
+<details>
+<summary><b>Duration-bucketed, anchor-based exits, never a flat barrier.</b></summary>
+
+Take-profit and stop-loss levels are derived from each horizon's own empirically observed Maximum Favorable/Adverse Excursion (MFE/MAE) at 1, 3, 7, 14, and 21 days, refit walk-forward on each fold's training window only. A flat, arbitrary percentage barrier — the simpler alternative — doesn't reflect how far price actually tends to move before reversing at each horizon, and materially understates or overstates a real trade's risk depending on the coin's own volatility.
+
+</details>
+
+<details>
+<summary><b>Purged walk-forward validation with mandatory concentration checks.</b></summary>
+
+Anchors and multipliers are refit on an expanding window using only prior data, and every candidate's out-of-sample result is checked for concentration: is the pooled result actually carried by one coin or one calendar year? A result that doesn't diversify across both is not treated as validated, regardless of its headline number — a single strong year or a single strong coin is not evidence of a general, repeatable pattern.
+
+</details>
+
+<details>
+<summary><b>Win rate is always reported with a strict counterpart and a Sortino ratio, never alone.</b></summary>
+
+A headline win rate computed only on decisively-resolved trades can look strong while a large population of inconclusive, loss-leaning timeouts sits outside that denominator. Reporting the strict version (timeouts counted as non-wins) alongside Sortino removes that blind spot.
+
+</details>
+
+<details>
+<summary><b>Extreme historical shocks are statistically isolated from the static battery's fitting, not blended in.</b></summary>
+
+A coin's short-term realized volatility is z-scored against its own longer trailing distribution; events where that z-score crosses an extreme threshold are excluded from the anchors and multipliers a fixed rule set is fit and graded against, so a handful of crash days can't distort the barriers applied to ordinary conditions. These excluded events aren't discarded — they're the population Phase 2's live shock-detection pathway is built and validated on instead (see the collapsible section below).
+
+</details>
 
 <details>
 <summary><b>🔍 Technical & Quantitative Methodology Details (Fees, Slippage, Variance & Shock Handling)</b></summary>
