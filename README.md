@@ -12,7 +12,7 @@ Full build plan: [`docs/case_study/PLAN.md`](docs/case_study/PLAN.md). This proj
 
 ---
 
-<h1 align="center">Phase 1: Historical Research & Backtesting Methodology</h1>
+## Phase 1: Historical Research & Backtesting Methodology
 
 Before any live component was built, this project ran a systematic historical study of whether deterministic market triggers predict tradeable price moves in crypto — the foundation everything downstream is built on, and honest about what it did and didn't find.
 
@@ -55,7 +55,7 @@ A coin's short-term realized volatility is z-scored against its own longer trail
 
 </details>
 
-#### 🔍 Technical & Quantitative Methodology Details
+<h3 align="center">🔍 Technical & Quantitative Methodology Details</h3>
 
 <details>
 <summary><b>Fees, Slippage, Variance & Shock Handling</b></summary>
