@@ -55,8 +55,10 @@ A coin's short-term realized volatility is z-scored against its own longer trail
 
 </details>
 
+#### 🔍 Technical & Quantitative Methodology Details
+
 <details>
-<summary><b>🔍 Technical & Quantitative Methodology Details (Fees, Slippage, Variance & Shock Handling)</b></summary>
+<summary><b>Fees, Slippage, Variance & Shock Handling</b></summary>
 
 **Trading fees & slippage.** Phase 1's historical backtesting nets every simulated trade against a fixed 0.20% round-trip transaction cost (see Phase 3's battery table) — chosen to validate *directional* edge honestly, not to model exact live execution cost. Slippage is deliberately **not** modeled in this historical study; a static backtest has no order book to simulate against. In live deployment, actual execution friction (taker fees, spread, realized slippage) is not assumed — it's logged directly from Freqtrade's own order-fill records, which reflect what the exchange actually charged, not a backtest assumption.
 
