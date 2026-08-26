@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.env
+*.sqlite
+*.sqlite3
+execution/pending_manual_signals.json
+execution/active_manual_signals.json
+.DS_Store
