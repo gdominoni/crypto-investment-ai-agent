@@ -51,7 +51,7 @@ Three cooperating components, running continuously:
 
 | Module | Role | Status |
 |---|---|---|
-| **A — Safety Circuit Breaker** | Deterministic kill switch: forces flat on a volatility spike or ahead of a high-impact macro release; hardcoded leverage/size ceilings no AI component can override. | ✅ Live (`safety/`), carried forward from the prior project unchanged. |
+| **A — Safety Circuit Breaker** | Deterministic kill switch: forces flat on a volatility spike or ahead of a high-impact macro release; hardcoded leverage/size ceilings no AI component can override. | ✅ Live (`safety/`), carried forward from the prior project unchanged, and wired directly into the execution engine's `confirm_trade_entry`/`custom_exit` — checked first, ahead of every other rule, blocking any new entry and force-liquidating any open position regardless of source (battery, manual, or shock-reactive). Nothing in Modules B or C can override it. |
 | **B — Execution Engine (Freqtrade)** | Places and manages trades on the duration-bucketed, anchor-based ladder from Phase 1 — never a flat barrier, and refit on the same weekly schedule as the battery (Phase 3). | ✅ Live (`execution/strategies/sentiment_agent_strategy.py`, `execution/config_live.json`), `trading_mode: "futures"` / `margin_mode: "isolated"` so both long and short can actually execute (spot alone can't hold a short), running on the daily timeframe to match the battery's own validation granularity. Dry-run by default, per the safety guardrails below. |
 | **C — Signal Layer** | The candidate battery (Phase 3) plus the Haiku Scout → Sonnet Strategist judgment pipeline. | ✅ Live (`candidates/`, `llm_pipeline/`). |
 

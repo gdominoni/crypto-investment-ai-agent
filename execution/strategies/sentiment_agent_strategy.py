@@ -24,6 +24,15 @@ Two independent entry sources, both gated:
 No third path exists. A 'watch' or 'rejected' candidate cannot place a
 trade no matter what its own trigger condition does.
 
+Module A's deterministic circuit breaker (`safety/circuit_breaker.py`,
+carried forward from the prior project unchanged) is checked FIRST, ahead
+of everything else, in both `confirm_trade_entry` and `custom_exit` -- a
+volatility spike or a macro-event blackout window blocks any new entry
+and force-liquidates any open position regardless of source (battery,
+manual, or shock-reactive) or how far through its duration ladder it is.
+This is the one thing in the system no LLM signal, validated candidate,
+or human Telegram approval can override.
+
 Exit is the anchor-based, duration-bucketed ladder from
 `candidates/methodology.py` -- SL logic lives entirely in `custom_exit`,
 never `custom_stoploss` (which can only tighten a stop over a trade's
@@ -48,6 +57,8 @@ from candidates.methodology import barrier_prices, bucket_for_elapsed
 from execution.signal_store import (
     consume_manual_signal, get_active_manual_signal, load_battery_state, peek_pending_manual_signal,
 )
+from safety.circuit_breaker import evaluate_circuit_breaker
+from safety.macro_calendar import MACRO_CALENDAR_2026
 
 MANUAL_TAG_PREFIX = "manual:"
 
@@ -72,6 +83,14 @@ class SentimentAgentStrategy(IStrategy):
     use_custom_stoploss = False
     minimal_roi = {"0": 10.0}  # effectively disabled -- custom_exit owns all exit decisions
     stoploss = -0.99  # emergency-only floor, custom_exit is expected to fire long before this
+
+    def _circuit_breaker_triggered(self, pair: str, current_time) -> bool:
+        dataframe, _ = self.dp.get_analyzed_dataframe(pair=pair, timeframe=self.timeframe)
+        past = dataframe.loc[dataframe["date"] <= current_time]
+        if len(past) < 2:
+            return False  # not enough history yet to judge a spike -- fail safe to "no trigger", matching circuit_breaker.py's own convention
+        decision = evaluate_circuit_breaker(current_time, past.set_index("date"), MACRO_CALENDAR_2026)
+        return decision.should_liquidate
 
     def populate_indicators(self, dataframe: pd.DataFrame, metadata: dict) -> pd.DataFrame:
         symbol = metadata["pair"].split("/")[0] + "USDT"
@@ -121,6 +140,8 @@ class SentimentAgentStrategy(IStrategy):
         once, at the moment the order is actually about to be placed --
         and moved into the ACTIVE store so `custom_exit` can recover this
         same trade's anchors later without re-touching the pending queue."""
+        if self._circuit_breaker_triggered(pair, current_time):
+            return False  # Module A overrides every entry source -- no exceptions
         if not entry_tag.startswith(MANUAL_TAG_PREFIX):
             return True  # a battery candidate already claimed this entry
         symbol = pair.split("/")[0] + "USDT"
@@ -129,6 +150,9 @@ class SentimentAgentStrategy(IStrategy):
         return manual is not None
 
     def custom_exit(self, pair: str, trade, current_time, current_rate: float, current_profit: float, **kwargs):
+        if self._circuit_breaker_triggered(pair, current_time):
+            return "circuit_breaker_liquidation"  # Module A overrides every open position -- no exceptions, checked before entry-candle exclusion below
+
         symbol = pair.split("/")[0] + "USDT"
         tag = trade.enter_tag if hasattr(trade, "enter_tag") and trade.enter_tag else None
         direction = "short" if trade.is_short else "long"
