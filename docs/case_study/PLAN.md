@@ -31,11 +31,10 @@ These are lessons paid for expensively in the prior repository. They are inputs 
 
 ## 2. Architecture
 
-Three modules, unchanged in their division of responsibility from the prior project, rebuilt clean:
+Two modules, rebuilt clean:
 
 | Module | Role |
 |---|---|
-| **A — Safety Circuit Breaker** | Deterministic, non-LLM kill switch: forces flat on a volatility spike or ahead of a high-impact macro release; hardcoded leverage/size ceilings no AI component can raise. Ported forward essentially unchanged, and wired directly into the execution engine's entry/exit callbacks (§2.B) so it's checked first, ahead of every other rule -- not merely present in the repository. |
 | **B — Execution Engine (Freqtrade)** | Places and manages trades on a duration-bucketed, anchor-based TP/SL ladder (§1.2). Runs `trading_mode: "futures"` / `margin_mode: "isolated"` so both long and short can actually execute (spot alone can't hold a short). Entries can come from two sources: (a) the C-candidate battery, when one is live-flagged as validated, or (b) an explicit Sonnet Strategist recommendation -- including a real-time shock/crash detection (§4.4) -- escalated from Haiku and approved by an explicit human confirmation (never a blind LLM trade — see §4). |
 | **C — Signal Layer: candidate battery + Haiku/Sonnet judgment** | Two parts, working together, described in §3 and §4. |
 

@@ -82,11 +82,10 @@ Given that a fixed rule set doesn't hold up, this project's central bet is archi
 
 ## Phase 2: System Architecture
 
-Three cooperating components, running continuously:
+Two cooperating components, running continuously:
 
 | Module | Role | Status |
 |---|---|---|
-| **A — Safety Circuit Breaker** | Deterministic kill switch: forces flat on a volatility spike or ahead of a high-impact macro release; hardcoded leverage/size ceilings no AI component can override. | ✅ Live (`safety/`), carried forward from the prior project unchanged, and wired directly into the execution engine's `confirm_trade_entry`/`custom_exit` — checked first, ahead of every other rule, blocking any new entry and force-liquidating any open position regardless of source (battery, manual, or shock-reactive). Nothing in Modules B or C can override it. |
 | **B — Execution Engine (Freqtrade)** | Places and manages trades on the duration-bucketed, anchor-based ladder from Phase 1 — never a flat barrier, and refit on the same weekly schedule as the battery (Phase 3). | ✅ Live (`execution/strategies/sentiment_agent_strategy.py`, `execution/config_live.json`), `trading_mode: "futures"` / `margin_mode: "isolated"` so both long and short can actually execute (spot alone can't hold a short), running on the daily timeframe to match the battery's own validation granularity. Dry-run by default, per the safety guardrails below. |
 | **C — Signal Layer** | The candidate battery (Phase 3) plus the Haiku Scout → Sonnet Strategist judgment pipeline. | ✅ Live (`candidates/`, `llm_pipeline/`). |
 
@@ -259,7 +258,6 @@ You:     Show me results for signal C-FUNDING-01.
 
 ```
 crypto-sentiment-trading-agent/
-├── safety/                      # Module A, ported forward unchanged
 ├── candidates/                  # Phase 1's methodology + battery: methodology.py, definitions.py, run_battery.py
 ├── execution/                   # Module B: Freqtrade strategy, config_live.json (futures/isolated), signal_store.py
 │   └── strategies/              # sentiment_agent_strategy.py -- the live IStrategy implementation
@@ -272,7 +270,7 @@ crypto-sentiment-trading-agent/
 └── tests/
 ```
 
-**Safety & guardrails (inherited):** deterministic circuit breaker (Module A) forces flat on volatility spikes or ahead of high-impact macro releases; hardcoded leverage/position-size ceilings no AI component can raise; every module defaults to dry-run, live execution requires an explicit human-issued confirmation; no trade is ever placed on an LLM-generated number.
+**Safety & guardrails:** every module defaults to dry-run, live execution requires an explicit human-issued confirmation; no trade is ever placed on an LLM-generated number.
 
 **Observation & reporting:** the system runs untouched except for its own scheduled weekly refresh and any human-approved novel-condition tests, for the agreed observation period. No retroactive re-tuning of results already produced — the weekly refresh updates the *live* battery going forward, it does not rewrite what already happened. At the end of the observation window, and at any checkpoint along the way, the KPI dashboard (§4.3) and the full decision log are the report — including if the honest result is "no better than the static baseline Phase 1 already found."
 
