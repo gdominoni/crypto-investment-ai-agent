@@ -101,7 +101,9 @@ The adaptive layer at the center of the Dynamic Agent Thesis:
 - **Novel-condition escalation is built as a whitelist, not code execution.** A novel-condition proposal can only compose from a fixed registry of indicators (`llm_pipeline/novel_condition_tester.py::SUPPORTED_INDICATORS`) plus a comparison operator and threshold — chosen specifically so there is no path from an LLM proposal to arbitrary executed code. Every approved test runs through the exact same walk-forward, concentration-checked pipeline as Phase 1's original research, not a shortcut version.
 - **Real-time shock/crash detection ("Mode B") is a distinct escalation path, market-data-driven rather than news-driven.** `llm_pipeline/shock_detector.py` scans live volatility for the same statistical extreme Phase 1 excludes from the static battery, and escalates directly to Sonnet when found — full detail, including why an "ideal retroactive entry" mode was considered and deliberately dropped, in Phase 1's collapsible technical section.
 
-> **[SCREENSHOT PLACEHOLDER — system architecture diagram: baseline battery + Haiku/Sonnet + Telegram interface + Freqtrade execution, one page]**
+<p align="center">
+  <img src="docs/case_study/assets/architecture_diagram.svg" alt="System architecture: statistical baseline feeding and checked against the adaptive Haiku/Sonnet layer, both driving execution and Telegram" width="900">
+</p>
 
 ---
 

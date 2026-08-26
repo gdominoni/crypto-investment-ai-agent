@@ -1,0 +1,117 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 780" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5b6472"/>
+    </marker>
+    <marker id="arrowGate" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#c2540c"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1180" height="780" fill="#fbfaf8"/>
+
+  <text x="590" y="38" text-anchor="middle" font-size="22" font-weight="700" fill="#1f2430">AI Agent on Freqtrade — System Architecture</text>
+  <text x="590" y="60" text-anchor="middle" font-size="13" fill="#6b7280">Statistical baseline (left) feeds and is checked against the adaptive layer (center); both drive execution and Telegram (right)</text>
+
+  <!-- Column headers -->
+  <text x="185" y="98" text-anchor="middle" font-size="13" font-weight="700" fill="#1d5f8a">STATISTICAL BASELINE</text>
+  <text x="590" y="98" text-anchor="middle" font-size="13" font-weight="700" fill="#6b4fbb">ADAPTIVE LAYER (Claude)</text>
+  <text x="985" y="98" text-anchor="middle" font-size="13" font-weight="700" fill="#166534">EXECUTION &amp; INTERFACE</text>
+
+  <!-- ===================== LEFT COLUMN: Statistical baseline ===================== -->
+  <rect x="55" y="118" width="260" height="64" rx="10" fill="#e8f1f8" stroke="#1d5f8a" stroke-width="1.5"/>
+  <text x="185" y="144" text-anchor="middle" font-size="13" font-weight="600" fill="#12384f">Phase 1: Historical Research</text>
+  <text x="185" y="163" text-anchor="middle" font-size="11" fill="#33566b">Walk-forward, causality-safe, shock-isolated</text>
+
+  <rect x="55" y="216" width="260" height="78" rx="10" fill="#e8f1f8" stroke="#1d5f8a" stroke-width="1.5"/>
+  <text x="185" y="240" text-anchor="middle" font-size="13" font-weight="600" fill="#12384f">Candidate Battery</text>
+  <text x="185" y="258" text-anchor="middle" font-size="11" fill="#33566b">validated · watch · rejected</text>
+  <text x="185" y="276" text-anchor="middle" font-size="11" fill="#33566b">candidates/run_battery.py</text>
+
+  <rect x="55" y="330" width="260" height="70" rx="10" fill="#fdf3e7" stroke="#b0740f" stroke-width="1.5"/>
+  <text x="185" y="355" text-anchor="middle" font-size="13" font-weight="600" fill="#5c4108">Weekly Re-Validation</text>
+  <text x="185" y="373" text-anchor="middle" font-size="11" fill="#7a5a13">scheduler/weekly_revalidation.py</text>
+  <text x="185" y="389" text-anchor="middle" font-size="11" fill="#7a5a13">Sunday cron, notifies on status change</text>
+
+  <!-- battery -> weekly loop -->
+  <path d="M185,400 C 40,430 40,240 55,240" fill="none" stroke="#b0740f" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Phase1 -> Battery -->
+  <line x1="185" y1="182" x2="185" y2="216" stroke="#1d5f8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- ===================== CENTER COLUMN: Adaptive layer ===================== -->
+  <rect x="460" y="118" width="260" height="64" rx="10" fill="#f1ecfa" stroke="#6b4fbb" stroke-width="1.5"/>
+  <text x="590" y="144" text-anchor="middle" font-size="13" font-weight="600" fill="#3d2a70">Haiku Scout</text>
+  <text x="590" y="163" text-anchor="middle" font-size="11" fill="#5b4590">Always-on: news + real-time shock scan</text>
+
+  <rect x="460" y="216" width="260" height="90" rx="10" fill="#f1ecfa" stroke="#6b4fbb" stroke-width="1.5"/>
+  <text x="590" y="240" text-anchor="middle" font-size="13" font-weight="600" fill="#3d2a70">Sonnet Strategist</text>
+  <text x="590" y="258" text-anchor="middle" font-size="11" fill="#5b4590">Reads battery status + live trade state</text>
+  <text x="590" y="274" text-anchor="middle" font-size="11" fill="#5b4590">TP/SL always from validated anchors —</text>
+  <text x="590" y="290" text-anchor="middle" font-size="11" fill="#5b4590">never a number it invents</text>
+
+  <line x1="590" y1="182" x2="590" y2="216" stroke="#6b4fbb" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <!-- battery -> sonnet context -->
+  <path d="M315,255 C 400,255 420,255 460,258" fill="none" stroke="#1d5f8a" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+  <text x="388" y="245" text-anchor="middle" font-size="10" fill="#33566b">status context</text>
+
+  <!-- Two outcomes from Sonnet -->
+  <rect x="460" y="346" width="260" height="70" rx="10" fill="#eaf6ee" stroke="#166534" stroke-width="1.5"/>
+  <text x="590" y="368" text-anchor="middle" font-size="12" font-weight="600" fill="#0f3d22">Routine trade proposal</text>
+  <text x="590" y="385" text-anchor="middle" font-size="11" fill="#215c37">References a validated candidate</text>
+  <text x="590" y="401" text-anchor="middle" font-size="11" font-weight="700" fill="#166534">→ fires immediately, no human step</text>
+
+  <rect x="460" y="440" width="260" height="86" rx="10" fill="#fdece3" stroke="#c2540c" stroke-width="1.5"/>
+  <text x="590" y="462" text-anchor="middle" font-size="12" font-weight="600" fill="#7a2e05">Novel-condition / shock test</text>
+  <text x="590" y="479" text-anchor="middle" font-size="11" fill="#8f3d10">Genuinely untested pattern</text>
+  <text x="590" y="496" text-anchor="middle" font-size="11" font-weight="700" fill="#c2540c">⏸ HUMAN GATE — "test it"</text>
+  <text x="590" y="513" text-anchor="middle" font-size="11" fill="#8f3d10">then walk-forward validated for real</text>
+
+  <path d="M590,306 C 590,320 590,330 590,346" fill="none" stroke="#166534" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M620,306 C 660,340 660,400 620,440" fill="none" stroke="#c2540c" stroke-width="1.5" marker-end="url(#arrowGate)"/>
+
+  <!-- novel test validated -> back into battery -->
+  <path d="M460,470 C 300,470 260,340 215,300" fill="none" stroke="#c2540c" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+  <text x="300" y="440" text-anchor="middle" font-size="10" fill="#8f3d10">if validated, joins battery</text>
+
+  <!-- ===================== RIGHT COLUMN: Execution & interface ===================== -->
+  <rect x="865" y="118" width="260" height="78" rx="10" fill="#eaf6ee" stroke="#166534" stroke-width="1.5"/>
+  <text x="995" y="142" text-anchor="middle" font-size="13" font-weight="600" fill="#0f3d22">Execution Engine</text>
+  <text x="995" y="160" text-anchor="middle" font-size="11" fill="#215c37">Freqtrade, futures/isolated, dry-run</text>
+  <text x="995" y="178" text-anchor="middle" font-size="11" fill="#215c37">Duration-bucketed anchor TP/SL ladder</text>
+
+  <rect x="865" y="230" width="260" height="150" rx="10" fill="#e7f4fb" stroke="#26a5e4" stroke-width="1.5"/>
+  <text x="995" y="254" text-anchor="middle" font-size="13" font-weight="600" fill="#0f4c68">Telegram Interface</text>
+  <text x="995" y="276" text-anchor="middle" font-size="11" fill="#155d7d">Natural language ↔ Sonnet</text>
+  <text x="995" y="294" text-anchor="middle" font-size="11" fill="#155d7d">(always cites computed numbers only)</text>
+  <text x="995" y="316" text-anchor="middle" font-size="11" fill="#155d7d">Structured commands / inline keyboard</text>
+  <text x="995" y="334" text-anchor="middle" font-size="11" fill="#155d7d">→ KPI queries, no LLM in this path</text>
+  <text x="995" y="356" text-anchor="middle" font-size="11" fill="#155d7d">Automated TP/SL post-mortems</text>
+
+  <!-- battery/routine trade -> execution -->
+  <path d="M720,381 C 800,381 800,157 865,157" fill="none" stroke="#166534" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <!-- execution <-> telegram -->
+  <line x1="995" y1="196" x2="995" y2="230" stroke="#26a5e4" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <!-- human gate box -> telegram (the actual chat where "test it" happens) -->
+  <path d="M720,483 C 800,483 800,320 865,300" fill="none" stroke="#c2540c" stroke-width="1.5" marker-end="url(#arrowGate)"/>
+  <text x="820" y="410" text-anchor="middle" font-size="10" fill="#8f3d10">proposal shown,</text>
+  <text x="820" y="422" text-anchor="middle" font-size="10" fill="#8f3d10">awaits reply</text>
+
+  <!-- Telegram back to Sonnet (human replies) -->
+  <path d="M865,340 C 780,410 700,340 620,306" fill="none" stroke="#26a5e4" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+  <text x="770" y="360" text-anchor="middle" font-size="10" fill="#155d7d">"test it" reply</text>
+
+  <!-- Legend -->
+  <rect x="55" y="610" width="1070" height="140" rx="10" fill="#ffffff" stroke="#d8dce3" stroke-width="1"/>
+  <text x="75" y="636" font-size="12" font-weight="700" fill="#1f2430">Signal classes reaching Execution (tagged for KPI breakdown, Phase 4.3):</text>
+  <circle cx="82" cy="658" r="5" fill="#1d5f8a"/>
+  <text x="95" y="663" font-size="11" fill="#33566b">battery — validated candidate fires unattended</text>
+  <circle cx="82" cy="680" r="5" fill="#166534"/>
+  <text x="95" y="685" font-size="11" fill="#215c37">sonnet_confirmed — Sonnet's own routine call, auto-fired, no human step</text>
+  <circle cx="82" cy="702" r="5" fill="#c2540c"/>
+  <text x="95" y="707" font-size="11" fill="#8f3d10">manual / shock_reactive — human approved testing a genuinely new or critical pattern first</text>
+
+  <text x="620" y="658" font-size="11" fill="#4b5563">The human gate sits on exactly one decision: whether to spend compute validating an</text>
+  <text x="620" y="676" font-size="11" fill="#4b5563">untested pattern. It is never on whether an already-proven signal gets to trade —</text>
+  <text x="620" y="694" font-size="11" fill="#4b5563">gating every trade on a human would test human+LLM judgment, not the LLM's own.</text>
+</svg>
