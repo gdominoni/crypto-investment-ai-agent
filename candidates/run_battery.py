@@ -28,6 +28,7 @@ from .methodology import (
     MethodologyConfig, build_events, classify_status, compute_anchors, concentration_check,
     report, shock_zscore_series, walk_forward,
 )
+from .status_history import candidates_due_for_prune_decision, is_dropped, is_shut_down, record_status, trigger_shutdown
 from llm_pipeline.dynamic_candidates import record_test_result, registered_specs
 from llm_pipeline.novel_condition_tester import test_novel_condition
 
@@ -38,15 +39,21 @@ ASSETS_DIR = Path(__file__).resolve().parent.parent / "docs" / "case_study" / "a
 SIGNAL_STORE_PATH = Path(__file__).resolve().parent.parent / "execution" / "live_battery_state.json"
 
 
-def run_all() -> tuple[pd.DataFrame, dict]:
-    """Returns (status_table, live_state). `live_state` is what the
+def run_all() -> tuple[pd.DataFrame, dict, dict]:
+    """Returns (status_table, live_state, meta). `live_state` is what the
     execution engine actually reads at trade time -- per (candidate,
     coin) the most recent walk-forward fold's chosen (tp_mult, sl_mult)
     and the anchors fit from ALL available data, keyed only for
     candidates whose pooled status is 'validated'. A 'watch' or
     'rejected' candidate is never allowed to place a trade unattended,
     so it has no entry in `live_state` regardless of what any single
-    coin's own numbers look like."""
+    coin's own numbers look like. `meta` carries `prune_candidates`
+    (names tracked 2+ years with no validation, due for a keep-or-drop
+    decision) and `shutdown_triggered` (True the run that finds zero
+    active candidates left -- static and dynamic alike)."""
+    if is_shut_down():
+        return pd.DataFrame(), {"generated_at": datetime.now(timezone.utc).isoformat(), "candidates": {}}, {"prune_candidates": [], "shutdown_triggered": False, "already_shut_down": True}
+
     cfg = MethodologyConfig(horizons=HORIZONS_DAYS)
     ohlc_by_coin = {c: load_daily(c) for c in COINS}
     triggers_by_coin = {c: build_triggers(c) for c in COINS}
@@ -55,6 +62,8 @@ def run_all() -> tuple[pd.DataFrame, dict]:
     rows = []
     live_state = {"generated_at": datetime.now(timezone.utc).isoformat(), "horizons_days": list(HORIZONS_DAYS), "candidates": {}}
     for variant, direction in CANDIDATE_DIRECTIONS.items():
+        if is_dropped(variant):
+            continue
         all_events, all_shock_events = [], []
         for coin in COINS:
             ev = build_events(ohlc_by_coin[coin], triggers_by_coin[coin][variant], direction, HORIZONS_DAYS,
@@ -67,6 +76,7 @@ def run_all() -> tuple[pd.DataFrame, dict]:
         n_shock_events = sum(len(e) for e in all_shock_events)
         if not all_events or not any(len(e) for e in all_events):
             rows.append({"candidate": variant, "status": "insufficient_data", "n": 0, "n_shock_excluded": n_shock_events})
+            record_status(variant, "insufficient_data")
             continue
         events = pd.concat(all_events, ignore_index=True)
 
@@ -75,6 +85,7 @@ def run_all() -> tuple[pd.DataFrame, dict]:
         coin_conc = concentration_check(oos, "group")
         year_conc = concentration_check(oos, "period")
         status = classify_status(rep, coin_conc, year_conc, cfg)
+        record_status(variant, status)
 
         rows.append({
             "candidate": variant, "direction": direction, "status": status,
@@ -101,9 +112,12 @@ def run_all() -> tuple[pd.DataFrame, dict]:
     # never treated as permanent, and a rejected one is cheaply re-checked
     # in case conditions genuinely changed, not silently dropped.
     for spec in registered_specs():
+        if is_dropped(spec.label):
+            continue
         result = test_novel_condition(spec, COINS)
         status = result["status"]
         record_test_result(spec, status, source="weekly_revalidation")
+        record_status(spec.label, status)
         if status == "insufficient_data":
             rows.append({"candidate": spec.label, "status": status, "n": 0, "n_shock_excluded": 0})
             continue
@@ -122,11 +136,22 @@ def run_all() -> tuple[pd.DataFrame, dict]:
                 "anchors": result["live_anchors"],
             }
 
-    return pd.DataFrame(rows), live_state
+    active_static = [v for v in CANDIDATE_DIRECTIONS if not is_dropped(v)]
+    active_dynamic = [s.label for s in registered_specs() if not is_dropped(s.label)]
+    shutdown_triggered = False
+    if not active_static and not active_dynamic:
+        trigger_shutdown("No candidates left -- every static and dynamic candidate has been dropped, and none have been proposed to replace them.")
+        shutdown_triggered = True
+
+    meta = {"prune_candidates": candidates_due_for_prune_decision(), "shutdown_triggered": shutdown_triggered}
+    return pd.DataFrame(rows), live_state, meta
 
 
 if __name__ == "__main__":
-    result, live_state = run_all()
+    result, live_state, meta = run_all()
+    if meta.get("already_shut_down"):
+        print("System already shut down -- no candidates left. See candidates/SHUTDOWN.")
+        raise SystemExit(0)
     ASSETS_DIR.mkdir(parents=True, exist_ok=True)
     result.to_csv(ASSETS_DIR / "candidate_battery_status.csv", index=False)
     SIGNAL_STORE_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -140,3 +165,7 @@ if __name__ == "__main__":
     }
     print(result.to_string(index=False, formatters={k: v for k, v in fmt.items() if k in result.columns}))
     print(f"\n{len(live_state['candidates'])} candidate(s) validated for live trading -> {SIGNAL_STORE_PATH}")
+    if meta["prune_candidates"]:
+        print(f"Due for a keep-or-drop decision (2+ years, never validated): {meta['prune_candidates']}")
+    if meta["shutdown_triggered"]:
+        print("SHUTDOWN TRIGGERED: no candidates left to test.")

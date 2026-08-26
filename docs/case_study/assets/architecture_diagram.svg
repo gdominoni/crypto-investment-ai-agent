@@ -44,11 +44,9 @@
   <text x="590" y="144" text-anchor="middle" font-size="13" font-weight="600" fill="#3d2a70">Haiku Scout</text>
   <text x="590" y="163" text-anchor="middle" font-size="11" fill="#5b4590">Always-on: news + real-time shock scan</text>
 
-  <rect x="460" y="216" width="260" height="90" rx="10" fill="#f1ecfa" stroke="#6b4fbb" stroke-width="1.5"/>
+  <rect x="460" y="216" width="260" height="64" rx="10" fill="#f1ecfa" stroke="#6b4fbb" stroke-width="1.5"/>
   <text x="590" y="240" text-anchor="middle" font-size="13" font-weight="600" fill="#3d2a70">Sonnet Strategist</text>
   <text x="590" y="258" text-anchor="middle" font-size="11" fill="#5b4590">Reads battery status + live trade state</text>
-  <text x="590" y="274" text-anchor="middle" font-size="11" fill="#5b4590">TP/SL always from validated anchors —</text>
-  <text x="590" y="290" text-anchor="middle" font-size="11" fill="#5b4590">never a number it invents</text>
 
   <line x1="590" y1="182" x2="590" y2="216" stroke="#6b4fbb" stroke-width="1.5" marker-end="url(#arrow)"/>
   <!-- battery -> sonnet context -->
@@ -62,13 +60,13 @@
   <text x="590" y="401" text-anchor="middle" font-size="11" font-weight="700" fill="#166534">→ fires immediately, no human step</text>
 
   <rect x="460" y="440" width="260" height="86" rx="10" fill="#fdece3" stroke="#c2540c" stroke-width="1.5"/>
-  <text x="590" y="462" text-anchor="middle" font-size="12" font-weight="600" fill="#7a2e05">Novel-condition / shock proposal</text>
-  <text x="590" y="479" text-anchor="middle" font-size="11" fill="#8f3d10">Sonnet's role ends here: a spec,</text>
-  <text x="590" y="496" text-anchor="middle" font-size="11" fill="#8f3d10">shown to the human, nothing more</text>
-  <text x="590" y="513" text-anchor="middle" font-size="11" font-weight="700" fill="#c2540c">⏸ sent to Telegram, awaits "test it"</text>
+  <text x="590" y="462" text-anchor="middle" font-size="12" font-weight="600" fill="#7a2e05">A Novel Condition Appears</text>
+  <text x="590" y="479" text-anchor="middle" font-size="11" fill="#8f3d10">Human decision: trade it now?</text>
+  <text x="590" y="496" text-anchor="middle" font-size="11" fill="#8f3d10">Add it to the battery of</text>
+  <text x="590" y="513" text-anchor="middle" font-size="11" fill="#8f3d10">enter-trade signals?</text>
 
-  <path d="M590,306 C 590,320 590,330 590,346" fill="none" stroke="#166534" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M620,306 C 660,340 660,400 620,440" fill="none" stroke="#c2540c" stroke-width="1.5" marker-end="url(#arrowGate)"/>
+  <path d="M590,280 C 590,305 590,325 590,346" fill="none" stroke="#166534" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M620,280 C 660,330 660,400 620,440" fill="none" stroke="#c2540c" stroke-width="1.5" marker-end="url(#arrowGate)"/>
 
   <!-- ===================== RIGHT COLUMN: Execution & interface ===================== -->
   <rect x="865" y="118" width="260" height="78" rx="10" fill="#eaf6ee" stroke="#166534" stroke-width="1.5"/>
@@ -79,10 +77,9 @@
   <rect x="865" y="230" width="260" height="150" rx="10" fill="#e7f4fb" stroke="#26a5e4" stroke-width="1.5"/>
   <text x="995" y="254" text-anchor="middle" font-size="13" font-weight="600" fill="#0f4c68">Telegram Interface</text>
   <text x="995" y="276" text-anchor="middle" font-size="11" fill="#155d7d">Natural language ↔ Sonnet</text>
-  <text x="995" y="294" text-anchor="middle" font-size="11" fill="#155d7d">(always cites computed numbers only)</text>
-  <text x="995" y="316" text-anchor="middle" font-size="11" fill="#155d7d">Structured commands / inline keyboard</text>
-  <text x="995" y="334" text-anchor="middle" font-size="11" fill="#155d7d">→ KPI queries, no LLM in this path</text>
-  <text x="995" y="356" text-anchor="middle" font-size="11" fill="#155d7d">Automated TP/SL post-mortems</text>
+  <text x="995" y="298" text-anchor="middle" font-size="11" fill="#155d7d">Structured commands / inline keyboard</text>
+  <text x="995" y="316" text-anchor="middle" font-size="11" fill="#155d7d">→ KPI queries, no LLM in this path</text>
+  <text x="995" y="338" text-anchor="middle" font-size="11" fill="#155d7d">Auto write-up sent when a trade closes</text>
 
   <!-- battery/routine trade -> execution -->
   <path d="M720,381 C 800,381 800,157 865,157" fill="none" stroke="#166534" stroke-width="1.5" marker-end="url(#arrow)"/>
@@ -95,9 +92,9 @@
 
   <!-- "test it" reply -> calls Phase 1's engine DIRECTLY, bypassing Sonnet entirely -->
   <rect x="55" y="560" width="1070" height="72" rx="10" fill="#fdece3" stroke="#c2540c" stroke-width="1.5" stroke-dasharray="2,3"/>
-  <text x="590" y="586" text-anchor="middle" font-size="12" font-weight="700" fill="#7a2e05">A human reply of "test it" calls Phase 1's methodology engine DIRECTLY — it never routes back through Sonnet</text>
+  <text x="590" y="586" text-anchor="middle" font-size="12" font-weight="700" fill="#7a2e05">A human reply of "test it" calls Phase 1's methodology engine directly.</text>
   <text x="590" y="606" text-anchor="middle" font-size="11" fill="#8f3d10">Sonnet proposed the spec and is done; test_novel_condition() runs the same build_events / walk_forward / classify_status pipeline as the static battery</text>
-  <text x="590" y="623" text-anchor="middle" font-size="11" fill="#8f3d10">If validated: trades the live occurrence immediately AND is recorded in the dynamic-candidate registry, re-tested weekly below. If not: recorded too, so Sonnet won't re-propose it.</text>
+  <text x="590" y="623" text-anchor="middle" font-size="11" fill="#8f3d10">If validated: trades the live occurrence immediately AND is recorded in the dynamic-candidate registry, re-tested weekly below.</text>
 
   <path d="M865,395 C 900,545 700,552 400,558" fill="none" stroke="#c2540c" stroke-width="2" stroke-dasharray="4,3" marker-end="url(#arrowGate)"/>
   <text x="880" y="440" text-anchor="middle" font-size="10" fill="#8f3d10">"test it" reply</text>

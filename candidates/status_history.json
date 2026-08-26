@@ -1,0 +1,68 @@
+{
+  "c1_long": {
+    "first_tracked_at": "2026-08-26T13:52:04.964923+00:00",
+    "dropped": false,
+    "last_asked_at": null,
+    "status_log": [
+      {
+        "status": "rejected",
+        "at": "2026-08-26T13:52:04.964923+00:00"
+      }
+    ]
+  },
+  "c1_short": {
+    "first_tracked_at": "2026-08-26T13:52:07.239305+00:00",
+    "dropped": false,
+    "last_asked_at": null,
+    "status_log": [
+      {
+        "status": "rejected",
+        "at": "2026-08-26T13:52:07.239305+00:00"
+      }
+    ]
+  },
+  "c2_long": {
+    "first_tracked_at": "2026-08-26T13:52:07.855094+00:00",
+    "dropped": false,
+    "last_asked_at": null,
+    "status_log": [
+      {
+        "status": "watch",
+        "at": "2026-08-26T13:52:07.855094+00:00"
+      }
+    ]
+  },
+  "c2_short": {
+    "first_tracked_at": "2026-08-26T13:52:08.811547+00:00",
+    "dropped": false,
+    "last_asked_at": null,
+    "status_log": [
+      {
+        "status": "watch",
+        "at": "2026-08-26T13:52:08.811547+00:00"
+      }
+    ]
+  },
+  "c6_long": {
+    "first_tracked_at": "2026-08-26T13:52:12.464252+00:00",
+    "dropped": false,
+    "last_asked_at": null,
+    "status_log": [
+      {
+        "status": "watch",
+        "at": "2026-08-26T13:52:12.464252+00:00"
+      }
+    ]
+  },
+  "c6_short": {
+    "first_tracked_at": "2026-08-26T13:52:14.274957+00:00",
+    "dropped": false,
+    "last_asked_at": null,
+    "status_log": [
+      {
+        "status": "rejected",
+        "at": "2026-08-26T13:52:14.274957+00:00"
+      }
+    ]
+  }
+}

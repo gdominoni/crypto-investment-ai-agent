@@ -77,3 +77,14 @@ CANDIDATE_DIRECTIONS = {
     "c2_long": "long", "c2_short": "short",
     "c6_long": "long", "c6_short": "short",
 }
+
+# Grounds any LLM call that reasons about a static candidate by name --
+# e.g. haiku_sonnet_pipeline.sonnet_prune_advice() -- in what the trigger
+# ACTUALLY tests, rather than letting the model infer a mechanism from
+# the label alone (a label like "c1_long" carries no information about
+# funding-rate crowding on its own).
+TRIGGER_DESCRIPTIONS = {
+    "c1": "funding-rate crowding: an extreme perpetual-futures funding rate, betting on a squeeze in the opposite direction",
+    "c2": "post-macro-release reaction: FOMC/CPI day with an unusually wide range, betting the day's own initial close direction reverses",
+    "c6": "efficiency-ratio trend: a high Kaufman efficiency ratio (a clean, low-noise trend) paired with a volume surge, in the direction already in motion",
+}

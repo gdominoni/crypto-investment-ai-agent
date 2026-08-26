@@ -129,7 +129,9 @@ Every candidate signal carries a live status, re-derived — not assumed — on 
 | `watch` | Positive signal that hasn't cleared every check yet. Visible to Sonnet as context, never triggers a trade alone. |
 | `rejected` | Failed validation. Logged so it isn't silently re-proposed without new evidence. |
 
-**Launch-day battery** (`candidates/run_battery.py`, 7 coins, daily bars, walk-forward OOS, **net of a 0.20% round-trip transaction cost applied to every simulated trade, and with extreme-shock events statistically excluded from fitting** — see the collapsible technical section above for both):
+### Launch-Day Battery Results
+
+`candidates/run_battery.py`, 7 coins, daily bars, walk-forward OOS, **net of a 0.20% round-trip transaction cost applied to every simulated trade, and with extreme-shock events statistically excluded from fitting** — see the collapsible technical section above for both:
 
 | Candidate | Direction | Status | N | Win Rate | Strict WR | Sortino | Txn Cost (RT) | Timeout % | Shocks Excluded |
 |---|---|---|---|---|---|---|---|---|---|
@@ -146,11 +148,9 @@ The 0.20% fee figure is a fixed, conservative round-trip assumption (entry + exi
 
 **Zero candidates reached `validated` status at launch** — the expected, honestly-reported continuation of Phase 1's finding, not a bug in the battery. In practice this means two things on day one: nothing in `execution/live_battery_state.json` is eligible to fire on its own, and Sonnet's routine `propose_trade` path (§4.1) has no validated candidate to reference either, so it has nothing to act on unattended yet. The only route to a live trade at launch is the human-gated one — Haiku/Sonnet flag a genuinely novel condition, a human approves testing it, and if it validates, that trade fires immediately and any future occurrence joins the weekly-refreshed battery. This is expected, not a shortfall: it's the system correctly refusing to invent a signal it hasn't earned. Two more candidates (stablecoin-supply flow, funding-basis unwind) are scoped in the [build plan](docs/case_study/PLAN.md) for a future data-source addition.
 
-**The re-validation loop that keeps this table alive:** every Sunday, `scheduler/weekly_revalidation.py` re-runs the full battery's walk-forward fold and concentration check against the latest week of data, diffs every candidate's status against the previous run, and notifies the human only when something actually changed. Separately, any time Haiku/Sonnet flag a genuinely novel condition, the human can approve an ad-hoc test of it on the spot via the same pipeline, run on demand instead of waiting for Sunday — if it validates, it joins the battery under this same weekly regime.
+### The Re-Validation Loop That Keeps This Table Alive
 
-> **[SCREENSHOT PLACEHOLDER — this table, rendered from the live dashboard, with a current "last refreshed" timestamp]**
-
-> **[SCREENSHOT PLACEHOLDER — weekly re-validation notification, showing a status change for one candidate]**
+Every Sunday, `scheduler/weekly_revalidation.py` re-runs the full battery's walk-forward fold and concentration check against the latest week of data, diffs every candidate's status against the previous run, and notifies the human only when something actually changed. Separately, any time Haiku/Sonnet flag a genuinely novel condition, the human can approve an ad-hoc test of it on the spot via the same pipeline, run on demand instead of waiting for Sunday — if it validates, it joins the battery under this same weekly regime.
 
 ---
 

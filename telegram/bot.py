@@ -13,6 +13,7 @@ import requests
 from anthropic import Anthropic
 from dotenv import load_dotenv
 
+from candidates.status_history import drop_candidate, mark_asked
 from execution.signal_store import consume_manual_signal, load_manual_signals, push_manual_signal
 from llm_pipeline.context_builder import build_context_summary, build_technical_snapshot
 from llm_pipeline.dynamic_candidates import record_test_result
@@ -79,6 +80,22 @@ def handle_kpi_callback(callback_data: str) -> str:
     table = format_kpi_table(df, title)
     title_line, _, rest = table.partition("\n")
     return f"<b>{escape_html(title_line)}</b>\n<pre>{escape_html(rest)}</pre>"  # <pre> preserves the table's column alignment
+
+
+def handle_prune_callback(callback_data: str) -> str:
+    """Answers the "Keep Testing" / "Drop from Batch" buttons sent by
+    scheduler/weekly_revalidation.py for a candidate tracked 2+ years
+    with no validation. The decision is the human's -- Sonnet's earlier
+    message was advisory only -- so this just records it: "keep" resets
+    the re-ask timer (mark_asked, same as sending the prompt already
+    did) so it isn't re-proposed for another 6 months, "drop" removes
+    the candidate from every future battery run via status_history.py."""
+    _, action, candidate = callback_data.split(":", 2)
+    if action == "drop":
+        drop_candidate(candidate)
+        return f"Dropped '<b>{escape_html(candidate)}</b>' from the batch. It will no longer be tested."
+    mark_asked(candidate)
+    return f"Keeping '<b>{escape_html(candidate)}</b>' in the batch. Will ask again in 6 months if it still hasn't validated."
 
 
 def handle_test_it_confirmation(pending_spec: ConditionSpec, coins: list[str], approved_by: str,
@@ -159,7 +176,11 @@ def _get_updates(token: str, offset: int | None, timeout: int = 30) -> list[dict
 def _dispatch_update(update: dict, client: Anthropic) -> None:
     if "callback_query" in update:
         cq = update["callback_query"]
-        reply = handle_kpi_callback(cq["data"])
+        data = cq["data"]
+        if data.startswith("prune:"):
+            reply = handle_prune_callback(data)
+        else:
+            reply = handle_kpi_callback(data)
         _send(reply)
         _answer_callback_query(cq["id"])
         return
