@@ -9,6 +9,7 @@ import sqlite3
 from pathlib import Path
 
 from execution.signal_store import BATTERY_STATE_PATH, load_battery_state
+from llm_pipeline.dynamic_candidates import rejected_labels
 
 
 def build_context_summary() -> str:
@@ -19,13 +20,23 @@ def build_context_summary() -> str:
         names = ", ".join(battery["candidates"].keys())
         candidates_line = f"Currently validated (unattended-trade-eligible) candidates: {names}."
     generated_at = battery.get("generated_at", "never run")
+
+    already_tested = rejected_labels()
+    tested_line = (
+        f"Already tested via 'test it' and NOT currently validated (do not re-propose these without genuinely new "
+        f"evidence, not just seeing the same pattern again): {', '.join(sorted(already_tested))}."
+        if already_tested else
+        "No novel conditions have been tested yet."
+    )
+
     return (
         f"CANDIDATE BATTERY STATUS (refreshed weekly, last run: {generated_at}):\n"
         f"{candidates_line}\n"
         f"A candidate not listed as validated must never be treated as a live trading signal, "
         f"regardless of how positive it looks in isolation -- it either failed walk-forward "
         f"validation or a per-coin/per-year concentration check. Full status table: "
-        f"{BATTERY_STATE_PATH.parent.parent / 'docs/case_study/assets/candidate_battery_status.csv'}."
+        f"{BATTERY_STATE_PATH.parent.parent / 'docs/case_study/assets/candidate_battery_status.csv'}.\n"
+        f"{tested_line}"
     )
 
 

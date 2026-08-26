@@ -15,6 +15,7 @@ from dotenv import load_dotenv
 
 from execution.signal_store import consume_manual_signal, load_manual_signals, push_manual_signal
 from llm_pipeline.context_builder import build_context_summary, build_technical_snapshot
+from llm_pipeline.dynamic_candidates import record_test_result
 from llm_pipeline.haiku_sonnet_pipeline import escape_html, extract_text
 from llm_pipeline.novel_condition_tester import ConditionSpec, test_novel_condition
 from llm_pipeline.pending_tests import pop_pending_test
@@ -82,19 +83,26 @@ def handle_kpi_callback(callback_data: str) -> str:
 
 def handle_test_it_confirmation(pending_spec: ConditionSpec, coins: list[str], approved_by: str,
                                  live_coin: str | None = None, signal_class: str = "manual") -> str:
-    """Fired when a human replies "test it" to a Sonnet novel-condition
-    proposal -- runs the actual walk-forward test (never assumed, never
-    faked). If it validates AND `live_coin` is given (the specific coin
-    whose live occurrence prompted this test -- e.g. the coin a shock was
-    just detected on), the resulting anchors are pushed immediately as a
-    manual signal for THAT occurrence, tagged `signal_class` so it can be
-    measured separately from routine trades. Validating in general and
-    trading the specific live instance are two different things -- this
-    does both, not just the first."""
+    """Fired when a human replies "test it" -- this calls Phase 1's own
+    methodology engine directly (test_novel_condition -> the same
+    build_events/walk_forward/classify_status pipeline run_battery.py
+    uses for the static candidates), never routing back through Sonnet:
+    Sonnet's job ended when it proposed the spec, the actual validation
+    is deterministic and Sonnet has no further say in the outcome.
+
+    If it validates AND `live_coin` is given (the specific coin whose
+    live occurrence prompted this test -- e.g. the coin a shock was just
+    detected on), the resulting anchors are pushed immediately as a
+    manual signal for THAT occurrence, tagged `signal_class`. Separately,
+    and regardless of outcome, the result is recorded in the dynamic-
+    candidate registry (llm_pipeline/dynamic_candidates.py) so it's
+    re-tested weekly alongside the static battery from now on, and so a
+    rejected condition isn't silently re-proposed later."""
     result = test_novel_condition(pending_spec, coins)
     status = result["status"]
     if status == "insufficient_data":
         return f"Tested '<b>{escape_html(pending_spec.label)}</b>': not enough historical occurrences to evaluate yet."
+    record_test_result(pending_spec, status, source=signal_class)
     lines = [
         f"Tested '<b>{escape_html(pending_spec.label)}</b>': status = <b>{escape_html(status)}</b>",
         f"N={result['n']}  win_rate={result['win_rate']:.1%}  strict_win_rate={result['strict_win_rate']:.1%}",
@@ -102,7 +110,7 @@ def handle_test_it_confirmation(pending_spec: ConditionSpec, coins: list[str], a
         f"timeout_fraction={result['timeout_fraction']:.1%}",
     ]
     if status == "validated":
-        lines.append("This condition is now eligible to be approved for a live trade the next time it fires.")
+        lines.append("Added to the weekly-refreshed battery going forward -- re-tested every Sunday alongside the static candidates, same as any of them.")
         if live_coin:
             push_manual_signal(
                 coin=live_coin, direction=pending_spec.direction,
@@ -113,7 +121,7 @@ def handle_test_it_confirmation(pending_spec: ConditionSpec, coins: list[str], a
             )
             lines.append(f"<b>{'━' * 4} Pushed as a live signal for {escape_html(live_coin)} now -- tagged '{escape_html(signal_class)}' {'━' * 4}</b>")
     else:
-        lines.append("This does not clear the bar for live trading -- logged as tested, will not be re-proposed without new evidence.")
+        lines.append("This does not clear the bar for live trading -- logged as tested, won't be re-proposed by Sonnet without new evidence, but will still be re-checked weekly in case conditions genuinely change.")
     return "\n".join(lines)
 
 

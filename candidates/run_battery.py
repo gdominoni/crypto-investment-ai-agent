@@ -1,7 +1,11 @@
-"""Runs every candidate in `definitions.py` through the fixed methodology
-(`methodology.py`) across the live coin universe, pooled for anchor
-fitting, graded per-coin and per-year for concentration, and writes the
-status table this project's weekly refresh cycle re-runs unchanged.
+"""Runs every candidate in `definitions.py` (the static battery) PLUS
+every candidate in the dynamic registry (`llm_pipeline/dynamic_candidates.py`
+-- conditions discovered live through "test it", re-tested here every
+week with the exact same rigor rather than trusted permanently from
+their first validation) through the fixed methodology (`methodology.py`)
+across the live coin universe, pooled for anchor fitting, graded per-coin
+and per-year for concentration, and writes the status table this
+project's weekly refresh cycle re-runs unchanged.
 
 Coin universe: BTC/ETH/BNB/XRP/DOGE/ADA/LTC. SOL/AVAX/LINK are available
 in `data/` but excluded here -- their intra-bar volatility relative to
@@ -24,6 +28,8 @@ from .methodology import (
     MethodologyConfig, build_events, classify_status, compute_anchors, concentration_check,
     report, shock_zscore_series, walk_forward,
 )
+from llm_pipeline.dynamic_candidates import record_test_result, registered_specs
+from llm_pipeline.novel_condition_tester import test_novel_condition
 
 COINS = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "XRPUSDT", "DOGEUSDT", "ADAUSDT", "LTCUSDT"]
 HORIZONS_DAYS = (1, 3, 7, 14, 21)
@@ -88,6 +94,34 @@ def run_all() -> tuple[pd.DataFrame, dict]:
                 "sl_mult": float(last_params["sl_mult"]) if last_params is not None else 1.0,
                 "anchors": {str(h): {"mfe": full_anchors[h]["mfe"], "mae": full_anchors[h]["mae"]} for h in HORIZONS_DAYS},
             }
+
+    # Dynamic candidates -- conditions a human approved testing live via
+    # "test it" -- are re-tested here with test_novel_condition() every
+    # week, exactly like the static ones above: a validated status is
+    # never treated as permanent, and a rejected one is cheaply re-checked
+    # in case conditions genuinely changed, not silently dropped.
+    for spec in registered_specs():
+        result = test_novel_condition(spec, COINS)
+        status = result["status"]
+        record_test_result(spec, status, source="weekly_revalidation")
+        if status == "insufficient_data":
+            rows.append({"candidate": spec.label, "status": status, "n": 0, "n_shock_excluded": 0})
+            continue
+        coin_conc, year_conc = result["coin_concentration"], result["year_concentration"]
+        rows.append({
+            "candidate": spec.label, "direction": spec.direction, "status": status,
+            "n": result["n"], "win_rate": result["win_rate"], "strict_win_rate": result["strict_win_rate"],
+            "sortino": result["sortino"], "total_expectancy": result["total_expectancy"], "timeout_fraction": result["timeout_fraction"],
+            "dominant_coin": coin_conc.get("dominant_group"), "max_coin_share": coin_conc.get("max_group_share"),
+            "dominant_year": year_conc.get("dominant_group"), "max_year_share": year_conc.get("max_group_share"),
+            "n_shock_excluded": 0,  # dynamic candidates aren't run through the static battery's shock-regime preprocessing -- their own indicator may already BE a shock measure
+        })
+        if status == "validated" and result.get("live_anchors"):
+            live_state["candidates"][spec.label] = {
+                "direction": spec.direction, "tp_mult": result["live_tp_mult"], "sl_mult": result["live_sl_mult"],
+                "anchors": result["live_anchors"],
+            }
+
     return pd.DataFrame(rows), live_state
 
 
