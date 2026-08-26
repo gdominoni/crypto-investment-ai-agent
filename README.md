@@ -6,7 +6,9 @@
 
 **Executive summary.** A prior, static rule-based research phase (Phase 1 below) tested six categories of deterministic market triggers — scheduled macro releases, futures-market crowding, trend-efficiency continuation — across seven years of crypto data, under full walk-forward validation, and found no statistically persistent edge. This project's response to that finding is the adaptive system described above: a continuously re-validated statistical baseline, an LLM judgment layer (Claude Haiku → Claude Sonnet), and a human supervisor at exactly one decision point, observed live rather than assumed from a backtest. **Target objectives:** (1) determine whether adaptive re-validation and LLM-mediated judgment produce a different live result than the static baseline; (2) do so with a fully causality-safe, leakage-free methodology throughout; (3) keep every trading decision traceable to a specific signal and a specific piece of data. The human gate sits on exactly one kind of decision — whether to spend real compute validating a genuinely untested pattern — never on whether a routine, already-validated trade fires: gating every individual trade on a human would test human-plus-LLM judgment, not the LLM's own, defeating the point of objective (1).
 
-> **[HERO SCREENSHOT — a real Telegram exchange showing the human-in-the-loop interaction live: a market-check question, the AI's reasoning, and a trade decision (§4.1). This is the single image that should convince a reader the system is real, not a mockup — goes here, above the fold, as soon as it's captured.]**
+<p align="center">
+  <img src="docs/case_study/assets/hero_telegram_trade_open.png" alt="Sonnet Strategist opening a live trade on Telegram, with bolded fields and the full TP/SL ladder" width="360">
+</p>
 
 Full build plan: [`docs/case_study/PLAN.md`](docs/case_study/PLAN.md). This project rebuilds an earlier one whose complete prior case study is linked at the bottom.
 
