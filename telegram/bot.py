@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 
 from execution.signal_store import consume_manual_signal, load_manual_signals, push_manual_signal
 from llm_pipeline.context_builder import build_context_summary, build_technical_snapshot
-from llm_pipeline.haiku_sonnet_pipeline import extract_text
+from llm_pipeline.haiku_sonnet_pipeline import escape_html, extract_text
 from llm_pipeline.novel_condition_tester import ConditionSpec, test_novel_condition
 from llm_pipeline.pending_tests import pop_pending_test
 from telegram.kpi_queries import format_kpi_table, kpi_table
@@ -42,7 +42,7 @@ def _send(text: str, reply_markup: dict | None = None) -> bool:
     load_dotenv()
     token, chat_id = os.environ["TELEGRAM_BOT_TOKEN"], os.environ["TELEGRAM_CHAT_ID"]
     url = f"https://api.telegram.org/bot{token}/sendMessage"
-    payload = {"chat_id": chat_id, "text": text}
+    payload = {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
     if reply_markup is not None:
         payload["reply_markup"] = reply_markup
     resp = requests.post(url, json=payload, timeout=15)
@@ -52,14 +52,16 @@ def _send(text: str, reply_markup: dict | None = None) -> bool:
 def handle_natural_language(text: str, client: Anthropic) -> str:
     """Market checks ("how's the market", "do we have open trades") and
     conversational follow-ups -- never the KPI path, which is command-
-    driven and LLM-free by design (see `handle_command`)."""
+    driven and LLM-free by design (see `handle_command`). Escaped, not
+    bolded: this is free-form Sonnet prose with no template around it, so
+    only HTML-safety is applied, not formatting Sonnet didn't ask for."""
     snapshot = build_technical_snapshot("MARKET", FREQTRADE_DB_PATH)
     context = build_context_summary()
     response = client.messages.create(
         model=SONNET_MODEL, max_tokens=400, system=MARKET_CHECK_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": f"USER QUESTION: {text}\n\nSTATE:\n{snapshot}\n\n{context}"}],
     )
-    return extract_text(response)
+    return escape_html(extract_text(response))
 
 
 def handle_command(command: str, args: list[str]) -> tuple[str, dict | None]:
@@ -73,7 +75,9 @@ def handle_kpi_callback(callback_data: str) -> str:
     group_by = None if group == "overall" else group
     df = kpi_table(FREQTRADE_DB_PATH, group_by=group_by)
     title = f"Results by {group}:" if group_by else "Results (all-time, overall):"
-    return format_kpi_table(df, title)
+    table = format_kpi_table(df, title)
+    title_line, _, rest = table.partition("\n")
+    return f"<b>{escape_html(title_line)}</b>\n<pre>{escape_html(rest)}</pre>"  # <pre> preserves the table's column alignment
 
 
 def handle_test_it_confirmation(pending_spec: ConditionSpec, coins: list[str], approved_by: str,
@@ -90,9 +94,9 @@ def handle_test_it_confirmation(pending_spec: ConditionSpec, coins: list[str], a
     result = test_novel_condition(pending_spec, coins)
     status = result["status"]
     if status == "insufficient_data":
-        return f"Tested '{pending_spec.label}': not enough historical occurrences to evaluate yet."
+        return f"Tested '<b>{escape_html(pending_spec.label)}</b>': not enough historical occurrences to evaluate yet."
     lines = [
-        f"Tested '{pending_spec.label}': status = {status}",
+        f"Tested '<b>{escape_html(pending_spec.label)}</b>': status = <b>{escape_html(status)}</b>",
         f"N={result['n']}  win_rate={result['win_rate']:.1%}  strict_win_rate={result['strict_win_rate']:.1%}",
         f"Sortino={result['sortino']:.2f}  total_expectancy={result['total_expectancy']:+.1%}  "
         f"timeout_fraction={result['timeout_fraction']:.1%}",
@@ -107,7 +111,7 @@ def handle_test_it_confirmation(pending_spec: ConditionSpec, coins: list[str], a
                           f"trading the live occurrence that prompted it.",
                 approved_by=approved_by, signal_class=signal_class,
             )
-            lines.append(f"Pushed as a live signal for {live_coin} now -- tagged '{signal_class}'.")
+            lines.append(f"<b>{'━' * 4} Pushed as a live signal for {escape_html(live_coin)} now -- tagged '{escape_html(signal_class)}' {'━' * 4}</b>")
     else:
         lines.append("This does not clear the bar for live trading -- logged as tested, will not be re-proposed without new evidence.")
     return "\n".join(lines)
@@ -123,7 +127,9 @@ def send_stoploss_postmortem(trade_pair: str, exit_reason: str, close_profit: fl
         f"signal's underlying assumption broke? Cite only the numbers given here.\n\n{context}"
     )
     response = client.messages.create(model=SONNET_MODEL, max_tokens=300, messages=[{"role": "user", "content": prompt}])
-    _send(f"{'SL' if close_profit < 0 else 'TP'} hit on {trade_pair} ({close_profit:+.2%}).\n\n{extract_text(response)}\n\nDocumented in the history report.")
+    kind = "SL" if close_profit < 0 else "TP"
+    _send(f"<b>{kind} hit on {escape_html(trade_pair)} ({close_profit:+.2%})</b>\n\n"
+          f"{escape_html(extract_text(response))}\n\nDocumented in the history report.")
 
 
 def _answer_callback_query(callback_query_id: str) -> None:

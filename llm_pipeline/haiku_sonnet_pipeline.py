@@ -109,6 +109,15 @@ def _strip_fences(text: str) -> str:
     return text.strip()
 
 
+def escape_html(text: str) -> str:
+    """The only three characters Telegram's HTML parse_mode actually
+    requires escaping -- far fewer sharp edges than MarkdownV2 (which is
+    why this project uses HTML for any formatted message, not Markdown:
+    a stray '_' or '*' in LLM-generated free text broke MarkdownV2
+    parsing outright in an earlier version of this pipeline)."""
+    return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
 def extract_text(response) -> str:
     """A response's content blocks aren't always [text] -- a model can
     emit a ThinkingBlock (or other non-text block) before its actual
@@ -166,16 +175,16 @@ def sonnet_shock_response(shock: dict, client: Anthropic) -> dict:
 
 def format_shock_message(shock: dict, assessment: dict) -> str:
     base = (
-        f"SHOCK ALERT -- {shock['symbol']}\n\n"
-        f"Direction: {shock['direction']} (z={shock['shock_z']:.2f}, a statistical extreme this "
+        f"<b>{'━' * 4} SHOCK ALERT: {escape_html(shock['symbol'])} {'━' * 4}</b>\n\n"
+        f"<b>Direction:</b> {escape_html(shock['direction'])} (z={shock['shock_z']:.2f}, a statistical extreme this "
         f"project's own methodology treats as excluded from routine conditions)\n\n"
-        f"Assessment: {assessment['assessment']}\n"
-        f"Recommended action: {assessment['recommended_action']}"
+        f"<b>Assessment:</b> {escape_html(assessment['assessment'])}\n"
+        f"<b>Recommended action:</b> {escape_html(assessment['recommended_action'])}"
     )
     if assessment["recommended_action"] == "propose_novel_test" and assessment.get("novel_condition_spec"):
         spec = assessment["novel_condition_spec"]
         base += (
-            f"\n\nProposed test: {spec['indicator']} {spec['op']} {spec['threshold']} -> {spec['direction']}\n"
+            f"\n\n<b>Proposed test:</b> {escape_html(spec['indicator'])} {escape_html(spec['op'])} {spec['threshold']} -> {escape_html(spec['direction'])}\n"
             f"Reply 'test it' to run a real walk-forward backtest of this coin's own historical "
             f"shocks. If it validates, the result trades THIS live occurrence too (tagged "
             f"shock_reactive), so we can measure how the system actually did reacting in real time."
@@ -205,7 +214,7 @@ def send_telegram(message: str, reply_markup: dict | None = None) -> bool:
     token = os.environ["TELEGRAM_BOT_TOKEN"]
     chat_id = os.environ["TELEGRAM_CHAT_ID"]
     url = f"https://api.telegram.org/bot{token}/sendMessage"
-    payload = {"chat_id": chat_id, "text": message}
+    payload = {"chat_id": chat_id, "text": message, "parse_mode": "HTML"}
     if reply_markup is not None:
         payload["reply_markup"] = json.dumps(reply_markup)
     resp = requests.post(url, json=payload, timeout=15)
@@ -215,55 +224,64 @@ def send_telegram(message: str, reply_markup: dict | None = None) -> bool:
     return True
 
 
-def execute_routine_trade(trade_proposal: dict) -> str:
+def execute_routine_trade(trade_proposal: dict) -> dict:
     """Fires immediately, no human confirmation -- `trade_proposal` must
     reference a candidate CURRENTLY 'validated' in the battery (enforced
     here, not just requested in the prompt: Sonnet's output is untrusted
     input like any other model output, so the anchor lookup is the real
-    gate, not the instruction asking it to behave). Returns a status
-    string for the Telegram notification, never a request for approval --
-    routine trades are not a human decision in this project (see module
-    docstring for why)."""
+    gate, not the instruction asking it to behave). Returns a dict for
+    the Telegram notification (never a request for approval -- routine
+    trades are not a human decision in this project, see module
+    docstring), including the actual TP/SL ladder so the notification
+    can show real numbers, not just a status line."""
     battery = load_battery_state()
     spec = battery.get("candidates", {}).get(trade_proposal.get("candidate", ""))
     if spec is None:
-        return (f"REJECTED: '{trade_proposal.get('candidate')}' is not currently a validated "
-                f"candidate -- Sonnet proposed a trade without a real anchor set behind it, refused.")
+        return {"opened": False,
+                "message": f"REJECTED: '{trade_proposal.get('candidate')}' is not currently a validated "
+                           f"candidate -- Sonnet proposed a trade without a real anchor set behind it, refused."}
     push_manual_signal(
         coin=trade_proposal["coin"], direction=trade_proposal["direction"],
         tp_mult=spec["tp_mult"], sl_mult=spec["sl_mult"], anchors=spec["anchors"],
         reasoning=trade_proposal["reasoning"], approved_by="sonnet_autonomous",
         signal_class="sonnet_confirmed",
     )
-    return f"Opened now: {trade_proposal['direction'].upper()} {trade_proposal['coin']} (candidate: {trade_proposal['candidate']})"
+    ladder = [(int(h), a["mfe"] * spec["tp_mult"], a["mae"] * spec["sl_mult"]) for h, a in sorted(spec["anchors"].items(), key=lambda kv: int(kv[0]))]
+    return {"opened": True, "coin": trade_proposal["coin"], "direction": trade_proposal["direction"],
+            "candidate": trade_proposal["candidate"], "ladder": ladder,
+            "message": f"Opened now: {trade_proposal['direction'].upper()} {trade_proposal['coin']} (candidate: {trade_proposal['candidate']})"}
 
 
-def format_sonnet_message(item: dict, assessment: dict, execution_status: str | None = None) -> str:
+def format_sonnet_message(item: dict, assessment: dict, execution: dict | None = None) -> str:
     base = (
-        f"Sonnet Strategist Alert\n\n"
-        f"Headline: {item['headline']}\n"
-        f"Asset: {item['asset']} | Magnitude: {item['magnitude']}/5\n\n"
-        f"Assessment: {assessment['assessment']}\n"
-        f"Recommended action: {assessment['recommended_action']}"
+        f"<b>Sonnet Strategist Alert</b>\n\n"
+        f"<b>Headline:</b> {escape_html(item['headline'])}\n"
+        f"<b>Asset:</b> {escape_html(item['asset'])} | <b>Magnitude:</b> {item['magnitude']}/5\n\n"
+        f"<b>Assessment:</b> {escape_html(assessment['assessment'])}\n"
+        f"<b>Recommended action:</b> {escape_html(assessment['recommended_action'])}"
     )
     if assessment["recommended_action"] == "propose_trade" and assessment.get("trade_proposal"):
         tp = assessment["trade_proposal"]
         base += (
-            f"\n\nCandidate: {tp.get('candidate')}\n"
-            f"{tp['direction'].upper()} {tp['coin']}\n"
-            f"Reasoning: {tp['reasoning']}\n"
-            f"{execution_status or 'Not executed.'}"
+            f"\n\n<b>Candidate:</b> {escape_html(tp.get('candidate'))}\n"
+            f"<b>Reasoning:</b> {escape_html(tp['reasoning'])}"
         )
+        if execution and execution.get("opened"):
+            base += f"\n\n<b>{'━' * 4} Opened now: {tp['direction'].upper()} {escape_html(tp['coin'])} {'━' * 4}</b>\n"
+            for horizon, tp_pct, sl_pct in execution["ladder"]:
+                base += f"<b>{horizon}d</b>  TP +{tp_pct:.1%}  /  SL -{sl_pct:.1%}\n"
+        else:
+            base += f"\n\n{escape_html(execution['message']) if execution else 'Not executed.'}"
     elif assessment["recommended_action"] == "propose_novel_test" and assessment.get("novel_condition_spec"):
         spec = assessment["novel_condition_spec"]
         base += (
             f"\n\nThis looks like a condition we haven't tested before.\n"
-            f"Proposed test: {spec['indicator']} {spec['op']} {spec['threshold']} -> {spec['direction']}\n"
+            f"<b>Proposed test:</b> {escape_html(spec['indicator'])} {escape_html(spec['op'])} {spec['threshold']} -> {escape_html(spec['direction'])}\n"
             f"Reply 'test it' to run a real walk-forward backtest of this condition before it "
             f"ever influences a trade."
         )
     else:
-        base += f"\nWatch condition: {assessment.get('watch_condition') or 'n/a'}"
+        base += f"\n<b>Watch condition:</b> {escape_html(assessment.get('watch_condition') or 'n/a')}"
     return base
 
 
@@ -286,15 +304,15 @@ def run_once() -> None:
             print(f"Not escalated (magnitude {item.get('magnitude')}): {item['headline'][:80]}")
             continue
         assessment = sonnet_strategist(item, client)
-        execution_status = None
+        execution = None
         if assessment["recommended_action"] == "propose_trade" and assessment.get("trade_proposal"):
-            execution_status = execute_routine_trade(assessment["trade_proposal"])
+            execution = execute_routine_trade(assessment["trade_proposal"])
         elif assessment["recommended_action"] == "propose_novel_test" and assessment.get("novel_condition_spec"):
             s = assessment["novel_condition_spec"]
             spec = ConditionSpec(label=s["label"], indicator=s["indicator"], op=s["op"],
                                   threshold=s["threshold"], direction=s["direction"])
             push_pending_test(spec, SHOCK_SCAN_COINS, live_coin=_asset_to_coin(item.get("asset", "")), signal_class="manual")
-        message = format_sonnet_message(item, assessment, execution_status)
+        message = format_sonnet_message(item, assessment, execution)
         sent = send_telegram(message)
         status = "notified" if sent else "notify FAILED, see error above"
         print(f"Escalated + {status}: {item['headline'][:80]}")
