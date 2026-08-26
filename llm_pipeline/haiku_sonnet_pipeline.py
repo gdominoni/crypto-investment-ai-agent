@@ -27,7 +27,8 @@ from dotenv import load_dotenv
 from data_ingestion.news_sentiment.cryptocompare_fetcher import fetch_cryptocompare_news
 from execution.signal_store import load_battery_state, push_manual_signal
 from llm_pipeline.context_builder import build_context_summary, build_technical_snapshot
-from llm_pipeline.novel_condition_tester import SUPPORTED_INDICATORS
+from llm_pipeline.novel_condition_tester import SUPPORTED_INDICATORS, ConditionSpec
+from llm_pipeline.pending_tests import push_pending_test
 from llm_pipeline.shock_detector import scan_for_shocks
 
 HAIKU_MODEL = "claude-haiku-4-5"
@@ -174,8 +175,14 @@ def format_shock_message(shock: dict, assessment: dict) -> str:
 def run_shock_scan(coins: list[str] | None = None) -> None:
     load_dotenv()
     client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-    for shock in scan_for_shocks(coins or SHOCK_SCAN_COINS):
+    scan_coins = coins or SHOCK_SCAN_COINS
+    for shock in scan_for_shocks(scan_coins):
         assessment = sonnet_shock_response(shock, client)
+        if assessment["recommended_action"] == "propose_novel_test" and assessment.get("novel_condition_spec"):
+            s = assessment["novel_condition_spec"]
+            spec = ConditionSpec(label=s["label"], indicator=s["indicator"], op=s["op"],
+                                  threshold=s["threshold"], direction=s["direction"])
+            push_pending_test(spec, scan_coins, live_coin=shock["symbol"], signal_class="shock_reactive")
         message = format_shock_message(shock, assessment)
         sent = send_telegram(message)
         status = "notified" if sent else "notify FAILED, see error above"
@@ -249,6 +256,13 @@ def format_sonnet_message(item: dict, assessment: dict, execution_status: str | 
     return base
 
 
+def _asset_to_coin(asset: str) -> str | None:
+    if not asset or asset.upper() in ("MARKET", ""):
+        return None  # a broad/unclear headline has no single coin to trade the live occurrence on
+    symbol = f"{asset.upper()}USDT"
+    return symbol if symbol in SHOCK_SCAN_COINS else None
+
+
 def run_once() -> None:
     load_dotenv()
     client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
@@ -264,6 +278,11 @@ def run_once() -> None:
         execution_status = None
         if assessment["recommended_action"] == "propose_trade" and assessment.get("trade_proposal"):
             execution_status = execute_routine_trade(assessment["trade_proposal"])
+        elif assessment["recommended_action"] == "propose_novel_test" and assessment.get("novel_condition_spec"):
+            s = assessment["novel_condition_spec"]
+            spec = ConditionSpec(label=s["label"], indicator=s["indicator"], op=s["op"],
+                                  threshold=s["threshold"], direction=s["direction"])
+            push_pending_test(spec, SHOCK_SCAN_COINS, live_coin=_asset_to_coin(item.get("asset", "")), signal_class="manual")
         message = format_sonnet_message(item, assessment, execution_status)
         sent = send_telegram(message)
         status = "notified" if sent else "notify FAILED, see error above"

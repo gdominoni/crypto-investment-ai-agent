@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 from execution.signal_store import consume_manual_signal, load_manual_signals, push_manual_signal
 from llm_pipeline.context_builder import build_context_summary, build_technical_snapshot
 from llm_pipeline.novel_condition_tester import ConditionSpec, test_novel_condition
+from llm_pipeline.pending_tests import pop_pending_test
 from telegram.kpi_queries import format_kpi_table, kpi_table
 
 SONNET_MODEL = "claude-sonnet-5"
@@ -122,3 +123,77 @@ def send_stoploss_postmortem(trade_pair: str, exit_reason: str, close_profit: fl
     )
     response = client.messages.create(model=SONNET_MODEL, max_tokens=300, messages=[{"role": "user", "content": prompt}])
     _send(f"{'SL' if close_profit < 0 else 'TP'} hit on {trade_pair} ({close_profit:+.2%}).\n\n{response.content[0].text}\n\nDocumented in the history report.")
+
+
+def _answer_callback_query(callback_query_id: str) -> None:
+    load_dotenv()
+    token = os.environ["TELEGRAM_BOT_TOKEN"]
+    requests.post(f"https://api.telegram.org/bot{token}/answerCallbackQuery",
+                  json={"callback_query_id": callback_query_id}, timeout=15)
+
+
+def _get_updates(token: str, offset: int | None, timeout: int = 30) -> list[dict]:
+    params = {"timeout": timeout}
+    if offset is not None:
+        params["offset"] = offset
+    resp = requests.get(f"https://api.telegram.org/bot{token}/getUpdates", params=params, timeout=timeout + 10)
+    resp.raise_for_status()
+    return resp.json().get("result", [])
+
+
+def _dispatch_update(update: dict, client: Anthropic) -> None:
+    if "callback_query" in update:
+        cq = update["callback_query"]
+        reply = handle_kpi_callback(cq["data"])
+        _send(reply)
+        _answer_callback_query(cq["id"])
+        return
+
+    message = update.get("message", {})
+    text = (message.get("text") or "").strip()
+    if not text:
+        return
+
+    if text.lower() in ("test it", "/test", "test"):
+        pending = pop_pending_test()
+        if pending is None:
+            _send("Nothing pending to test right now.")
+            return
+        spec, coins, live_coin, signal_class = pending
+        reply = handle_test_it_confirmation(spec, coins, approved_by="telegram_user", live_coin=live_coin, signal_class=signal_class)
+        _send(reply)
+        return
+
+    if text.startswith("/"):
+        command, *args = text.split()
+        reply, keyboard = handle_command(command, args)
+        _send(reply, keyboard)
+        return
+
+    reply = handle_natural_language(text, client)
+    _send(reply)
+
+
+def run_bot() -> None:
+    """Long-polls Telegram for updates and dispatches them -- the live
+    process behind every conversation in the README's Phase 4 mockups.
+    Runs until interrupted; each update is processed and acknowledged
+    (via the returned offset) before the next poll, so a crash mid-batch
+    re-delivers rather than silently drops a message."""
+    load_dotenv()
+    token = os.environ["TELEGRAM_BOT_TOKEN"]
+    client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+    offset = None
+    print("Telegram bot polling started.")
+    while True:
+        updates = _get_updates(token, offset)
+        for update in updates:
+            offset = update["update_id"] + 1
+            try:
+                _dispatch_update(update, client)
+            except Exception as e:
+                print(f"Error handling update {update.get('update_id')}: {e}")
+
+
+if __name__ == "__main__":
+    run_bot()
