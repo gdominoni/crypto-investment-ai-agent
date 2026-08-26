@@ -15,6 +15,7 @@ from dotenv import load_dotenv
 
 from execution.signal_store import consume_manual_signal, load_manual_signals, push_manual_signal
 from llm_pipeline.context_builder import build_context_summary, build_technical_snapshot
+from llm_pipeline.haiku_sonnet_pipeline import extract_text
 from llm_pipeline.novel_condition_tester import ConditionSpec, test_novel_condition
 from llm_pipeline.pending_tests import pop_pending_test
 from telegram.kpi_queries import format_kpi_table, kpi_table
@@ -58,7 +59,7 @@ def handle_natural_language(text: str, client: Anthropic) -> str:
         model=SONNET_MODEL, max_tokens=400, system=MARKET_CHECK_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": f"USER QUESTION: {text}\n\nSTATE:\n{snapshot}\n\n{context}"}],
     )
-    return response.content[0].text
+    return extract_text(response)
 
 
 def handle_command(command: str, args: list[str]) -> tuple[str, dict | None]:
@@ -122,7 +123,7 @@ def send_stoploss_postmortem(trade_pair: str, exit_reason: str, close_profit: fl
         f"signal's underlying assumption broke? Cite only the numbers given here.\n\n{context}"
     )
     response = client.messages.create(model=SONNET_MODEL, max_tokens=300, messages=[{"role": "user", "content": prompt}])
-    _send(f"{'SL' if close_profit < 0 else 'TP'} hit on {trade_pair} ({close_profit:+.2%}).\n\n{response.content[0].text}\n\nDocumented in the history report.")
+    _send(f"{'SL' if close_profit < 0 else 'TP'} hit on {trade_pair} ({close_profit:+.2%}).\n\n{extract_text(response)}\n\nDocumented in the history report.")
 
 
 def _answer_callback_query(callback_query_id: str) -> None:

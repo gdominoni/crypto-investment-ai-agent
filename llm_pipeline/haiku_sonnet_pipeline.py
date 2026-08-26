@@ -109,6 +109,17 @@ def _strip_fences(text: str) -> str:
     return text.strip()
 
 
+def extract_text(response) -> str:
+    """A response's content blocks aren't always [text] -- a model can
+    emit a ThinkingBlock (or other non-text block) before its actual
+    answer, so content[0] is not reliably the text. Finds the first block
+    that actually has text instead of assuming position."""
+    for block in response.content:
+        if getattr(block, "type", None) == "text":
+            return block.text
+    raise ValueError(f"No text block in response.content: {[getattr(b, 'type', type(b)) for b in response.content]}")
+
+
 def haiku_scout(articles: list[dict], client: Anthropic) -> list[dict]:
     if not articles:
         return []
@@ -117,7 +128,7 @@ def haiku_scout(articles: list[dict], client: Anthropic) -> list[dict]:
         model=HAIKU_MODEL, max_tokens=2048, system=HAIKU_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": headlines_block}],
     )
-    return json.loads(_strip_fences(response.content[0].text))
+    return json.loads(_strip_fences(extract_text(response)))
 
 
 def sonnet_strategist(flagged: dict, client: Anthropic) -> dict:
@@ -134,7 +145,7 @@ def sonnet_strategist(flagged: dict, client: Anthropic) -> dict:
         model=SONNET_MODEL, max_tokens=700, system=SONNET_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_content}],
     )
-    return json.loads(_strip_fences(response.content[0].text))
+    return json.loads(_strip_fences(extract_text(response)))
 
 
 def sonnet_shock_response(shock: dict, client: Anthropic) -> dict:
@@ -150,7 +161,7 @@ def sonnet_shock_response(shock: dict, client: Anthropic) -> dict:
         model=SONNET_MODEL, max_tokens=500, system=SHOCK_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_content}],
     )
-    return json.loads(_strip_fences(response.content[0].text))
+    return json.loads(_strip_fences(extract_text(response)))
 
 
 def format_shock_message(shock: dict, assessment: dict) -> str:
