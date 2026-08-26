@@ -2,9 +2,18 @@
 headline against the live candidate battery; only genuinely unmatched,
 significant conditions escalate to Sonnet, which reads real technical
 state (not a placeholder) and proposes a concrete, checkable action --
-never a freehand trade or a freehand number. A Sonnet trade proposal is
-only ever executed after a human confirms it in Telegram; a Sonnet
-novel-condition proposal only ever runs after a human replies "test it".
+never a freehand trade or a freehand number.
+
+The human gate sits on exactly one kind of decision: whether to spend
+compute validating a genuinely untested pattern (`propose_novel_test`,
+and the shock-detection path in `run_shock_scan`). A routine trade
+proposal (`propose_trade`) is never gated on human confirmation -- it can
+only reference a candidate the battery has already validated, so the
+anchors are never invented and there is nothing left for a human to
+approve beyond what walk-forward validation already did. Requiring a
+human to also bless each individual trade would defeat this project's own
+purpose: testing whether the LLM layer's judgment holds up on its own,
+not testing a human's judgment about the LLM's judgment.
 """
 from __future__ import annotations
 
@@ -16,6 +25,7 @@ from anthropic import Anthropic
 from dotenv import load_dotenv
 
 from data_ingestion.news_sentiment.cryptocompare_fetcher import fetch_cryptocompare_news
+from execution.signal_store import load_battery_state, push_manual_signal
 from llm_pipeline.context_builder import build_context_summary, build_technical_snapshot
 from llm_pipeline.novel_condition_tester import SUPPORTED_INDICATORS
 from llm_pipeline.shock_detector import scan_for_shocks
@@ -38,19 +48,28 @@ Return ONLY the JSON array, no prose, no markdown fences."""
 
 SONNET_SYSTEM_PROMPT = f"""You are a market strategist for a crypto trading system. You will be \
 given: (1) a flagged news headline, (2) real technical/portfolio state, (3) the live status of \
-this system's candidate battery. Treat a candidate's status as load-bearing: only 'validated' \
-candidates may justify an unattended trade; everything else is context, not a signal.
+this system's candidate battery, including which candidates currently carry 'validated' status \
+and their coin/direction. Treat a candidate's status as load-bearing: only 'validated' candidates \
+may justify a trade; everything else is context, not a signal.
+
+"propose_trade" is a routine, unattended decision -- it fires immediately, with no human \
+confirmation, so it may ONLY reference a candidate CURRENTLY listed as 'validated' in the battery \
+context you were given. You are not inventing a new pattern here, only recognizing that current \
+conditions match one already proven -- if no validated candidate actually applies, use \
+"propose_novel_test" or "no_action" instead, never stretch a trade_proposal to fit.
 
 If this headline suggests a genuinely new, untested pattern -- not covered by any existing \
-candidate and not already logged as rejected -- you may propose a novel-condition test, but ONLY \
-using one of these whitelisted indicators (nothing else is buildable): {list(SUPPORTED_INDICATORS)}.
+candidate and not already logged as rejected -- propose a novel-condition test instead (this DOES \
+wait for human approval, since it spends real compute validating something unproven), using ONLY \
+one of these whitelisted indicators (nothing else is buildable): {list(SUPPORTED_INDICATORS)}.
 
 Return ONLY a JSON object with exactly these fields:
 - "assessment": 1-2 sentences
 - "recommended_action": one of "no_action", "watch", "propose_trade", "propose_novel_test", "exit_now"
 - "watch_condition": a concrete, checkable condition (or null)
-- "trade_proposal": null, or {{"coin": "...", "direction": "long"/"short", "reasoning": "..."}} \
-  (TP/SL are never Sonnet's to set -- always drawn from the candidate's own validated anchors)
+- "trade_proposal": null, or {{"candidate": "<must be a currently-validated candidate name>", \
+  "coin": "...", "direction": "long"/"short", "reasoning": "..."}} \
+  (TP/SL are never Sonnet's to set -- always drawn from that candidate's own validated anchors)
 - "novel_condition_spec": null, or {{"label": "...", "indicator": "...", "op": "<"/">"/"<="/">=", \
   "threshold": <number>, "direction": "long"/"short"}}
 
@@ -178,7 +197,30 @@ def send_telegram(message: str, reply_markup: dict | None = None) -> bool:
     return True
 
 
-def format_sonnet_message(item: dict, assessment: dict) -> str:
+def execute_routine_trade(trade_proposal: dict) -> str:
+    """Fires immediately, no human confirmation -- `trade_proposal` must
+    reference a candidate CURRENTLY 'validated' in the battery (enforced
+    here, not just requested in the prompt: Sonnet's output is untrusted
+    input like any other model output, so the anchor lookup is the real
+    gate, not the instruction asking it to behave). Returns a status
+    string for the Telegram notification, never a request for approval --
+    routine trades are not a human decision in this project (see module
+    docstring for why)."""
+    battery = load_battery_state()
+    spec = battery.get("candidates", {}).get(trade_proposal.get("candidate", ""))
+    if spec is None:
+        return (f"REJECTED: '{trade_proposal.get('candidate')}' is not currently a validated "
+                f"candidate -- Sonnet proposed a trade without a real anchor set behind it, refused.")
+    push_manual_signal(
+        coin=trade_proposal["coin"], direction=trade_proposal["direction"],
+        tp_mult=spec["tp_mult"], sl_mult=spec["sl_mult"], anchors=spec["anchors"],
+        reasoning=trade_proposal["reasoning"], approved_by="sonnet_autonomous",
+        signal_class="sonnet_confirmed",
+    )
+    return f"Opened now: {trade_proposal['direction'].upper()} {trade_proposal['coin']} (candidate: {trade_proposal['candidate']})"
+
+
+def format_sonnet_message(item: dict, assessment: dict, execution_status: str | None = None) -> str:
     base = (
         f"Sonnet Strategist Alert\n\n"
         f"Headline: {item['headline']}\n"
@@ -189,9 +231,10 @@ def format_sonnet_message(item: dict, assessment: dict) -> str:
     if assessment["recommended_action"] == "propose_trade" and assessment.get("trade_proposal"):
         tp = assessment["trade_proposal"]
         base += (
-            f"\n\nProposed: {tp['direction'].upper()} {tp['coin']}\n"
+            f"\n\nCandidate: {tp.get('candidate')}\n"
+            f"{tp['direction'].upper()} {tp['coin']}\n"
             f"Reasoning: {tp['reasoning']}\n"
-            f"This trade will NOT execute until you confirm it."
+            f"{execution_status or 'Not executed.'}"
         )
     elif assessment["recommended_action"] == "propose_novel_test" and assessment.get("novel_condition_spec"):
         spec = assessment["novel_condition_spec"]
@@ -218,7 +261,10 @@ def run_once() -> None:
             print(f"Not escalated (magnitude {item.get('magnitude')}): {item['headline'][:80]}")
             continue
         assessment = sonnet_strategist(item, client)
-        message = format_sonnet_message(item, assessment)
+        execution_status = None
+        if assessment["recommended_action"] == "propose_trade" and assessment.get("trade_proposal"):
+            execution_status = execute_routine_trade(assessment["trade_proposal"])
+        message = format_sonnet_message(item, assessment, execution_status)
         sent = send_telegram(message)
         status = "notified" if sent else "notify FAILED, see error above"
         print(f"Escalated + {status}: {item['headline'][:80]}")

@@ -30,7 +30,7 @@ so plainly rather than guessing."""
 KPI_KEYBOARD = {
     "inline_keyboard": [
         [{"text": "By Coin", "callback_data": "kpi:coin"}, {"text": "By Signal", "callback_data": "kpi:signal"}],
-        [{"text": "Battery vs Manual vs Shock", "callback_data": "kpi:signal_class"}],
+        [{"text": "By Decision Type", "callback_data": "kpi:signal_class"}],
         [{"text": "Overall", "callback_data": "kpi:overall"}],
     ]
 }
