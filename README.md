@@ -293,6 +293,6 @@ crypto-sentiment-trading-agent/
 
 **Observation & reporting:** the system runs untouched except for its own scheduled weekly refresh and any human-approved novel-condition tests, for the agreed observation period. No retroactive re-tuning of results already produced — the weekly refresh updates the *live* battery going forward, it does not rewrite what already happened. At the end of the observation window, and at any checkpoint along the way, the KPI dashboard (§4.3) and the full decision log are the report — including if the honest result is "no better than the static baseline Phase 1 already found."
 
-Full build plan, phase by phase: [`docs/case_study/PLAN.md`](docs/case_study/PLAN.md).
+Full build plan, phase by phase: [`docs/case_study/PLAN.md`](docs/case_study/PLAN.md). File-by-file guide to what every module does: [`PROJECT_MAP.md`](PROJECT_MAP.md).
 
 **Prior work this project builds on:** the full case study of the research that led here lives in the prior repository's `docs/case_study/` (Phases 0-13) and is linked from here once that repository is replaced by this one.
