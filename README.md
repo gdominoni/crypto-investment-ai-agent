@@ -292,3 +292,10 @@ crypto-sentiment-trading-agent/
 Full build plan, phase by phase: [`docs/case_study/PLAN.md`](docs/case_study/PLAN.md). File-by-file guide to what every module does: [`PROJECT_MAP.md`](PROJECT_MAP.md).
 
 **Prior work this project builds on:** the full case study of the research that led here lives in the prior repository's `docs/case_study/` (Phases 0-13) and is linked from here once that repository is replaced by this one.
+
+---
+
+## About the Author
+
+**Giovanni Dominoni** — Riga, Latvia
+[giovanni.dominoni@gmail.com](mailto:giovanni.dominoni@gmail.com) · [LinkedIn](https://www.linkedin.com/in/giovannidominoni/)
