@@ -32,7 +32,7 @@ from candidates.status_history import years_tracked as candidate_years_tracked
 from data_ingestion.market_data.binance_fetcher import COINS as MARKET_DATA_COINS
 from data_ingestion.market_data.binance_fetcher import update_all as update_market_data
 from llm_pipeline.dynamic_candidates import registered_specs
-from llm_pipeline.haiku_sonnet_pipeline import sonnet_prune_advice
+from llm_pipeline.haiku_sonnet_pipeline import escape_html, sonnet_prune_advice
 from telegram.bot import _send
 
 PREVIOUS_STATUS_PATH = Path(__file__).resolve().parent / "previous_status.json"
@@ -68,12 +68,30 @@ def run_weekly_revalidation() -> None:
     failure (network, exchange outage) is logged but doesn't block the
     run -- re-validating against last week's data is still more useful
     than not re-validating at all, and next week's run gets another
-    chance to catch up."""
+    chance to catch up.
+
+    Everything past the data refresh is wrapped so a crash always sends
+    a Telegram alert before re-raising -- without this, "no message this
+    week" would be ambiguous between "nothing changed" (normal, expected)
+    and "the whole run silently died" (a real failure nobody would
+    otherwise notice until they happened to check the logs)."""
     try:
         update_market_data(MARKET_DATA_COINS)
     except Exception as e:
         print(f"Market data refresh failed, continuing with existing data: {e}")
 
+    try:
+        _run_weekly_revalidation()
+    except Exception as e:
+        message = (f"<b>Weekly re-validation crashed and did not complete.</b>\n\n"
+                    f"{escape_html(type(e).__name__)}: {escape_html(str(e))}\n\n"
+                    f"Nothing was updated this run -- check the process logs for the full traceback.")
+        sent = _send(message)
+        print(f"Failure alert: {'sent' if sent else 'SEND FAILED'}")
+        raise
+
+
+def _run_weekly_revalidation() -> None:
     result, live_state, meta = run_all()
     if meta.get("already_shut_down"):
         print("Weekly re-validation: system already shut down, nothing to do.")
@@ -109,6 +127,12 @@ def run_weekly_revalidation() -> None:
         _send(message)
     else:
         print("Weekly re-validation: no status changes.")
+
+    if meta.get("failed_candidates"):
+        failed_msg = (f"<b>{len(meta['failed_candidates'])} candidate(s) failed to process this run "
+                       f"(will retry next week):</b> {escape_html(', '.join(meta['failed_candidates']))}")
+        print(failed_msg)
+        _send(failed_msg)
 
     if meta["prune_candidates"]:
         load_dotenv()

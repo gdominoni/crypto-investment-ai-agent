@@ -363,21 +363,33 @@ def run_once() -> None:
         if item.get("magnitude", 0) < ESCALATION_MAGNITUDE_THRESHOLD:
             print(f"Not escalated (magnitude {item.get('magnitude')}): {item['headline'][:80]}")
             continue
-        assessment = sonnet_strategist(item, client)
-        execution = None
-        if assessment["recommended_action"] == "propose_trade" and assessment.get("trade_proposal"):
-            execution = execute_routine_trade(assessment["trade_proposal"])
-        elif assessment["recommended_action"] == "propose_novel_test" and assessment.get("novel_condition_spec"):
-            s = assessment["novel_condition_spec"]
-            spec = ConditionSpec(label=s["label"], indicator=s["indicator"], op=s["op"],
-                                  threshold=s["threshold"], direction=s["direction"])
-            push_pending_test(spec, SHOCK_SCAN_COINS, live_coin=_asset_to_coin(item.get("asset", "")), signal_class="manual")
-        message = format_sonnet_message(item, assessment, execution)
-        sent = send_telegram(message)
-        status = "notified" if sent else "notify FAILED, see error above"
-        print(f"Escalated + {status}: {item['headline'][:80]}")
+        try:
+            assessment = sonnet_strategist(item, client)
+            execution = None
+            if assessment["recommended_action"] == "propose_trade" and assessment.get("trade_proposal"):
+                execution = execute_routine_trade(assessment["trade_proposal"])
+            elif assessment["recommended_action"] == "propose_novel_test" and assessment.get("novel_condition_spec"):
+                s = assessment["novel_condition_spec"]
+                spec = ConditionSpec(label=s["label"], indicator=s["indicator"], op=s["op"],
+                                      threshold=s["threshold"], direction=s["direction"])
+                push_pending_test(spec, SHOCK_SCAN_COINS, live_coin=_asset_to_coin(item.get("asset", "")), signal_class="manual")
+            message = format_sonnet_message(item, assessment, execution)
+            sent = send_telegram(message)
+            status = "notified" if sent else "notify FAILED, see error above"
+            print(f"Escalated + {status}: {item['headline'][:80]}")
+        except Exception as e:
+            # One malformed Sonnet response (e.g. invalid JSON) must not
+            # cost every OTHER headline in this batch its own escalation --
+            # without this, a single bad item silently stops the whole run.
+            print(f"Failed to process escalated headline '{item.get('headline', '?')[:80]}', skipping: {e}")
 
 
 if __name__ == "__main__":
-    run_once()
-    run_shock_scan()
+    try:
+        run_once()
+    except Exception as e:
+        print(f"run_once() failed: {e}")
+    try:
+        run_shock_scan()
+    except Exception as e:
+        print(f"run_shock_scan() failed: {e}")

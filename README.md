@@ -150,7 +150,7 @@ The 0.20% fee figure is a fixed, conservative round-trip assumption (entry + exi
 
 ### The Re-Validation Loop That Keeps This Table Alive
 
-Every Sunday, `scheduler/weekly_revalidation.py` first refreshes local OHLCV/funding data from Binance (`data_ingestion/market_data/binance_fetcher.py`), then re-runs the full battery's walk-forward fold and concentration check against that current data, diffs every candidate's status against the previous run, and notifies the human only when something actually changed. Separately, any time Haiku/Sonnet flag a genuinely novel condition, the human can approve an ad-hoc test of it on the spot via the same pipeline, run on demand instead of waiting for Sunday — if it validates, it joins the battery under this same weekly regime. As of this writing, `weekly_revalidation.py` runs on demand; it is not yet wired to an actual scheduled job (Phase 6 of the [build plan](docs/case_study/PLAN.md)).
+Every Sunday, `scheduler/weekly_revalidation.py` first refreshes local OHLCV/funding data from Binance (`data_ingestion/market_data/binance_fetcher.py`), then re-runs the full battery's walk-forward fold and concentration check against that current data, diffs every candidate's status against the previous run, and notifies the human only when something actually changed. Separately, any time Haiku/Sonnet flag a genuinely novel condition, the human can approve an ad-hoc test of it on the spot via the same pipeline, run on demand instead of waiting for Sunday — if it validates, it joins the battery under this same weekly regime. As of this writing, `weekly_revalidation.py` runs on demand; it is not yet wired to an actual scheduled job (Phase 6 of the [build plan](docs/case_study/PLAN.md)). One candidate's own bad data or bug can't take the rest of the battery down with it — each is isolated and retried the following run — and any failure that does reach the top level sends a Telegram alert rather than failing silently (see [`PROJECT_MAP.md`](PROJECT_MAP.md)'s "Partial Failures & Crashes").
 
 ---
 
@@ -282,7 +282,8 @@ crypto-sentiment-trading-agent/
 ├── data_ingestion/              # market_data/binance_fetcher.py (keeps data/ current), news_sentiment/ (CryptoCompare)
 ├── data/                        # Historical + continuously-refreshed market/macro data
 ├── docs/case_study/             # PLAN.md, this project's build log, and the live-results writeup
-└── tests/                       # candidates/methodology.py, status_history.py, novel_condition_tester.py
+├── .github/workflows/           # tests.yml -- the tests below run automatically on every push
+└── tests/                       # candidates/methodology.py, status_history.py, novel_condition_tester.py, run_battery.py
 ```
 
 **Safety & guardrails:** every module defaults to dry-run; no trade is ever placed on an LLM-generated number — TP/SL always come from a walk-forward-validated anchor set, structurally enforced (§2). The human gate sits on exactly one decision — whether to spend compute validating a genuinely untested pattern (§2, §4.3-4.4) — never on whether a routine, already-validated trade fires; requiring a human to also bless every individual trade would test human-plus-LLM judgment, not the LLM's own.

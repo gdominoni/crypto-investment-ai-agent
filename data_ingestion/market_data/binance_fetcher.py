@@ -98,13 +98,28 @@ def update_funding(symbol: str) -> int:
     return added
 
 
-def update_all(coins: list[str] | None = None) -> dict[str, dict[str, int]]:
+def update_all(coins: list[str] | None = None) -> dict[str, dict[str, int | None]]:
+    """One coin's fetch failure must not cost every OTHER coin's update --
+    each coin's OHLCV and funding fetch is isolated so a single network
+    blip or a bad response for e.g. coin #3 of 7 doesn't silently skip
+    coins #4-7 for the whole week. `None` in the report (rather than 0)
+    marks "failed", distinct from 0 meaning "fetched fine, nothing new"."""
     report = {}
     for symbol in (coins or COINS):
-        ohlcv_added = update_ohlcv(symbol)
-        funding_added = update_funding(symbol)
+        try:
+            ohlcv_added = update_ohlcv(symbol)
+        except Exception as e:
+            print(f"OHLCV fetch failed for {symbol}, skipping: {e}")
+            ohlcv_added = None
+        try:
+            funding_added = update_funding(symbol)
+        except Exception as e:
+            print(f"funding fetch failed for {symbol}, skipping: {e}")
+            funding_added = None
         report[symbol] = {"ohlcv_added": ohlcv_added, "funding_added": funding_added}
-        print(f"{symbol}: +{ohlcv_added} daily candle(s), +{funding_added} funding entry(ies)")
+        ohlcv_msg = f"+{ohlcv_added} daily candle(s)" if ohlcv_added is not None else "OHLCV FAILED"
+        funding_msg = f"+{funding_added} funding entry(ies)" if funding_added is not None else "funding FAILED"
+        print(f"{symbol}: {ohlcv_msg}, {funding_msg}")
     return report
 
 

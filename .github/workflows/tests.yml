@@ -1,0 +1,29 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # The test suite only exercises candidates/ and llm_pipeline/novel_condition_tester.py,
+      # neither of which touches Freqtrade, ccxt, or the Anthropic/Telegram clients -- installing
+      # just what's actually imported keeps CI fast and avoids Freqtrade's native build
+      # dependencies (TA-Lib) for a job that would never use them. pyarrow is needed because
+      # test_run_battery.py reads the real historical parquet files (an integration test, not
+      # a synthetic-data unit test). If a future test imports execution/, telegram/, or
+      # llm_pipeline/haiku_sonnet_pipeline.py, add its real dependency here rather than
+      # switching to the full requirements.txt.
+      - name: Install test dependencies
+        run: pip install pandas numpy pytest pyarrow
+
+      - name: Run tests
+        run: python -m pytest tests/ -v

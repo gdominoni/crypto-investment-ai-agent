@@ -11,10 +11,17 @@ would resolve to the wrong spec with no indication anything was lost.
 "test it" always resolves the OLDEST pending proposal -- the one that's
 been sitting unanswered in the chat the longest, matching what a human
 replying "test it" to the first thing they see would actually expect.
+
+Entries expire (default 48h, longer than a routine trade signal's 24h in
+execution/signal_store.py -- testing a condition isn't as time-sensitive
+as firing a live trade on it) so a proposal nobody ever answers doesn't
+sit in the queue forever and get resolved to a "test it" reply weeks
+later, testing a condition against market context that's long gone.
 """
 from __future__ import annotations
 
 import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from llm_pipeline.novel_condition_tester import ConditionSpec
@@ -35,19 +42,27 @@ def _save_queue(queue: list[dict]) -> None:
         PENDING_TESTS_PATH.unlink()
 
 
-def push_pending_test(spec: ConditionSpec, coins: list[str], live_coin: str | None, signal_class: str) -> None:
-    queue = _load_queue()
+def _drop_expired(queue: list[dict]) -> list[dict]:
+    now = datetime.now(timezone.utc)
+    return [q for q in queue if datetime.fromisoformat(q["expires_at"]) > now]
+
+
+def push_pending_test(spec: ConditionSpec, coins: list[str], live_coin: str | None, signal_class: str,
+                       expires_hours: float = 48.0) -> None:
+    queue = _drop_expired(_load_queue())
     queue.append({
         "spec": {"label": spec.label, "indicator": spec.indicator, "op": spec.op,
                   "threshold": spec.threshold, "direction": spec.direction, "horizons": list(spec.horizons)},
         "coins": coins, "live_coin": live_coin, "signal_class": signal_class,
+        "expires_at": (datetime.now(timezone.utc) + timedelta(hours=expires_hours)).isoformat(),
     })
     _save_queue(queue)
 
 
 def pop_pending_test() -> tuple[ConditionSpec, list[str], str | None, str] | None:
-    queue = _load_queue()
+    queue = _drop_expired(_load_queue())
     if not queue:
+        _save_queue(queue)
         return None
     data = queue.pop(0)
     _save_queue(queue)
