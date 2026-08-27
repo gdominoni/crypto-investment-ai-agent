@@ -7,29 +7,32 @@ A file-by-file guide to what each part of this codebase does. Companion referenc
 ## Backtesting Methodology (Phase 1) — `candidates/`
 
 - **`methodology.py`** — Core statistical engine, shared by every candidate. Encodes every methodology rule as code: `build_events()` (causality-safe entry, always the bar after a trigger), `compute_anchors()` (duration-bucketed TP/SL levels from real historical MFE/MAE, never a flat barrier), `walk_forward()` (expanding-window, out-of-sample validation), `report()` (win rate, strict win rate, and Sortino ratio, always returned together), `concentration_check()` (flags a result carried by a single coin or a single year), `shock_zscore_series()` / `classify_regime()` (statistical isolation of extreme market shocks from ordinary conditions).
-- **`definitions.py`** — The three trigger families under test (C1 funding-rate crowding, C2 post-macro-release reaction, C6 efficiency-ratio trend), each a pure, independently testable function of price/volume/funding data.
+- **`definitions.py`** — The three trigger families under test (C1 funding-rate crowding, C2 post-macro-release reaction, C6 efficiency-ratio trend — C3/C4/C5 were part of the prior research's larger set but weren't carried forward), each a pure, independently testable function of price/volume/funding data.
 - **`data_loading.py`** — Loads historical OHLCV and funding-rate series from `data/`.
-- **`macro_calendar.py`** — FOMC/CPI release calendar, with timezone-aware (US Eastern → UTC) conversion logic.
+- **`macro_calendar.py`** — FOMC/CPI release calendar, at calendar-day granularity (matching the daily-bar timeframe this project trades on).
 - **`run_battery.py`** — Orchestrator: runs every static and dynamic candidate through `methodology.py`, assigns a live status (`validated` / `watch` / `rejected`), and writes the state file the execution engine reads from.
 - **`status_history.py`** — Tracks how long each candidate has been monitored, to trigger a keep-or-drop decision after years without validating.
 
 ## Historical & Market Data — `data/`
 
-- OHLCV data (daily/hourly) for 7 coins (BTC, ETH, BNB, XRP, DOGE, ADA, LTC) from Binance spot, funding-rate history, and macro series (CPI, Fed funds rate, VIX, gold, S&P 500) from FRED and Yahoo Finance. Coverage: 2017–2019 through 2026, depending on the coin's listing date.
+- OHLCV data (daily/hourly) for 7 coins (BTC, ETH, BNB, XRP, DOGE, ADA, LTC) from Binance spot, funding-rate history, and macro series (CPI, Fed funds rate, VIX, gold, S&P 500) from FRED and Yahoo Finance. Coverage: 2017–2019 through the present, depending on the coin's listing date — kept current by `data_ingestion/market_data/binance_fetcher.py` below, not a frozen one-time snapshot.
+
+## Live Data Refresh — `data_ingestion/market_data/`
+
+- **`binance_fetcher.py`** — Pulls new OHLCV candles and funding-rate entries from Binance's public API (no key needed) and appends them to the files in `data/`, incrementally. Runs before every weekly re-validation and every shock scan — this is what makes "re-validated against live data" and "real-time shock detection" actually true rather than aspirational.
 
 ## News Ingestion — `data_ingestion/news_sentiment/`
 
-- **`cryptocompare_fetcher.py`** — The one file in this folder used by the live pipeline: fetches headlines from the CryptoCompare News API.
-- **`rss_fetcher.py`, `aggregator.py`, `haiku_sentiment.py`** — An earlier multi-source design (CryptoCompare + RSS feeds, deduplicated, then scored). Not currently wired into the live pipeline.
+- **`cryptocompare_fetcher.py`** — Fetches headlines from the CryptoCompare News API. The only file in this folder used by the live pipeline.
 
 ## LLM Judgment Layer (Phase 2) — `llm_pipeline/`
 
-- **`haiku_sonnet_pipeline.py`** — The adaptive layer. `haiku_scout()` (Claude Haiku screens every headline for asset/sentiment/magnitude/event type), `sonnet_strategist()` (Claude Sonnet's judgment, only for escalated headlines), `execute_routine_trade()` (fires a routine trade unattended — but only after independently re-checking the candidate is actually `validated` in the real state file, regardless of what the model claims).
-- **`novel_condition_tester.py`** — Runs a human-approved novel condition through the same statistical pipeline as `methodology.py`. The model can only choose from a fixed whitelist of indicators (`SUPPORTED_INDICATORS`) — never arbitrary generated code.
+- **`haiku_sonnet_pipeline.py`** — The adaptive layer. `haiku_scout()` (Claude Haiku screens every headline for asset/sentiment/magnitude/event type), `sonnet_strategist()` (Claude Sonnet's judgment, only for escalated headlines), `execute_routine_trade()` (fires a routine trade unattended — but only after independently re-checking the candidate is actually `validated` in the real state file, regardless of what the model claims), `sonnet_prune_advice()` (a lightweight, explicitly-unverified opinion feeding the keep/drop decision below).
+- **`novel_condition_tester.py`** — Runs a human-approved novel condition through the same statistical pipeline as `methodology.py`, including the same shock-regime exclusion the static battery uses (except when the condition being tested IS the shock indicator itself). The model can only choose from a fixed whitelist of indicators (`SUPPORTED_INDICATORS`) — never arbitrary generated code.
 - **`shock_detector.py`** — Real-time detection of extreme volatility, reusing the same statistical definition of "shock" as Phase 1.
-- **`context_builder.py`** — Builds Sonnet's context from live state: real open positions read from the Freqtrade database, real candidate statuses — never a hand-maintained file.
+- **`context_builder.py`** — Builds Sonnet's context from live state: real open positions and the last closed trade, read from the Freqtrade database, real candidate statuses — never a hand-maintained file.
 - **`dynamic_candidates.py`** — Persistent registry of conditions discovered live, re-tested weekly alongside the static candidates.
-- **`pending_tests.py`** — Holds the most recent novel-condition proposal awaiting a human's "test it" reply.
+- **`pending_tests.py`** — FIFO queue of novel-condition proposals awaiting a human's "test it" reply — a queue, not a single slot, so two proposals flagged close together can't silently overwrite each other.
 
 ## Trade Execution (Phase 2, Module B) — `execution/`
 
@@ -40,11 +43,11 @@ A file-by-file guide to what each part of this codebase does. Companion referenc
 ## Telegram Interface (Phase 4) — `telegram/`
 
 - **`bot.py`** — The long-polling bot process. Routes free-text questions to Sonnet (`handle_natural_language`); routes structured commands and button presses straight to a database query (`handle_command`, `handle_kpi_callback`, `handle_prune_callback`), never through an LLM.
-- **`kpi_queries.py`** — Real SQL queries against the Freqtrade trade database: win rate, Sharpe, Sortino, max drawdown, filterable by coin, by signal, and by decision type (`signal_class`).
+- **`kpi_queries.py`** — Real SQL queries against the Freqtrade trade database: win rate, Sharpe, Sortino, max drawdown (on chronologically-ordered, summed — not compounded — returns, consistent with `methodology.py`'s own convention), filterable by coin, by signal, and by decision type (`signal_class`).
 
 ## Scheduling (Phase 3) — `scheduler/`
 
-- **`weekly_revalidation.py`** — Re-runs the full candidate battery, diffs every candidate's status against the previous run, and notifies on change. Not yet wired to an actual cron job.
+- **`weekly_revalidation.py`** — Refreshes market/funding data first, then re-runs the full candidate battery, diffs every candidate's status against the previous run, notifies on change, and handles the candidate keep/drop and shutdown flow. Written and tested end-to-end; not yet wired to an actual cron job.
 
 ## Documentation — `docs/case_study/`
 
@@ -53,7 +56,9 @@ A file-by-file guide to what each part of this codebase does. Companion referenc
 
 ## Tests — `tests/`
 
-- Currently empty.
+- **`test_methodology.py`** — Causality safety (entry never fills on the trigger bar itself), anchor/barrier math, Sortino's downside-only penalty, concentration detection, status classification thresholds, and the shock z-score's backward-looking guarantee.
+- **`test_status_history.py`** — The keep/drop-decision and shutdown logic, against an isolated temp file (never the real, committed `status_history.json`).
+- **`test_novel_condition_tester.py`** — The indicator/operator/direction whitelist rejects anything outside it at construction time.
 
 ## Root files
 

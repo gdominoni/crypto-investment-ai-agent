@@ -29,6 +29,8 @@ from candidates.definitions import TRIGGER_DESCRIPTIONS
 from candidates.run_battery import ASSETS_DIR, run_all
 from candidates.status_history import PRUNE_YEARS_THRESHOLD, mark_asked
 from candidates.status_history import years_tracked as candidate_years_tracked
+from data_ingestion.market_data.binance_fetcher import COINS as MARKET_DATA_COINS
+from data_ingestion.market_data.binance_fetcher import update_all as update_market_data
 from llm_pipeline.dynamic_candidates import registered_specs
 from llm_pipeline.haiku_sonnet_pipeline import sonnet_prune_advice
 from telegram.bot import _send
@@ -60,6 +62,18 @@ PRUNE_KEYBOARD_TEMPLATE = lambda candidate: {
 
 
 def run_weekly_revalidation() -> None:
+    """Refreshes local OHLCV/funding data from Binance BEFORE re-running
+    the battery -- without this, `run_all()` would re-grade the exact
+    same frozen snapshot every week and never see anything new. A fetch
+    failure (network, exchange outage) is logged but doesn't block the
+    run -- re-validating against last week's data is still more useful
+    than not re-validating at all, and next week's run gets another
+    chance to catch up."""
+    try:
+        update_market_data(MARKET_DATA_COINS)
+    except Exception as e:
+        print(f"Market data refresh failed, continuing with existing data: {e}")
+
     result, live_state, meta = run_all()
     if meta.get("already_shut_down"):
         print("Weekly re-validation: system already shut down, nothing to do.")

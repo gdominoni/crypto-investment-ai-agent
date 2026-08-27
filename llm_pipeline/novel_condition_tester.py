@@ -9,7 +9,7 @@ arbitrary generated logic unattended.
 from __future__ import annotations
 
 import operator
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Callable
 
 import numpy as np
@@ -21,6 +21,8 @@ from candidates.macro_calendar import macro_release_days
 from candidates.methodology import (
     MethodologyConfig, build_events, classify_status, concentration_check, report, shock_zscore_series, walk_forward,
 )
+
+SHOCK_ZSCORE_THRESHOLD = 3.0  # matches run_battery.py / shock_detector.py -- one consistent definition of "shock" everywhere
 
 SUPPORTED_INDICATORS: dict[str, Callable[[pd.DataFrame, pd.Series | None], pd.Series]] = {
     "close_return_1d": lambda df, funding: df["close"].pct_change(1),
@@ -62,26 +64,41 @@ class ConditionSpec:
 
 
 def test_novel_condition(spec: ConditionSpec, coins: list[str]) -> dict:
+    """Runs the same walk-forward, concentration-checked pipeline
+    `run_battery.py` uses for the static candidates -- including the same
+    shock-regime exclusion, with one deliberate exception: when the spec
+    being tested IS the `shock_zscore` indicator itself (Mode B, see
+    `shock_detector.py`), the trigger condition already selects extreme-
+    volatility bars by construction, so excluding "shock"-regime events
+    here would exclude the very population this test exists to evaluate."""
     cfg = MethodologyConfig(horizons=spec.horizons)
     indicator_fn = SUPPORTED_INDICATORS[spec.indicator]
     op_fn = _OPERATORS[spec.op]
+    is_shock_indicator = spec.indicator == "shock_zscore"
 
     all_events = []
     ohlc_by_coin = {}
+    n_shock_excluded = 0
     for coin in coins:
         daily = load_daily(coin)
         ohlc_by_coin[coin] = daily
         funding = load_funding(coin)
         signal = indicator_fn(daily, funding)
         trigger = op_fn(signal, spec.threshold).fillna(False)
-        ev = build_events(daily, trigger, spec.direction, spec.horizons)
+        shock_z = None if is_shock_indicator else shock_zscore_series(daily)
+        ev = build_events(daily, trigger, spec.direction, spec.horizons,
+                           shock_z=shock_z, shock_threshold=SHOCK_ZSCORE_THRESHOLD)
         if len(ev):
             ev["group"] = coin
             ev["period"] = ev["trigger_time"].dt.year
-            all_events.append(ev)
+            if is_shock_indicator:
+                all_events.append(ev)
+            else:
+                n_shock_excluded += int((ev["regime"] == "shock").sum())
+                all_events.append(ev[ev["regime"] == "normal"])
 
-    if not all_events:
-        return {"spec": spec, "status": "insufficient_data", "n_raw_triggers": 0}
+    if not all_events or not any(len(e) for e in all_events):
+        return {"spec": spec, "status": "insufficient_data", "n_raw_triggers": 0, "n_shock_excluded": n_shock_excluded}
 
     events = pd.concat(all_events, ignore_index=True)
     oos, params_log = walk_forward(events, ohlc_by_coin, spec.direction, cfg)
@@ -104,7 +121,7 @@ def test_novel_condition(spec: ConditionSpec, coins: list[str]) -> dict:
             live_sl_mult = float(params_log.iloc[-1]["sl_mult"])
 
     return {
-        "spec": spec, "status": status, "n_raw_triggers": len(events), **rep,
+        "spec": spec, "status": status, "n_raw_triggers": len(events), "n_shock_excluded": n_shock_excluded, **rep,
         "coin_concentration": coin_conc, "year_concentration": year_conc,
         "params_log": params_log.to_dict("records"),
         "live_anchors": live_anchors, "live_tp_mult": live_tp_mult, "live_sl_mult": live_sl_mult,

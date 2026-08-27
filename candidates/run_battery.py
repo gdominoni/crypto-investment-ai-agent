@@ -119,7 +119,7 @@ def run_all() -> tuple[pd.DataFrame, dict, dict]:
         record_test_result(spec, status, source="weekly_revalidation")
         record_status(spec.label, status)
         if status == "insufficient_data":
-            rows.append({"candidate": spec.label, "status": status, "n": 0, "n_shock_excluded": 0})
+            rows.append({"candidate": spec.label, "status": status, "n": 0, "n_shock_excluded": result.get("n_shock_excluded", 0)})
             continue
         coin_conc, year_conc = result["coin_concentration"], result["year_concentration"]
         rows.append({
@@ -128,7 +128,7 @@ def run_all() -> tuple[pd.DataFrame, dict, dict]:
             "sortino": result["sortino"], "total_expectancy": result["total_expectancy"], "timeout_fraction": result["timeout_fraction"],
             "dominant_coin": coin_conc.get("dominant_group"), "max_coin_share": coin_conc.get("max_group_share"),
             "dominant_year": year_conc.get("dominant_group"), "max_year_share": year_conc.get("max_group_share"),
-            "n_shock_excluded": 0,  # dynamic candidates aren't run through the static battery's shock-regime preprocessing -- their own indicator may already BE a shock measure
+            "n_shock_excluded": result.get("n_shock_excluded", 0),  # 0 by construction when the spec's own indicator IS shock_zscore -- see novel_condition_tester.py
         })
         if status == "validated" and result.get("live_anchors"):
             live_state["candidates"][spec.label] = {

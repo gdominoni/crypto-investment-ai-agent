@@ -24,6 +24,7 @@ import requests
 from anthropic import Anthropic
 from dotenv import load_dotenv
 
+from data_ingestion.market_data.binance_fetcher import update_all as update_market_data
 from data_ingestion.news_sentiment.cryptocompare_fetcher import fetch_cryptocompare_news
 from execution.signal_store import load_battery_state, push_manual_signal
 from llm_pipeline.context_builder import build_context_summary, build_technical_snapshot
@@ -241,6 +242,17 @@ def format_shock_message(shock: dict, assessment: dict) -> str:
 
 
 def run_shock_scan(coins: list[str] | None = None) -> None:
+    """Refreshes local OHLCV data from Binance first -- `scan_for_shocks`
+    reads the last bar of what's on disk (`candidates/data_loading.py`),
+    so without this the "real-time" shock detector would be checking a
+    frozen snapshot instead of the market as it actually stands right
+    now. A fetch failure is logged, not fatal -- the scan still runs
+    against whatever data is already on disk."""
+    try:
+        update_market_data(coins or SHOCK_SCAN_COINS)
+    except Exception as e:
+        print(f"Market data refresh failed, scanning with existing data: {e}")
+
     load_dotenv()
     client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     scan_coins = coins or SHOCK_SCAN_COINS

@@ -25,12 +25,15 @@ def _signal_class(enter_tag: str | None) -> str:
 
 
 def _load_closed_trades(db_path: str | Path) -> pd.DataFrame:
+    """Ordered by `close_date` -- `_max_drawdown` needs trades in
+    chronological order to mean anything; SQLite gives no ordering
+    guarantee without an explicit ORDER BY."""
     conn = sqlite3.connect(str(db_path))
     try:
         df = pd.read_sql(
             "SELECT pair, is_short, open_rate, close_rate, close_profit, "
             "open_date, close_date, enter_tag, exit_reason "
-            "FROM trades WHERE is_open = 0", conn,
+            "FROM trades WHERE is_open = 0 ORDER BY close_date ASC", conn,
         )
     finally:
         conn.close()
@@ -54,11 +57,17 @@ def _sortino(returns: np.ndarray, periods_per_year: float = 252.0) -> float:
 
 
 def _max_drawdown(returns: pd.Series) -> float:
+    """Worst peak-to-trough decline in CUMULATIVE SUMMED return, not a
+    compounded equity curve -- this system runs several coins/candidates
+    with overlapping open positions, not one account staking 100% into a
+    single sequential trade chain, so geometric compounding (`cumprod`)
+    would produce a number with no realistic interpretation here, same
+    reasoning as `candidates/methodology.py::report`'s `total_expectancy`."""
     if len(returns) == 0:
         return float("nan")
-    equity = (1 + returns).cumprod()
+    equity = returns.cumsum()
     running_max = equity.cummax()
-    drawdown = equity / running_max - 1
+    drawdown = equity - running_max
     return float(drawdown.min())
 
 

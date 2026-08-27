@@ -1,18 +1,16 @@
 """FOMC + CPI release calendar. FOMC decision dates are real (Federal
 Reserve press-release schedule); CPI dates are approximated as the 13th
 of each month (BLS publishes CPI on a weekday in the 10th-15th range,
-not scraped here). Release timestamps are computed DST-aware via
-`zoneinfo` against US Eastern time, not a fixed UTC offset -- FOMC
-releases at 2:00pm ET and CPI at 8:30am ET land on different UTC hours
-depending on the time of year.
+not scraped here). Everything here works at calendar-day granularity,
+matching the daily-bar timeframe this project trades on (`is_macro_day`
+in `definitions.py` only needs to know WHICH day, not what hour) -- no
+intraday/timezone precision is computed because nothing downstream
+consumes it yet; that would only become load-bearing if a candidate
+started trading on an intraday timeframe.
 """
 from __future__ import annotations
 
-from zoneinfo import ZoneInfo
-
 import pandas as pd
-
-_ET = ZoneInfo("America/New_York")
 
 FOMC_DECISION_DATES = [
     "2018-01-31", "2018-03-21", "2018-05-02", "2018-06-13", "2018-08-01", "2018-09-26", "2018-11-08", "2018-12-19",
@@ -44,17 +42,3 @@ def cpi_days(start: str = "2018-01-01", end: str = "2026-12-31", release_day: in
 
 def macro_release_days() -> pd.DatetimeIndex:
     return pd.DatetimeIndex(sorted(set(fomc_days()) | set(cpi_days())))
-
-
-def release_events() -> list[tuple[pd.Timestamp, str]]:
-    """(UTC release timestamp, event type) pairs -- FOMC 2:00pm ET, CPI
-    8:30am ET, both converted through actual US Eastern local time so the
-    EST/EDT switch is handled correctly rather than assumed away."""
-    events = []
-    for d in fomc_days():
-        local = pd.Timestamp(d.date(), tz=_ET).replace(hour=14, minute=0)
-        events.append((local.tz_convert("UTC").tz_localize(None), "FOMC"))
-    for d in cpi_days():
-        local = pd.Timestamp(d.date(), tz=_ET).replace(hour=8, minute=30)
-        events.append((local.tz_convert("UTC").tz_localize(None), "CPI"))
-    return sorted(events)

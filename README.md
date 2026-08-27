@@ -1,6 +1,6 @@
 # AI Agent on Freqtrade: Testing Whether Market Sentiment and Financial News Can Create Predictable, Tradeable Patterns in Crypto
 
-![Python](https://img.shields.io/badge/Python-3.11+-blue) ![Freqtrade](https://img.shields.io/badge/Freqtrade-daily%20strategy-orange) ![Claude](https://img.shields.io/badge/Claude-Haiku%20%2B%20Sonnet-6B4FBB) ![Docker](https://img.shields.io/badge/Docker-live-2496ED) ![Telegram](https://img.shields.io/badge/Telegram-human--in--the--loop-26A5E4) ![Status](https://img.shields.io/badge/Status-Live-brightgreen)
+![Python](https://img.shields.io/badge/Python-3.11+-blue) ![Freqtrade](https://img.shields.io/badge/Freqtrade-daily%20strategy-orange) ![Claude](https://img.shields.io/badge/Claude-Haiku%20%2B%20Sonnet-6B4FBB) ![Telegram](https://img.shields.io/badge/Telegram-human--in--the--loop-26A5E4) ![Status](https://img.shields.io/badge/Status-Live-brightgreen)
 
 ## What This Project Tests
 
@@ -22,7 +22,7 @@ The human gate sits on exactly one kind of decision — whether to spend real co
   <img src="docs/case_study/assets/hero_telegram_trade_open.png" alt="Sonnet Strategist opening a live trade on Telegram, with bolded fields and the full TP/SL ladder" width="360">
 </p>
 
-Full build plan: [`docs/case_study/PLAN.md`](docs/case_study/PLAN.md). This project rebuilds an earlier one whose complete prior case study is linked at the bottom.
+Full build plan: [`docs/case_study/PLAN.md`](docs/case_study/PLAN.md). This project rebuilds an earlier one whose complete prior case study will be linked here once that repository is replaced by this one (see the note at the bottom).
 
 ---
 
@@ -76,11 +76,11 @@ A coin's short-term realized volatility is z-scored against its own longer trail
 
 **Trading fees & slippage.** Phase 1's historical backtesting nets every simulated trade against a fixed 0.20% round-trip transaction cost (see Phase 3's battery table) — chosen to validate *directional* edge honestly, not to model exact live execution cost. Slippage is deliberately **not** modeled in this historical study; a static backtest has no order book to simulate against. In live deployment, actual execution friction (taker fees, spread, realized slippage) is not assumed — it's logged directly from Freqtrade's own order-fill records, which reflect what the exchange actually charged, not a backtest assumption.
 
-**Funding / holding costs.** Precision matters here: the historical battery uses a coin's funding rate only as one candidate's *signal* (extreme funding as a crowding indicator, `c1`) — it is not subtracted as an ongoing holding cost from any simulated trade's P&L, long or short. That's a real, stated gap in Phase 1's numbers, not an oversight papered over. In live futures execution (`trading_mode: "futures"`, `margin_mode: "isolated"` — see Phase 2), Freqtrade natively tracks actual funding fee payments on any open position, which do accrue over a real multi-day hold and are visible in the live trade record. **Backtested short-side results should be read as directional validation on spot price data (does the coin tend to fall after this trigger, net of a flat fee), not as a simulation of real futures carry cost** — that distinction only starts to matter once a position is actually held live.
+**Funding / holding costs.** Precision matters here: the historical battery uses a coin's funding rate only as one candidate's *signal* (extreme funding as a crowding indicator, `c1`) — it is not subtracted as an ongoing holding cost from any simulated trade's P&L, long or short. That's a real, stated gap in Phase 1's numbers, not an oversight papered over. In live futures execution (`trading_mode: "futures"`, `margin_mode: "isolated"` — see Phase 2), Freqtrade natively tracks actual funding fee payments on any open position, which do accrue over a real multi-day hold and are visible in the live trade record. **Backtested short-side results should be read as directional validation on spot price data (does the coin tend to fall after this trigger, net of a flat fee), not as a simulation of real futures carry cost** — that distinction only starts to matter once a position is actually held live. One more honestly-stated gap: 3 of the 7 coins (DOGE, ADA, LTC) had no funding-rate history at all until `data_ingestion/market_data/binance_fetcher.py` backfilled it — `c1` currently has only a few months of coverage on those three versus multiple years on the other four, so its result is still mostly carried by BTC/ETH/BNB/XRP; coverage grows every time the fetcher runs.
 
 **Variance non-stationary shift.** Realized volatility in crypto is not stationary — a handful of historic shocks (a 2020-style crash, a 2022-style unwind) can dominate a naive average and produce anchors that fit the crash, not ordinary conditions. This project's fix: a rolling z-score of short-term realized volatility against its own trailing baseline (`candidates/methodology.py::shock_zscore_series`, causally safe by construction — every value uses only bars up to and including itself) flags events crossing an extreme threshold as `shock`-regime; the static battery's anchor-fitting and walk-forward trading use `normal`-regime events only. On the current battery, this excludes between 2 and 78 events per candidate (out of a few hundred), a real, verified effect that moved results moderately without changing any candidate's overall status. Live, `shock`-regime conditions aren't a dead end — they're the input to the shock-detection pathway below.
 
-**Live shock/crash recognition ("Mode B: Live Reactive Entry").** Real-time market data is scanned for the same statistical shock signature Phase 1 uses to exclude extreme events (`llm_pipeline/shock_detector.py`) — when a coin's current short-term volatility crosses that same extreme threshold, Sonnet is escalated directly, independent of any news headline. Sonnet's only available response to a confirmed shock is to propose testing it — using a whitelisted `shock_zscore` indicator, the exact same walk-forward, concentration-checked pipeline as any other novel condition, run specifically on that coin's own historical shock-regime events (the ones excluded from the static battery above). If a human approves and it validates, the resulting anchors trade the live occurrence immediately, tagged `shock_reactive` so its outcome is measured separately from routine battery or manual trades (Phase 4.3) — a direct test of whether the LLM layer can recognize and react to a crash or a bull surge as it's actually happening, not just process routine headlines. An earlier design considered a second "retroactive" mode (simulate an ideal entry at the exact catalyst candle, in hindsight) — dropped deliberately: identifying "the" catalyst candle is itself only possible after the fact, which would have reintroduced the same kind of lookahead bias this project's entire methodology exists to avoid.
+**Live shock/crash recognition ("Mode B: Live Reactive Entry").** Real-time market data is scanned for the same statistical shock signature Phase 1 uses to exclude extreme events (`llm_pipeline/shock_detector.py`) — when a coin's current short-term volatility crosses that same extreme threshold, Sonnet is escalated directly, independent of any news headline. "Real-time" is literal: every scan (`run_shock_scan()`) refreshes local OHLCV from Binance first (`data_ingestion/market_data/binance_fetcher.py`) rather than reading a static snapshot — the same refresh runs before every weekly re-validation (Phase 3) so the whole battery is graded against current data, not a frozen one-time copy. Sonnet's only available response to a confirmed shock is to propose testing it — using a whitelisted `shock_zscore` indicator, the exact same walk-forward, concentration-checked pipeline as any other novel condition, run specifically on that coin's own historical shock-regime events (the ones excluded from the static battery above). If a human approves and it validates, the resulting anchors trade the live occurrence immediately, tagged `shock_reactive` so its outcome is measured separately from routine battery or manual trades (Phase 4.3) — a direct test of whether the LLM layer can recognize and react to a crash or a bull surge as it's actually happening, not just process routine headlines. An earlier design considered a second "retroactive" mode (simulate an ideal entry at the exact catalyst candle, in hindsight) — dropped deliberately: identifying "the" catalyst candle is itself only possible after the fact, which would have reintroduced the same kind of lookahead bias this project's entire methodology exists to avoid.
 
 </details>
 
@@ -150,7 +150,7 @@ The 0.20% fee figure is a fixed, conservative round-trip assumption (entry + exi
 
 ### The Re-Validation Loop That Keeps This Table Alive
 
-Every Sunday, `scheduler/weekly_revalidation.py` re-runs the full battery's walk-forward fold and concentration check against the latest week of data, diffs every candidate's status against the previous run, and notifies the human only when something actually changed. Separately, any time Haiku/Sonnet flag a genuinely novel condition, the human can approve an ad-hoc test of it on the spot via the same pipeline, run on demand instead of waiting for Sunday — if it validates, it joins the battery under this same weekly regime.
+Every Sunday, `scheduler/weekly_revalidation.py` first refreshes local OHLCV/funding data from Binance (`data_ingestion/market_data/binance_fetcher.py`), then re-runs the full battery's walk-forward fold and concentration check against that current data, diffs every candidate's status against the previous run, and notifies the human only when something actually changed. Separately, any time Haiku/Sonnet flag a genuinely novel condition, the human can approve an ad-hoc test of it on the spot via the same pipeline, run on demand instead of waiting for Sunday — if it validates, it joins the battery under this same weekly regime. As of this writing, `weekly_revalidation.py` runs on demand; it is not yet wired to an actual scheduled job (Phase 6 of the [build plan](docs/case_study/PLAN.md)).
 
 ---
 
@@ -158,9 +158,9 @@ Every Sunday, `scheduler/weekly_revalidation.py` re-runs the full battery's walk
 
 Two structurally separate interaction modes, kept apart deliberately: **free-text conversation never generates a financial number itself** — every figure a message cites (a price, a win rate, a P&L) is pulled from a real computation or database query, never invented by the language model.
 
-### 4.1 Natural-language conversation — market checks and trade triggers
+The conversations below are illustrative mockups of the exact message format the live bot produces (verified against the real Telegram screenshot at the top of this page) — the specific figures shown (a `validated` candidate, a closed trade's P&L) are examples, not a claim about the current battery's actual state, which is reported plainly in Phase 3.
 
-> **[SCREENSHOT PLACEHOLDER — this exact exchange, captured from Telegram]**
+### 4.1 Natural-language conversation — market checks and trade triggers
 
 ```
 You:     How is the market going today?
@@ -186,7 +186,7 @@ You:     Do we have any open trades?
 ```
 🤖 Agent: It looks like the market should rise, based on a sharper
           than usual overnight funding-rate reset combined with BTC
-          holding its post-CPI range — matches candidate C-FUNDING-01
+          holding its post-CPI range — matches candidate c1_long
           (status: validated, last refreshed 3 days ago).
 
           Opening a LONG position on BTC/USDT.
@@ -200,7 +200,7 @@ You:     Do we have any open trades?
 ```
 🤖 Agent: Opposite setup on ETH — overnight move looks like an
           overreaction to a since-clarified headline, matches
-          candidate C-SPIKE-FADE-02 (status: validated).
+          candidate c6_short (status: validated).
 
           Opening a SHORT position on ETH/USDT.
           Target profit: +1.8% at 1 day, +3.9% at 3 days, +6.5% at
@@ -211,8 +211,6 @@ You:     Do we have any open trades?
 ```
 
 ### 4.2 Intra-trade updates and automated post-mortems
-
-> **[SCREENSHOT PLACEHOLDER — a stop-loss post-mortem message, captured from Telegram]**
 
 ```
 🤖 Agent: SL hit on the ETH/USDT short (3-day bucket, -3.2%).
@@ -239,8 +237,6 @@ You:     Do we have any open trades?
 
 This path never touches the language model for the numbers themselves — a command or a button press runs a direct query against the trade database and renders a template. This is deliberate: numeric reporting should never be at risk of being generated rather than computed.
 
-> **[SCREENSHOT PLACEHOLDER — the inline keyboard menu and one rendered KPI table, captured from Telegram]**
-
 Every closed trade is tagged with its own `signal_class` — `battery` (an unattended, validated candidate fired on its own), `sonnet_confirmed` (Sonnet's own routine proposal, referencing a validated candidate, fired automatically, no human step), `manual` (a genuinely novel condition a human approved testing, then validated), or `shock_reactive` (Mode B's real-time shock/crash response, same human-approved-test path) — so results can be broken out by *how* a trade was decided, not just by coin: a direct measure of whether the LLM's own judgment (`sonnet_confirmed`) holds up against the purely statistical path (`battery`), and whether its judgment on genuinely novel or critical conditions (`manual`/`shock_reactive`) differs from either.
 
 ```
@@ -257,15 +253,15 @@ You:     [taps "By Coin"]
           -------|----|----------|-----------|--------|--------|--------
           BTC    | 14 |  57.1%   |  +8.2%    | -4.1%  |  0.91  |  1.34
           ETH    | 11 |  54.5%   |  +5.7%    | -5.8%  |  0.68  |  0.95
-          SOL    |  6 |  33.3%   |  -3.1%    | -9.2%  | -0.22  | -0.31
+          DOGE   |  6 |  33.3%   |  -3.1%    | -9.2%  | -0.22  | -0.31
           BNB    |  9 |  55.6%   |  +3.9%    | -3.4%  |  0.71  |  1.02
           XRP    |  7 |  42.9%   |  +1.1%    | -6.0%  |  0.14  |  0.19
 ```
 
 ```
-You:     Show me results for signal C-FUNDING-01.
+You:     Show me results for signal c1_long.
 
-🤖 Agent: C-FUNDING-01 (status: validated, refreshed 2026-XX-XX):
+🤖 Agent: c1_long (status: validated, refreshed 2026-09-14):
 
           N=22  Win Rate 59.1%  Strict WR 54.5%  Net Profit +11.4%
           Max DD -4.7%  Sharpe 0.88  Sortino 1.21  Timeout rate 9.1%
@@ -283,13 +279,13 @@ crypto-sentiment-trading-agent/
 ├── llm_pipeline/                # Haiku Scout, Sonnet Strategist, live context builder, novel-condition tester, shock_detector.py
 ├── telegram/                    # Both interaction modes from Phase 4, KPI query layer
 ├── scheduler/                   # weekly_revalidation.py
-├── data_ingestion/              # News/sentiment fetchers, ported forward from the prior project
-├── data/                        # Historical market/macro data, ported forward -- the data wasn't the problem
+├── data_ingestion/              # market_data/binance_fetcher.py (keeps data/ current), news_sentiment/ (CryptoCompare)
+├── data/                        # Historical + continuously-refreshed market/macro data
 ├── docs/case_study/             # PLAN.md, this project's build log, and the live-results writeup
-└── tests/
+└── tests/                       # candidates/methodology.py, status_history.py, novel_condition_tester.py
 ```
 
-**Safety & guardrails:** every module defaults to dry-run, live execution requires an explicit human-issued confirmation; no trade is ever placed on an LLM-generated number.
+**Safety & guardrails:** every module defaults to dry-run; no trade is ever placed on an LLM-generated number — TP/SL always come from a walk-forward-validated anchor set, structurally enforced (§2). The human gate sits on exactly one decision — whether to spend compute validating a genuinely untested pattern (§2, §4.3-4.4) — never on whether a routine, already-validated trade fires; requiring a human to also bless every individual trade would test human-plus-LLM judgment, not the LLM's own.
 
 **Observation & reporting:** the system runs untouched except for its own scheduled weekly refresh and any human-approved novel-condition tests, for the agreed observation period. No retroactive re-tuning of results already produced — the weekly refresh updates the *live* battery going forward, it does not rewrite what already happened. At the end of the observation window, and at any checkpoint along the way, the KPI dashboard (§4.3) and the full decision log are the report — including if the honest result is "no better than the static baseline Phase 1 already found."
 

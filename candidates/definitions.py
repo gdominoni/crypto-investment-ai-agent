@@ -1,5 +1,8 @@
-"""Trigger definitions for the statistical baseline battery. Two
-candidates ported forward as ideas worth continuing to test (C4
+"""Trigger definitions for the statistical baseline battery: C1, C2, and
+C6 -- the three candidates selected, out of the prior research's larger
+set, as ideas worth re-deriving clean and continuing to test here (the
+numbering is inherited from that prior labeling, not sequential by
+design -- C3 was never one of the three carried forward). C4
 stablecoin-supply and C5 basis-unwind are deliberately NOT included here
 yet -- their required data source, on-chain stablecoin supply, isn't
 wired into this project's data layer; add them once it is, rather than
@@ -38,7 +41,14 @@ def compute_triggers(daily: pd.DataFrame, funding: pd.Series | None = None) -> p
     called identically by the research battery (`run_battery.py`, on a
     fully historical frame) and the live Freqtrade strategy (on its own
     `populate_indicators` dataframe), so there is exactly one
-    implementation of each trigger, never two that could drift apart."""
+    implementation of each trigger, never two that could drift apart.
+
+    `funding=None` (no funding-rate history available for this coin)
+    degrades c1_long/c1_short to always-False rather than raising --
+    deliberate, so a coin missing this one data source doesn't break
+    every other trigger for it. See `data_ingestion/market_data/`'s
+    fetcher for keeping funding-rate coverage current across the full
+    coin universe."""
     idx = daily.index
     out = pd.DataFrame(index=idx)
     close, volume = daily["close"], daily["volume"]
