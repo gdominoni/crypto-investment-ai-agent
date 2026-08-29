@@ -259,27 +259,53 @@ def _resolved_live_test_counts() -> dict[str, int]:
     return counts
 
 
+def _effective_milestone_count(candidate: str, backtest_n: int | None, live_n: int) -> int:
+    """Mirrors execution/live_testing.py::_effective_milestone_count
+    exactly. Static candidates (C1/C2/C6) were derived by directly mining
+    this project's own historical data -- a direct look-then-test risk,
+    so only genuinely prospective evidence (real, or here simulated,
+    resolved live tests) counts toward validating them. Dynamic
+    (Sonnet-proposed) candidates carry only a much weaker, diffuse
+    version of that risk (Sonnet never sees this project's own backtest
+    results before proposing), so they use a rolling window of the most
+    recent 50 occurrences, backtest and live mixed -- equivalent to
+    filling the window with live occurrences first and topping up with
+    the most recent backtest ones only while live_n hasn't reached 50
+    yet. Once a dynamic candidate accumulates 50 live tests on its own,
+    this collapses to the exact same live-only rule the static
+    candidates always use."""
+    if candidate in CANDIDATE_DIRECTIONS or live_n >= sh.MILESTONE_N:
+        return live_n
+    return min(backtest_n or 0, sh.MILESTONE_N - live_n) + live_n
+
+
 def _check_n50_milestones(as_of: pd.Timestamp, status_summary: dict, client: Anthropic) -> None:
     """NOT one-time -- fires again every time a candidate crosses a NEW
-    multiple of sh.MILESTONE_N resolved LIVE tests (50, 100, 150, ...),
-    states plainly whether it's 'accepted' AT THIS CHECKPOINT (fresh
-    each time, not a permanent badge -- it may have been accepted at N=50
-    and drifted to 'watch' by N=100, or the reverse, both worth logging
-    explicitly), and asks the human whether to keep testing or drop it --
-    reusing the exact same keep/drop buttons _check_prune_decisions uses.
-    This is the ONE place this project calls a candidate "validated":
-    that word is earned (or lost) fresh at each checkpoint by how the
-    candidate actually performed over real (or, in the replay, simulated)
-    live occurrences, not by the instant historical backtest alone.
-    Replaces an earlier one-time, purely calendar-based 2-year version --
-    see docs/case_study/methodology-decisions.md."""
+    multiple of sh.MILESTONE_N in its own _effective_milestone_count (50,
+    100, 150, ...), states plainly whether it's 'accepted' AT THIS
+    CHECKPOINT (fresh each time, not a permanent badge -- it may have
+    been accepted at N=50 and drifted to 'watch' by N=100, or the
+    reverse, both worth logging explicitly), and asks the human whether
+    to keep testing or drop it -- reusing the exact same keep/drop
+    buttons _check_prune_decisions uses. This is the ONE place this
+    project calls a candidate "validated": that word is earned (or lost)
+    fresh at each checkpoint by how the candidate actually performed
+    over real (or, in the replay, simulated) live occurrences (plus, for
+    dynamic candidates only, a rolling backtest top-up -- see
+    _effective_milestone_count), not by the instant historical backtest
+    alone. Replaces an earlier one-time, purely calendar-based 2-year
+    version -- see docs/case_study/methodology-decisions.md."""
     as_of_str = str(as_of.date())
-    counts = _resolved_live_test_counts()
+    live_counts = _resolved_live_test_counts()
+    counts = {c: _effective_milestone_count(c, status_summary.get(c, {}).get("n"), live_counts.get(c, 0))
+              for c in set(live_counts) | set(status_summary)}
     for candidate in sh.candidates_due_for_milestone(counts):
         n_reached = (counts.get(candidate, 0) // sh.MILESTONE_N) * sh.MILESTONE_N
+        live_n = live_counts.get(candidate, 0)
         info = status_summary.get(candidate, {})
         status = info.get("status") or sh.all_latest_statuses().get(candidate, {}).get("status", "unknown")
         cleared = status == "accepted"
+        is_static = candidate in CANDIDATE_DIRECTIONS
         if info.get("n") is not None:
             n, sig, p = info["n"], info.get("pattern_significant"), info.get("pattern_p_value")
             criteria = [f"backtest N={n} ({'meets' if n > 50 else 'below'} the minimum of {sh.MILESTONE_N})"]
@@ -294,17 +320,21 @@ def _check_n50_milestones(as_of: pd.Timestamp, status_summary: dict, client: Ant
             candidate, years_tracked=sh.years_tracked(candidate, as_of_str) or 0.0,
             recent_summary=criteria_str, trigger_description=trigger_desc, client=client,
         )
+        count_basis = (f"{live_n} live occurrence(s) so far" if is_static else
+                       f"{n_reached} recent occurrence(s) so far ({live_n} live, the rest backtest -- static "
+                       f"candidates count live occurrences only; this one is Sonnet-proposed, so backtest tops "
+                       f"up the count only until it has 50 live occurrences of its own)")
         message = (
             f"<b>{as_of_str}</b>\n\n"
-            f"<b>Checkpoint at {n_reached} live tests -- {escape_html(candidate)}</b>\n\n"
+            f"<b>Checkpoint at {n_reached} occurrences -- {escape_html(candidate)}</b>\n\n"
             f"({escape_html(trigger_desc)})\n\n"
             f"<b>{'VALIDATED' if cleared else 'NOT validated'}</b> -- {'cleared' if cleared else 'did not clear'} the "
-            f"acceptance bar as of this checkpoint ({counts.get(candidate, 0)} live occurrences so far).\n"
+            f"acceptance bar as of this checkpoint ({count_basis}).\n"
             f"{escape_html(criteria_str)}. (No single coin or period may carry more than 60% of the positive "
             f"return either, for either check to pass.)\n\n"
             f"Current status: <b>{escape_html(status)}</b>\n"
-            f"Re-evaluated fresh at every {sh.MILESTONE_N}-test checkpoint, not a permanent verdict -- re-checked "
-            f"again at {n_reached + sh.MILESTONE_N} tests either way, unless dropped below.\n\n"
+            f"Re-evaluated fresh at every {sh.MILESTONE_N}-occurrence checkpoint, not a permanent verdict -- re-checked "
+            f"again at {n_reached + sh.MILESTONE_N} either way, unless dropped below.\n\n"
             f"{escape_html(hyperopt_runner.format_result(candidate))}\n\n"
             f"Sonnet's opinion (advisory only, not a verified finding): {escape_html(advice)}"
         )

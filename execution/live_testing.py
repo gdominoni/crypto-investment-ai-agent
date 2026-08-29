@@ -235,21 +235,50 @@ PRUNE_KEYBOARD_TEMPLATE = lambda candidate: {
 }
 
 
+def _effective_milestone_count(candidate: str, backtest_n: int | None, live_n: int) -> int:
+    """What counts toward a validation checkpoint differs by how the
+    candidate was found. Static candidates (C1/C2/C6) were derived by
+    directly mining this project's own historical data (a prior,
+    dedicated research phase -- see docs/case_study/methodology-decisions.md)
+    -- a direct look-then-test risk, so only genuinely prospective
+    evidence (real resolved live tests) counts toward validating them,
+    unchanged from before. Dynamic (Sonnet-proposed) candidates carry
+    only a much weaker, diffuse version of that risk (Sonnet never sees
+    this project's own backtest results before proposing -- only a
+    live snapshot plus whatever general market-pattern knowledge its
+    training absorbed), so they use a rolling window of the most recent
+    50 occurrences, backtest and live mixed, chronologically -- since
+    every live occurrence is by definition more recent than every
+    backtest one, this is equivalent to filling the window with live
+    occurrences first and topping up with the most recent backtest ones
+    only while live_n hasn't reached 50 yet. Once a dynamic candidate
+    accumulates 50 real live tests on its own, backtest contributes
+    nothing further -- this collapses to the exact same live-only rule
+    the static candidates always use."""
+    if candidate in CANDIDATE_DIRECTIONS or live_n >= sh.MILESTONE_N:
+        return live_n
+    return min(backtest_n or 0, sh.MILESTONE_N - live_n) + live_n
+
+
 def check_n50_milestones(status_summary: dict, client: Anthropic) -> None:
     """Mirrors replay/engine.py::_check_n50_milestones exactly -- NOT
     one-time, fires again every time a candidate crosses a NEW multiple
-    of 50 resolved live tests (50, 100, 150, ...), each time re-asking
-    the human whether to keep testing or drop it, real data instead of
-    simulated. `status_summary` is the caller's freshly-computed battery
-    result (e.g. weekly_revalidation.py's `result` DataFrame keyed by
-    candidate) -- not re-derived here."""
+    of 50 in its own _effective_milestone_count (50, 100, 150, ...),
+    each time re-asking the human whether to keep testing or drop it,
+    real data instead of simulated. `status_summary` is the caller's
+    freshly-computed battery result (e.g. weekly_revalidation.py's
+    `result` DataFrame keyed by candidate) -- not re-derived here."""
     today_str = str(pd.Timestamp.now().date())
-    counts = _resolved_live_test_counts()
+    live_counts = _resolved_live_test_counts()
+    counts = {c: _effective_milestone_count(c, status_summary.get(c, {}).get("n"), live_counts.get(c, 0))
+              for c in set(live_counts) | set(status_summary)}
     for candidate in sh.candidates_due_for_milestone(counts):
         n_reached = (counts.get(candidate, 0) // sh.MILESTONE_N) * sh.MILESTONE_N
+        live_n = live_counts.get(candidate, 0)
         info = status_summary.get(candidate, {})
         status = info.get("status") or sh.all_latest_statuses().get(candidate, {}).get("status", "unknown")
         cleared = status == "accepted"
+        is_static = candidate in CANDIDATE_DIRECTIONS
         if info.get("n") is not None:
             n, sig, p = info["n"], info.get("pattern_significant"), info.get("pattern_p_value")
             criteria = [f"backtest N={n} ({'meets' if n > 50 else 'below'} the minimum of {sh.MILESTONE_N})"]
@@ -264,17 +293,21 @@ def check_n50_milestones(status_summary: dict, client: Anthropic) -> None:
             candidate, years_tracked=sh.years_tracked(candidate) or 0.0,
             recent_summary=criteria_str, trigger_description=trigger_desc, client=client,
         )
+        count_basis = (f"{live_n} real live occurrence(s) so far" if is_static else
+                       f"{n_reached} recent occurrence(s) so far ({live_n} real live, the rest backtest -- "
+                       f"static candidates count real live occurrences only; this one is Sonnet-proposed, so "
+                       f"backtest tops up the count only until it has 50 real live occurrences of its own)")
         message = (
             f"<b>{today_str}</b>\n\n"
-            f"<b>Checkpoint at {n_reached} live tests -- {escape_html(candidate)}</b>\n\n"
+            f"<b>Checkpoint at {n_reached} occurrences -- {escape_html(candidate)}</b>\n\n"
             f"({escape_html(trigger_desc)})\n\n"
             f"<b>{'VALIDATED' if cleared else 'NOT validated'}</b> -- {'cleared' if cleared else 'did not clear'} the "
-            f"acceptance bar as of this checkpoint ({counts.get(candidate, 0)} live occurrences so far).\n"
+            f"acceptance bar as of this checkpoint ({count_basis}).\n"
             f"{escape_html(criteria_str)}. (No single coin or period may carry more than 60% of the positive "
             f"return either, for either check to pass.)\n\n"
             f"Current status: <b>{escape_html(status)}</b>\n"
-            f"Re-evaluated fresh at every {sh.MILESTONE_N}-test checkpoint, not a permanent verdict -- re-checked "
-            f"again at {n_reached + sh.MILESTONE_N} tests either way, unless dropped below.\n\n"
+            f"Re-evaluated fresh at every {sh.MILESTONE_N}-occurrence checkpoint, not a permanent verdict -- re-checked "
+            f"again at {n_reached + sh.MILESTONE_N} either way, unless dropped below.\n\n"
             f"{escape_html(hyperopt_runner.format_result(candidate))}\n\n"
             f"Sonnet's opinion (advisory only, not a verified finding): {escape_html(advice)}"
         )
