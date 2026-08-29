@@ -67,7 +67,7 @@ def _format_live_test_opened(date, direction: str, coin: str, candidate: str, ho
     reading as one dense run-on sentence."""
     return (f"<b>{date}</b>\n\n"
             f"<b>Live test opened -- {direction.upper()} {coin}</b>\n\n"
-            f"(candidate {candidate}: {escape_html(_trigger_description(candidate))})\n\n"
+            f"(candidate <b>{escape_html(candidate)}</b>: {escape_html(_trigger_description(candidate))})\n\n"
             f"Held for <b>{horizon}d</b>, no TP/SL.")
 
 
@@ -144,8 +144,8 @@ def _check_consecutive_failures(candidate: str) -> None:
         lines.append(f"  {t['close_date']}  {escape_html(t['coin'])}  return={t['forward_return']:+.2%}  "
                       f"MFE={t['mfe']:+.2%}  MAE={t['mae']:+.2%}")
     lines.append(f"\nOver these {len(window)}: mean return={mean_return:+.2%}, MFE/MAE={ratio:.2f} (favorable if > 1.0)")
-    lines.append(f"\nInformational only -- this does not change {escape_html(candidate)}'s status. The full "
-                 f"aggregate statistics (see /details {escape_html(candidate)}) are far more resistant to a short "
+    lines.append(f"\nInformational only -- this does not change <b>{escape_html(candidate)}</b>'s status. The full "
+                 f"aggregate statistics (see /details <b>{escape_html(candidate)}</b>) are far more resistant to a short "
                  f"streak by design; this exists specifically to surface a genuine losing run long before the "
                  f"aggregate ever would.")
     _send("\n".join(lines))
@@ -172,7 +172,7 @@ def _check_live_tests() -> None:
         })
         _send(f"<b>{today.date()}</b>\n\n"
               f"<b>Live test resolved -- {trade['direction'].upper()} {trade['coin']}</b>\n\n"
-              f"(candidate {trade['candidate']}: {escape_html(_trigger_description(trade['candidate']))}, "
+              f"(candidate <b>{escape_html(trade['candidate'])}</b>: {escape_html(_trigger_description(trade['candidate']))}, "
               f"held {trade['horizon']}d, opened {trade['entry_date']})\n\n"
               f"Forward return: <b>{outcome['forward_return']:+.2%}</b>\n"
               f"Best point reached: {outcome['mfe']:+.2%}\n"

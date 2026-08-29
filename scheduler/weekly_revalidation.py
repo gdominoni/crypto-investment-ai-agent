@@ -124,7 +124,7 @@ def _run_weekly_revalidation() -> None:
     if changes:
         lines = ["Weekly re-validation -- status changes:"]
         for candidate, old, new in changes:
-            lines.append(f"  {candidate}: {old} -> {new}")
+            lines.append(f"  <b>{escape_html(candidate)}</b>: {old} -> {new}")
         message = "\n".join(lines)
         print(message)
         _send(message)

@@ -270,3 +270,13 @@ Each entry is dated and never silently rewritten — if a decision is later reve
 **Why.** (1) Production and the replay track two entirely separate dynamic-candidate registries (see PROJECT_MAP.md's "Historical Replay" section) -- a candidate discovered only during the replay was never going to be found by a lookup that only ever checks production's, exactly what happened: `/replay_details high_efficiency_breakout_with_volume_confirmation` showed "trigger definition not found" for a real, validated, currently-accepted candidate. (2) The "Reference TP/SL backtest" line showed win rate, Sortino, and total expectancy, all of which are meaningless without knowing what TP/SL structure produced them -- the data (`tp_mult`/`sl_mult`, the project's own walk-forward grid search's chosen multipliers against the duration-bucketed anchors) was already being computed and returned by both `run_all()` and `run_replay_battery()`, just never read at the one place a human asks for exactly this level of detail.
 
 **Type.** Real bug fixes, both caught live in immediate succession by a human actually reading the command's output line by line -- same pattern as every other fix in this section of the log: the missing piece was an input never passed in, not a flaw in `format_candidate_details()`'s own logic.
+
+---
+
+## Candidate names bolded consistently everywhere, not just in some messages
+
+**Decision.** Every candidate/trigger name shown in any Telegram message is now wrapped in `<b>...</b>` -- `/summary`/`/replay_summary`'s per-line listing (`_trigger_summary_line()`) and its "no historical occurrences yet" name list (`_insufficient_data_block()`), both "not found" error messages, the live-test-opened/resolved messages, the consecutive-failure alert's closing paragraph, and `weekly_revalidation.py`'s status-change diff line.
+
+**Why.** A real, spot-checked inconsistency: headers ("Checkpoint at 50 occurrences -- X", "Consecutive-failure alert -- X") were already bold, but the exact same name one line below, in the body of the same message or in a different command entirely, often wasn't -- `/summary`'s own per-candidate listing, the single most-read command in this whole system, never bolded a name at all. Nothing here changes what any message says, only how consistently a name reads as a name across every message a human might see it in.
+
+**Type.** Consistency/formatting fix, requested directly -- no effect on any computation or classification.

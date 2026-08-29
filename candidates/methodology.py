@@ -658,7 +658,7 @@ def _trigger_summary_line(name: str, row: dict, milestone: dict | None = None) -
     # real reason (already given below via "Why:").
     if row.get("status") == "accepted" and milestone and milestone.get("milestone_reported"):
         bits.append("VALIDATED" if milestone.get("milestone_cleared") else "not validated")
-    line = f"  {_escape_html(name)} -- {', '.join(bits)}"
+    line = f"  <b>{_escape_html(name)}</b> -- {', '.join(bits)}"
     if row.get("status") in ("watch", "rejected"):
         # Without this, a rejected/watch candidate can show a favorable p-value
         # AND a favorable MFE/MAE ratio right next to its verdict -- looking like
@@ -688,7 +688,7 @@ def _insufficient_data_block(items: list[tuple[str, dict]]) -> list[str]:
     if zero:
         if partial:
             lines.append("")
-        lines.append(f"No historical occurrences yet ({len(zero)}): " + ", ".join(_escape_html(n) for n in zero))
+        lines.append(f"No historical occurrences yet ({len(zero)}): " + ", ".join(f"<b>{_escape_html(n)}</b>" for n in zero))
     return lines
 
 
