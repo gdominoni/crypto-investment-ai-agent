@@ -210,3 +210,52 @@ class TestClauseSerialization:
         from llm_pipeline.novel_condition_tester import clause_from_dict
         with pytest.raises(ValueError):
             clause_from_dict({"indicator": "rsi_14d", "op": "<", "threshold": 30, "within_days": 500})
+
+
+class TestMacroSurpriseIndicators:
+    """`is_macro_day` is binary -- "did anything publish today". These
+    grade HOW FAR the print moved, which is most of what a macro event
+    means. The vintages were already on disk and the delta was already
+    computed for Sonnet's prompt; it was just never testable."""
+
+    def test_they_are_registered_as_events_and_as_daily_native(self):
+        from llm_pipeline.novel_condition_tester import (
+            SUPPORTED_INDICATORS, EVENT_INDICATORS, DAILY_NATIVE_INDICATORS)
+        for ind in ("cpi_surprise", "rate_surprise", "jobless_claims_surprise"):
+            assert ind in SUPPORTED_INDICATORS
+            assert ind in EVENT_INDICATORS, "a macro surprise IS the event -- reduced_spec must drop it"
+            assert ind in DAILY_NATIVE_INDICATORS, "a macro release has no intraday version"
+
+    def test_a_surprise_is_nan_off_release_days(self):
+        """The indicator IS the event, so a clause built on it fires only
+        on real publication dates by construction."""
+        from candidates.macro_vintage import surprise_series
+        import pandas as pd
+        idx = pd.date_range("2019-01-01", periods=400, freq="D")
+        s = surprise_series("cpi", idx)
+        assert s.notna().sum() > 5, "should fire on real CPI release days"
+        assert s.isna().sum() > len(s) * 0.8, "and be NaN on the vast majority of days"
+
+    def test_a_degenerate_trailing_window_yields_nan_not_a_colossal_zscore(self):
+        """Real case: the Fed funds rate sits flat for years, collapsing
+        its rolling std toward zero. A bare `sd > 0` guard produced a
+        'surprise' of -2,613,348 sigma -- a division artifact that would
+        have compared silently against any threshold Sonnet proposed."""
+        from candidates.macro_vintage import surprise_series
+        from candidates.data_loading import load_daily
+        s = surprise_series("rate_surprise".replace("rate_surprise", "fed_funds_rate"),
+                            load_daily("BTCUSDT").index).dropna()
+        assert len(s), "fixture should produce some readings"
+        assert s.abs().max() < 100, f"degenerate-window artifact leaked through: max |z| = {s.abs().max()}"
+
+    def test_a_surprise_value_never_changes_once_published(self):
+        """Point-in-time correctness: keyed to realtime_start, and the
+        z-score's own trailing stats are shifted, so a past reading can
+        never be revised by data that arrived later."""
+        from candidates.macro_vintage import surprise_series
+        from candidates.data_loading import load_daily
+        idx = load_daily("BTCUSDT").index
+        full, trunc = surprise_series("cpi", idx), surprise_series("cpi", idx[:1500])
+        overlap = full.iloc[:1500].dropna().index.intersection(trunc.dropna().index)
+        assert len(overlap), "fixture should overlap"
+        assert float((full.loc[overlap] - trunc.loc[overlap]).abs().max()) == 0.0

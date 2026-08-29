@@ -21,6 +21,7 @@ import pandas as pd
 from candidates.data_loading import load_daily, load_funding, zscore
 from candidates.definitions import trend_efficiency_ratio
 from candidates.macro_calendar import macro_release_days
+from candidates.macro_vintage import surprise_series
 from candidates.methodology import (
     MethodologyConfig, build_events, classify_status, concentration_check, pattern_significance, report,
     shock_zscore_series, walk_forward,
@@ -96,6 +97,18 @@ SUPPORTED_INDICATORS: dict[str, Callable[..., pd.Series]] = {
     # it a real, walk-forward-validated anchor set rather than an
     # invented one. Deliberately ignores `scale` -- see module note above.
     "shock_zscore": lambda df, funding, scale=1: shock_zscore_series(df),
+    # GRADED macro surprises, from the ALFRED vintages already on disk. Unlike
+    # `is_macro_day` (a binary "did anything publish today"), these carry HOW FAR
+    # the print moved from the previous one -- the difference between a hawkish
+    # shock and a nothing-burger, which is most of what a macro event actually
+    # means. NaN off release days by construction, so a clause using one fires
+    # only on real publication dates; pair with a Clause's `within_days` for
+    # "a big surprise landed in the last K days, and today X". Ignore `scale`
+    # for the same reason shock_zscore does: a macro release is a calendar-day
+    # event with no hourly refinement to reinterpret.
+    "cpi_surprise": lambda df, funding, scale=1: surprise_series("cpi", df.index),
+    "rate_surprise": lambda df, funding, scale=1: surprise_series("fed_funds_rate", df.index),
+    "jobless_claims_surprise": lambda df, funding, scale=1: surprise_series("initial_jobless_claims", df.index),
     "rsi_14d": _rsi,
     "atr_pct_14d": _atr_pct,
     "donchian_pct_20d": _donchian_pct,
@@ -120,6 +133,9 @@ INDICATOR_PLAIN_NAMES: dict[str, str] = {
     "funding_zscore_30d": "30-day funding-rate z-score",
     "efficiency_ratio_20d": "20-day trend efficiency ratio (0=choppy, 1=straight trend)",
     "is_macro_day": "is a macro-release day (CPI/FOMC)",
+    "cpi_surprise": "CPI surprise (how far the new inflation print moved vs. recent prints, in std devs; only on CPI release days)",
+    "rate_surprise": "Fed funds rate surprise (how far the new rate print moved vs. recent ones, in std devs; only on release days)",
+    "jobless_claims_surprise": "jobless-claims surprise (how far the new claims print moved vs. recent ones, in std devs; only on release days)",
     "shock_zscore": "shock z-score (how extreme today's price move is vs. this coin's own history)",
     "rsi_14d": "14-day RSI (momentum, 0-100 scale)",
     "atr_pct_14d": "14-day average true range (% of price, a volatility measure)",
@@ -273,6 +289,8 @@ class Clause:
 # before the daily close (see docs/case_study/methodology-decisions.md).
 DAILY_NATIVE_INDICATORS = frozenset({
     "shock_zscore", "rsi_14d", "atr_pct_14d", "daily_range_pct", "efficiency_ratio_20d",
+    # macro surprises are calendar-day events -- there is no intraday version
+    "cpi_surprise", "rate_surprise", "jobless_claims_surprise",
 })
 
 # Which clauses describe an EVENT (something happened in the world / the
@@ -283,7 +301,10 @@ DAILY_NATIVE_INDICATORS = frozenset({
 # meaningless -- the shock alone already differs from an ordinary day --
 # so the honest question is whether the event adds anything GIVEN X.
 # Future news/sentiment indicators belong here too.
-EVENT_INDICATORS = frozenset({"is_macro_day", "shock_zscore"})
+EVENT_INDICATORS = frozenset({
+    "is_macro_day", "shock_zscore",
+    "cpi_surprise", "rate_surprise", "jobless_claims_surprise",
+})
 
 
 def clause_to_dict(clause: "Clause") -> dict:

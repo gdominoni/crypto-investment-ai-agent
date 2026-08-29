@@ -42,6 +42,60 @@ def vintage_releases_as_of(name: str, as_of: pd.Timestamp | None = None) -> pd.D
     return latest_per_period.sort_values("date")[["date", "realtime_start", value_col]]
 
 
+def surprise_series(name: str, index: pd.DatetimeIndex, window: int = 12) -> pd.Series:
+    """A graded MACRO SURPRISE aligned to `index`: on each day this series
+    actually published, how far the new print moved from the previous one,
+    as a z-score against the trailing distribution of such moves. NaN on
+    every other day -- the indicator IS the event, so a clause built on it
+    fires only on release days by construction, and combines with a
+    Clause's own `within_days` to express "a big surprise landed within
+    the last K days".
+
+    Why this exists. `is_macro_day` is a BINARY flag: "was there a release
+    today". It cannot tell a hawkish shock from a nothing-burger, which is
+    most of the information a macro event carries. This project already
+    downloads the ALFRED vintages needed to grade it, and
+    `latest_release_with_prior` already computes the release-vs-prior
+    delta for Sonnet's prompt -- but that number was never exposed as a
+    testable indicator, so the pipeline computed the surprise, showed it
+    to the model, and discarded it at exactly the point where it would
+    have become a falsifiable hypothesis.
+
+    Point-in-time correct in two distinct senses, both load-bearing:
+      * keyed to `realtime_start` (the day it was PUBLISHED), never to the
+        period it describes, so a figure is never known before it existed;
+      * the z-score's trailing mean/std are `.shift(1)`-ed, so "how
+        surprising is this" is judged only on releases that preceded it.
+    Uses each period's FIRST print, not its latest revision -- the market
+    reacted to the number as originally published.
+
+    A DEGENERATE trailing window yields NaN, not a colossal z-score. Real
+    case caught on this data: the Fed funds rate sits flat for years at a
+    time, so its rolling std collapses toward zero and a bare `sd > 0`
+    guard produced a "surprise" of -2,613,348 standard deviations on the
+    first move afterwards. That is not an informative reading, it is a
+    division artifact -- and it would have been silently comparable
+    against any threshold Sonnet proposed. When the last several releases
+    were effectively identical there is genuinely no scale to judge
+    surprise against, and saying so (NaN) is the honest answer."""
+    df = _load_vintage(name)
+    value_col = [c for c in df.columns if c not in ("date", "realtime_start")][0]
+    first = df.sort_values("realtime_start").groupby("date", as_index=False).first()
+    first = first.sort_values("realtime_start").reset_index(drop=True)
+    delta = first[value_col].astype(float).diff()
+    mu = delta.rolling(window, min_periods=max(window // 2, 3)).mean().shift(1)
+    sd = delta.rolling(window, min_periods=max(window // 2, 3)).std().shift(1)
+    # Scale-free floor from the series' own typical move, so this works
+    # identically for a rate in percent and claims in hundreds of thousands.
+    typical = float(delta.abs().median(skipna=True) or 0.0)
+    floor = max(typical * 1e-2, 1e-12)
+    z = (delta - mu) / sd.where(sd > floor)
+    by_pub = pd.Series(z.to_numpy(), index=pd.DatetimeIndex(first["realtime_start"]).floor("D"))
+    by_pub = by_pub[~by_pub.index.duplicated(keep="last")]
+    target = pd.DatetimeIndex(index).floor("D")
+    return pd.Series(by_pub.reindex(target).to_numpy(), index=index, dtype=float)
+
+
 def release_dates(name: str, start: pd.Timestamp, end: pd.Timestamp) -> pd.DatetimeIndex:
     """Every distinct real-world date this series actually published a
     NEW number, within [start, end] -- these are the real, dated events
