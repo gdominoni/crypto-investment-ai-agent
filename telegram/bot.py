@@ -492,7 +492,10 @@ def _dispatch_update(update: dict, client: Anthropic) -> None:
         status_summary = run_replay_battery(as_of)
         row = status_summary.get(candidate)
         if row is None:
-            _send(f"No candidate named '{escape_html(candidate)}' found in the replay's current battery. Check /replay_summary for exact names.")
+            from candidates.status_history import all_latest_statuses as production_statuses
+            hint = (" This name IS tracked in production, though -- try /details instead."
+                    if candidate in production_statuses() else "")
+            _send(f"No candidate named '{escape_html(candidate)}' found in the replay's current battery. Check /replay_summary for exact names.{hint}")
             return
         horizon = replay_state.load_horizons().get(candidate)
         milestone = replay_sh.all_latest_statuses().get(candidate, {})
@@ -529,7 +532,10 @@ def _dispatch_update(update: dict, client: Anthropic) -> None:
         status_summary = result.set_index("candidate").to_dict(orient="index") if len(result) else {}
         row = status_summary.get(candidate)
         if row is None:
-            _send(f"No candidate named '{escape_html(candidate)}' found in the current battery. Check /summary for exact names.")
+            from replay import status_history as replay_sh
+            hint = (" This name IS tracked in the historical replay, though -- try /replay_details instead."
+                    if candidate in replay_sh.all_latest_statuses() else "")
+            _send(f"No candidate named '{escape_html(candidate)}' found in the current battery. Check /summary for exact names.{hint}")
             return
         horizon = load_horizons().get(candidate)
         milestone = all_latest_statuses().get(candidate, {})
