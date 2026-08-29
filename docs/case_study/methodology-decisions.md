@@ -280,3 +280,71 @@ Each entry is dated and never silently rewritten — if a decision is later reve
 **Why.** A real, spot-checked inconsistency: headers ("Checkpoint at 50 occurrences -- X", "Consecutive-failure alert -- X") were already bold, but the exact same name one line below, in the body of the same message or in a different command entirely, often wasn't -- `/summary`'s own per-candidate listing, the single most-read command in this whole system, never bolded a name at all. Nothing here changes what any message says, only how consistently a name reads as a name across every message a human might see it in.
 
 **Type.** Consistency/formatting fix, requested directly -- no effect on any computation or classification.
+
+---
+
+## 2026-08-29 -- Statistical audit: the significance test was not directional, and its bootstrap was badly miscalibrated. Every previously-reported result is superseded.
+
+This is the largest correction in this log. A deep audit of `candidates/methodology.py` found four defects that compounded, and together they were the reason this project appeared to be finding patterns. **After the fix, no candidate in either the production battery or the historical replay is `accepted`, and none is `validated`.** The previously-reported "1 validated out of 98" is withdrawn.
+
+### Defect 1 (critical) -- the test ignored the direction the candidate trades
+
+Two halves of the same root cause:
+
+- **Horizon selection used `abs()`.** `score = abs(float(np.mean(rets)))` picked whichever horizon showed the strongest effect *in either direction* -- so a `long` candidate could have its holding horizon chosen precisely because the effect was strongly **negative** there.
+- **The p-value's tail was chosen after seeing the data.** `np.mean(boot >= observed) if observed >= baseline else np.mean(boot <= observed)` is a two-sided procedure priced as one-sided.
+
+Neither `classify_status` nor anything downstream read `excess_return`, so a pattern running *opposite* to its own traded direction was labelled `significant`. Measured on the real static battery: **four of six candidates were "statistically significant" with a negative excess return** (c1_long −1.67% at p=0.010, c1_short −4.92% at p=0.0045, c2_short −7.79% at p=0.0070, c6_short −3.46% at p=0.0020). A synthetic candidate with p=0.001, MFE/MAE=2.4 and excess=−5% returned **`accepted`**. Only coincidence -- all four happened to have MFE/MAE < 1 -- kept them out of production.
+
+**Fix.** `_forward_return` already signs its output by direction, so a positive excess always means "works in the direction actually traded." The horizon is now selected by *signed* mean, and the p-value is a *pre-specified* upper tail. No doubling is needed because the side is fixed in advance rather than read off the data. `classify_status` independently re-checks `excess_return > 0`, and `explain_non_acceptance` names a wrong-direction effect as its own distinct reason rather than collapsing it into "not significant."
+
+### Defect 2 (critical) -- the bootstrap resampled i.i.d. from overlapping windows
+
+The baseline pool is built from overlapping h-day forward-return windows (day 2's 21-day window shares 20 days with day 1's). Resampling them independently destroys that serial dependence and understates the null distribution's variance, biasing every p-value downward. The module's own docstring acknowledged this and did nothing about it.
+
+**This was measured, not argued.** Under a *true null* -- observed sample drawn from the same process as the baseline, so there is no effect to find -- the shipped i.i.d. bootstrap rejected at **43.3%** against a nominal 5%. Nearly 9x over-rejecting. That single fact explains why six of six candidates looked significant.
+
+**Fix.** A moving-block bootstrap (`_block_bootstrap_means`), sampling contiguous blocks within a chunk, never across chunk boundaries. Block length calibrated empirically against that same true-null harness:
+
+| resampling | false-positive rate (target 5%) | power vs. a real +4% effect |
+|---|---|---|
+| i.i.d. (shipped) | **43.3%** | — |
+| block = 1x horizon | 15.3% | 39.0% |
+| **block = 3x horizon (chosen)** | **8.7%** | 25.0% |
+| block = 4x horizon | 7.7% | 23.5% |
+
+Verified unbiased: block and i.i.d. bootstrap means agree to 0.0015 (the block version is 3.7x wider, which is the entire point). The residual **8.7% is stated rather than rounded to 5%** -- and it is an upper bound, because the calibration harness draws the observed sample as a fully contiguous slice (maximum dependence) while real trigger events are clustered but scattered.
+
+### Defect 3 -- concentration was measured on a different quantity than acceptance
+
+Acceptance is decided by `pattern_significance`'s raw forward returns; `concentration_check` only ever ran on `walk_forward`'s **TP/SL-conditioned** `net_return`. Two different quantities that genuinely disagree -- on identical events, 96.8% concentration on the TP/SL basis versus 50.0% on the forward-return basis. The README's "no single coin or year may carry more than 60% of the positive return" never said which return, and the two answers differed.
+
+**Fix.** `pattern_significance` now returns per-event `oos_events` (group, period, forward_return), and all three callers (`run_battery`, `replay/battery`, `novel_condition_tester`) run concentration on that. `concentration_check` gained a `value_col` parameter; the TP/SL basis is still computed and reported as a diagnostic.
+
+### Defect 4 -- `concentrated: False` when there was nothing to concentrate
+
+When no group had a positive return, `concentration_check` returned `concentrated: False` -- so a candidate losing money on **every single coin** cleared both concentration gates. Harmless while significance was a real gate; not harmless combined with Defect 1. Now returns `concentrated: None` ("cannot assess"), which `classify_status` treats as `watch`, not as a pass.
+
+### Two smaller correctness fixes found in the same pass
+
+- **A flawless candidate was rejected.** `sortino_ratio` returned NaN whenever `downside_dev == 0` -- which happens both for an empty sample *and* for a candidate with no losing trade at all. `classify_status` rejects on a NaN Sortino, so a candidate that never lost was rejected for it. Now returns `+inf` for the no-losses case, NaN only for genuinely unusable input.
+- **Silent end-of-series clamping.** `_forward_return` and `path_outcome` clamped `exit_loc` to the last available bar, so an occurrence near the edge of the data returned a *0-bar hold* dressed up as a full-horizon result (measured: `+0.0000%` forward return, and a real-looking `+1.20%` from `path_outcome` with NaN excursions). Unreachable from the battery -- `build_events`'s `entry_loc + max_h >= len(idx)` filter is exactly correct, verified -- but reachable from **live resolution**, precisely where a wrong number becomes recorded evidence. Both now return NaN, and both live-test resolvers leave the test open and retry rather than recording a partial hold.
+
+### What was verified clean, and is worth saying plainly
+
+The audit tried to break the causality layer and could not. Recomputing all six triggers on truncated history (first 2,000 bars) versus full history produced **zero** differing past values in every trigger column; `shock_zscore_series` max |diff| on the overlap was **0.0**. Across 49 real events: zero entries at or before the trigger bar, `entry_loc == trigger_loc + 1` for 100%, full horizon room for 100%. No zero-division artifacts in the funding z-score on real data (0 infinities, max |z| = 5.3). The rolling-then-slice ordering -- the bug caught twice before in `find_backdated_entry` and `_scan_mechanical_triggers` -- is correct throughout this module.
+
+### The result, and why it is reported rather than tuned away
+
+| | before | after |
+|---|---|---|
+| static battery `accepted` | 2 of 6 | **0 of 6** |
+| static battery "significant" | 6 of 6 | 0 of 6 (best: c6_long, p=0.075) |
+| replay `accepted` (98 candidates) | 2 | **0** |
+| replay `validated` | 1 | **0** |
+
+`high_efficiency_breakout_with_volume_confirmation`, previously the project's one validated candidate, does not clear the corrected bar. Its earlier VALIDATED checkpoint was real in the sense that it genuinely fired -- but it fired on a statistic that was measuring the wrong thing.
+
+This is the outcome README's own Phase 1 "honest finding" predicted and the Dynamic Agent Thesis was built to test against. The correct response is to report it, not to relax a threshold until something passes: a 43% false-positive rate producing candidates is not a discovery, and a project whose entire stated purpose is distinguishing real patterns from flattering noise does not get to keep the flattering noise.
+
+**Type.** Critical statistical bug fix. Supersedes every previously-reported acceptance and validation result in this repository, including this log's own earlier entries on `_effective_milestone_count` and the consecutive-failure alert (both remain correct mechanisms -- they simply have no `accepted` candidate to act on right now). Found by audit, every claim above confirmed by execution against real data before being written down.

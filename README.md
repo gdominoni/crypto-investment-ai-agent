@@ -14,7 +14,7 @@ A prior, static rule-based research phase (Phase 1 below) tested six categories 
 
 ### The System, Live on Telegram — Real Screenshots
 
-Every message below is a real, unedited screenshot from this project's own Telegram bot — nothing staged, nothing mocked up for this README.
+Every message below is a real, unedited screenshot from this project's own Telegram bot — nothing staged, nothing mocked up for this README. They show the interface as it actually behaves; the *verdicts* visible in them predate the [2026-08-29 statistical audit](docs/case_study/methodology-decisions.md) and no longer hold — see Phase 3 for the current, corrected battery.
 
 <table>
 <tr>
@@ -23,8 +23,8 @@ Every message below is a real, unedited screenshot from this project's own Teleg
 <td width="33%" align="center"><img src="docs/case_study/assets/telegram_prune_decision.png" alt="A keep-or-drop decision after 2+ years untested, with Sonnet's advisory opinion" width="280"><br><sub>2+ years untested — Sonnet's advisory opinion, human decides Keep or Drop</sub></td>
 </tr>
 <tr>
-<td width="33%" align="center"><img src="docs/case_study/assets/telegram_replay_summary.png" alt="/replay_summary showing one VALIDATED candidate and thirteen on watch" width="280"><br><sub><code>/replay_summary</code> — real battery status, one candidate already VALIDATED</sub></td>
-<td width="33%" align="center"><img src="docs/case_study/assets/telegram_replay_details.png" alt="/replay_details showing the full numeric breakdown of the validated candidate" width="280"><br><sub><code>/replay_details</code> — the exact numbers behind that VALIDATED verdict</sub></td>
+<td width="33%" align="center"><img src="docs/case_study/assets/telegram_replay_summary.png" alt="/replay_summary grouping every tracked candidate by status" width="280"><br><sub><code>/replay_summary</code> — every tracked candidate, grouped by status, recomputed fresh <i>(verdicts shown are pre-audit)</i></sub></td>
+<td width="33%" align="center"><img src="docs/case_study/assets/telegram_replay_details.png" alt="/replay_details showing the full numeric breakdown for one candidate" width="280"><br><sub><code>/replay_details</code> — every number behind one candidate's verdict <i>(pre-audit figures)</i></sub></td>
 <td width="33%" align="center"><img src="docs/case_study/assets/telegram_help_pinned.png" alt="The pinned /help reference listing every standard command" width="280"><br><sub>The pinned <code>/help</code> reference — every command, always one scroll away</sub></td>
 </tr>
 </table>
@@ -52,7 +52,7 @@ Before any live component was built, this project ran a systematic historical st
 <details>
 <summary><b>A pattern must be statistically real, not just profitable-looking, to be accepted.</b></summary>
 
-The actual acceptance gate is a bootstrap significance test (`candidates/methodology.py::pattern_significance`, 2,000 resamples): it compares a trigger's forward returns against that *same coin's own* unconditional baseline over the identical calendar stretch, at whichever holding horizon (1, 3, 7, 14, or 21 days) a walk-forward search finds most reliable on training data alone. Win rate, strict win rate, and a TP/SL-conditioned Sortino ratio are still computed and shown, purely for reference — they describe how well a barrier-based trade structure would have captured the pattern historically, but they no longer decide accepted/watch/rejected. This project's purpose is finding real patterns, not fitting the most flattering trade structure around noise. A candidate also needs a favorable risk path during the hold (the average best-case move exceeding the average worst-case move) and no single coin or calendar year carrying more than 60% of the positive result — a real, general pattern, not a fluke of one period or one coin.
+The actual acceptance gate is a bootstrap significance test (`candidates/methodology.py::pattern_significance`, 2,000 resamples): it compares a trigger's forward returns against that *same coin's own* unconditional baseline over the identical calendar stretch, at whichever holding horizon (1, 3, 7, 14, or 21 days) a walk-forward search finds most reliable on training data alone. **The test is directional and pre-specified** — the horizon is chosen by *signed* mean return and the p-value is a fixed upper tail in the direction the candidate actually trades, so a pattern that is real but points the *opposite* way can never pass (it previously could; see the audit entry in the decisions log). Because the baseline's overlapping windows are serially dependent, the resampling is a **moving-block** bootstrap rather than i.i.d. — calibrated against a true-null harness, where the i.i.d. version rejected 43% of the time at a nominal 5%. Win rate, strict win rate, and a TP/SL-conditioned Sortino ratio are still computed and shown, purely for reference — they describe how well a barrier-based trade structure would have captured the pattern historically, but they no longer decide accepted/watch/rejected. This project's purpose is finding real patterns, not fitting the most flattering trade structure around noise. A candidate also needs a favorable risk path during the hold (the average best-case move exceeding the average worst-case move) and no single coin or calendar year carrying more than 60% of the positive result — a real, general pattern, not a fluke of one period or one coin.
 
 </details>
 
@@ -110,6 +110,8 @@ A coin's short-term realized volatility is z-scored against its own longer trail
 
 Applying this methodology across the full candidate battery, static deterministic rule sets did not produce a statistically persistent, cross-coin, cross-year edge on their own. That's the pessimistic baseline this project's live architecture is built to test against — not a result to argue away, and not one this project re-litigates by re-running the same static candidates hoping for a different answer.
 
+**And the adaptive layer has not overturned it.** As of the 2026-08-29 audit, 98 candidates have been tested against real history — 92 of them proposed by Sonnet, not hand-picked — and **none currently clears the bar** (Phase 3). An earlier version of this README reported two accepted and one validated; those were artifacts of a significance test that ignored direction and used a bootstrap rejecting at 43% under a true null. Correcting the statistics removed the finding rather than the other way round, which is the outcome this section always said it was prepared for.
+
 <h3 align="center">The Dynamic Agent Thesis.</h3>
 
 Given that a fixed rule set doesn't hold up on its own, this project's central bet is architectural rather than statistical: a system that (1) treats every historical finding as perishable, re-validating the full candidate battery on a weekly cadence against live data rather than fitting once and trusting it indefinitely; (2) escalates genuinely novel market conditions — by definition, the ones a fixed rule set cannot anticipate — to an LLM judgment layer and a human decision-maker, instead of silently misclassifying them; and (3) requires a real, tracked live occurrence, not just a favorable backtest, before ever calling a pattern "validated." This doesn't guarantee a different live outcome than the static study found — it's a mechanistically different hypothesis (adaptive discovery plus continuous re-validation, versus one rule set fit once), and this project exists to test it for real rather than assume it inherits the static result.
@@ -161,16 +163,21 @@ Every candidate signal carries a live status, re-derived — not assumed — on 
 
 `candidates/run_battery.py`, 7 coins, daily bars, walk-forward-selected horizon, bootstrap significance test against each coin's own baseline — recomputed fresh, not a frozen snapshot:
 
-| Candidate | Direction | Status | N | p-value | Risk Path (MFE/MAE) | Sortino (reference only) |
+| Candidate | Direction | Status | N | p-value | Excess return | Risk Path (MFE/MAE) |
 |---|---|---|---|---|---|---|
-| c1 (funding crowding) | long | watch | 325 | 0.010 | 0.74 | -4.40 |
-| c1 (funding crowding) | short | watch | 166 | 0.005 | 0.38 | -3.09 |
-| c2 (post-macro reaction) | long | **accepted** | 62 | 0.034 | 1.74 | 1.19 |
-| c2 (post-macro reaction) | short | watch | 86 | 0.007 | 0.55 | 1.00 |
-| c6 (efficiency trend) | long | **accepted** | 289 | 0.001 | 3.07 | 12.54 |
-| c6 (efficiency trend) | short | watch | 184 | 0.002 | 0.76 | -2.92 |
+| c1 (funding crowding) | long | watch | 325 | 0.783 | −1.79% | 0.76 |
+| c1 (funding crowding) | short | watch | 166 | 0.886 | −0.26% | 0.88 |
+| c2 (post-macro reaction) | long | watch | 62 | 0.255 | +2.50% | 2.59 |
+| c2 (post-macro reaction) | short | watch | 86 | 0.864 | −1.50% | 1.00 |
+| c6 (efficiency trend) | long | rejected | 289 | 0.075 | +9.49% | 2.53 |
+| c6 (efficiency trend) | short | watch | 184 | 0.764 | −3.36% | 0.89 |
 
-Every candidate above passes the significance test (p < 0.05) — the interesting split is entirely on the risk-path check: c2_long and c6_long have a favorable MFE/MAE ratio (>1, reward tends to exceed the risk taken to get there) and clear the bar; the four `watch` candidates have a real, significant pattern but an *unfavorable* risk path, exactly the distinction `pattern_significance` exists to surface that a win-rate-only view would have missed. Neither `accepted` candidate has yet crossed its first 50-live-test checkpoint, so neither is `validated` yet.
+**Nothing is currently `accepted`.** These numbers replace an earlier version of this table that showed all six candidates as significant (p < 0.05) and two as `accepted`. A [statistical audit on 2026-08-29](docs/case_study/methodology-decisions.md) found the significance test was measuring the wrong thing in two compounding ways, both since fixed:
+
+- **It ignored direction.** The holding horizon was chosen by the strongest effect *in either direction*, and the p-value's tail was picked after seeing which way the effect went. Four of six candidates were "significant" with a **negative** excess return — a real pattern, pointing the opposite way from the direction the candidate actually trades. The gate never checked the sign.
+- **Its bootstrap was miscalibrated.** Overlapping forward-return windows were resampled independently, which understates the null's variance. Measured under a true null, where there is nothing to find, the old test rejected **43% of the time** against a nominal 5%. That alone explains six of six looking significant.
+
+The test is now directional and uses a block bootstrap calibrated to an 8.7% false-positive rate (stated, not rounded to 5%). Under it, four candidates are held at `watch` on concentration, and the strongest survivor — c6_long, +9.49% excess return — misses significance at p=0.075. That is the honest reading, and it is consistent with Phase 1's own finding rather than an exception to it.
 
 ### The Re-Validation Loop That Keeps This Table Alive
 
@@ -182,29 +189,18 @@ Every candidate above passes the significance test (p < 0.05) — the interestin
 
 The table above is production's — real, but young, with no live tests resolved yet. The historical replay (`replay/`, see [`HOW_TO_RUN.md`](HOW_TO_RUN.md) to run it yourself) exists specifically to answer this project's own question — does the adaptive system find real patterns? — against years of real history instead of waiting on real time to pass. As of the replay's current simulated date (2023-08-02, ~6.6 years into a run that started at 2017-01-01), it has evaluated **98 candidates** total: the 6 static ones above, plus 92 discovered live by Sonnet.
 
-**One has reached `validated`:**
-
-<table>
-<tr><td colspan="2"><b>high_efficiency_breakout_with_volume_confirmation</b> — long, Sonnet-discovered</td></tr>
-<tr><td>What triggers it</td><td>20-day Bollinger %B above 0.95 <b>AND</b> 30-day volume z-score above 1.0 <b>AND</b> 20-day trend efficiency ratio above 0.5</td></tr>
-<tr><td>Statistical significance</td><td>N=161, p=0.010 (significant vs. this coin's own baseline)</td></tr>
-<tr><td>Risk path (MFE/MAE)</td><td>2.47 (favorable — reward tends to exceed the risk taken to get there)</td></tr>
-<tr><td>Concentration</td><td>46% BTCUSDT, 52% 2020 — both under the 60% flag</td></tr>
-<tr><td>Held for</td><td>21 days (empirically-derived, re-checked weekly)</td></tr>
-<tr><td>Reference TP/SL backtest</td><td>TP=1.50x / SL=1.50x (of the anchors) — win rate=55.9%, Sortino=2.03 — informational only, doesn't gate status</td></tr>
-<tr><td><b>Validated</b></td><td>cleared its first 50-occurrence checkpoint, still <code>accepted</code> at that check — re-checked fresh again at 100</td></tr>
-</table>
-
-**Everything else, grouped:**
+**Recomputed under the corrected methodology, none is `accepted` and none is `validated`:**
 
 | Status | Count | What it means |
 |---|---|---|
-| Accepted, not yet validated | 1 | Cleared the statistical bar; hasn't reached its first validation checkpoint yet |
-| Watch | 13 | A real, often significant pattern, but fails the concentration or risk-path check |
-| Rejected | 15 | No statistically significant pattern found, or too small a sample |
+| Accepted | **0** | Nothing currently clears the significance, direction, risk-path and concentration gates together |
+| Watch | 17 | A measurable pattern, but it fails the concentration or risk-path check |
+| Rejected | 13 | No significant pattern in the traded direction, or too small a sample |
 | Insufficient data | 68 | Fewer historical occurrences than the minimum needed to test at all |
 
-The honest reading: out of 98 ideas tested against real history — the large majority of them Sonnet's own proposals, not hand-picked — exactly one has both cleared every statistical bar *and* held up under a genuinely prospective checkpoint. That is not a large number, and this project reports it as exactly that rather than rounding it up — see the Dynamic Agent Thesis above for why a low hit rate here is still the honest, useful result this system is built to produce.
+An earlier version of this section reported **one validated candidate** (`high_efficiency_breakout_with_volume_confirmation`, N=161, p=0.010). That result is withdrawn: it was produced by the pre-audit significance test described above, and does not survive a directional test with a correctly calibrated bootstrap. Its VALIDATED checkpoint genuinely fired — it just fired on a statistic that was measuring the wrong thing.
+
+The honest reading: out of 98 ideas tested against real history — the large majority of them Sonnet's own proposals, not hand-picked — **zero** currently clear the bar. That is a real result, not a failure of the experiment. A pipeline whose stated purpose is separating real patterns from flattering noise does not get to keep the flattering noise once it's identified as such, and the alternative — relaxing a threshold until something passes — is exactly the failure mode Phase 1 was built to avoid. See the Dynamic Agent Thesis above for why a null result here is still the useful output this system was built to produce.
 
 ---
 
@@ -294,10 +290,9 @@ You:     [taps "Test It"]
 You:     How is the market going today?
 
 🤖 Agent: BTC +1.8% (24h), ETH +2.1%, broad risk-on tone. No macro
-          releases in the last 10 days. 2 candidates accepted
-          (c2_long, c6_long, neither validated yet), 4 on watch for
-          concentration or risk-path reasons, 9 live tests currently
-          open across 3 triggers.
+          releases in the last 10 days. Nothing currently accepted;
+          5 on watch for concentration or risk-path reasons, 1
+          rejected on significance. No live tests open.
 ```
 
 ### 4.4 Structured commands — no LLM involved
