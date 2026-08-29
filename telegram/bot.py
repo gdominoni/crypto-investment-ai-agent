@@ -22,7 +22,7 @@ from candidates.methodology import format_candidate_details, format_trigger_summ
 from candidates.status_history import drop_candidate, mark_asked, record_status
 from llm_pipeline.context_builder import build_context_summary, build_live_test_summary, build_technical_snapshot
 from llm_pipeline.dynamic_candidates import record_test_result, registered_specs
-from llm_pipeline.haiku_sonnet_pipeline import escape_html, extract_text
+from llm_pipeline.haiku_sonnet_pipeline import escape_html, extract_text, format_spec_clauses
 from llm_pipeline.novel_condition_tester import ConditionSpec, condition_desc, format_pattern_significance, test_novel_condition
 from llm_pipeline.pending_tests import discard_pending_test_by_id, pop_pending_test_by_id
 from telegram.kpi_queries import format_kpi_table, kpi_table
@@ -407,6 +407,26 @@ def _trigger_numeric_description(candidate: str) -> str:
     return "trigger definition not found -- treat this as missing information, do not guess at it"
 
 
+def _replay_trigger_numeric_description(candidate: str) -> str:
+    """Same as _trigger_numeric_description(), but against the replay's
+    own isolated dynamic-candidate registry (replay/state.py) instead of
+    production's (llm_pipeline/dynamic_candidates.py, via
+    registered_specs()) -- these are two separate registries (see
+    PROJECT_MAP.md's "Historical Replay" section). A real, live-caught
+    bug: /replay_details on a candidate that only exists in the replay's
+    own registry showed "trigger definition not found" because the
+    lookup this function replaces only ever checked production's,
+    mirrors replay/engine.py::_trigger_description's own lookup exactly."""
+    base = candidate.rsplit("_", 1)[0]
+    if base in TRIGGER_NUMERIC_DEFINITIONS:
+        return TRIGGER_NUMERIC_DEFINITIONS[base]
+    from replay import state as replay_state
+    spec_dict = replay_state.load_dynamic_candidates().get(candidate)
+    if spec_dict:
+        return f"{format_spec_clauses(spec_dict)} → {spec_dict['direction']}"
+    return "trigger definition not found -- treat this as missing information, do not guess at it"
+
+
 def _answer_callback_query(callback_query_id: str) -> None:
     load_dotenv()
     token = os.environ["TELEGRAM_BOT_TOKEN"]
@@ -499,7 +519,9 @@ def _dispatch_update(update: dict, client: Anthropic) -> None:
             return
         horizon = replay_state.load_horizons().get(candidate)
         milestone = replay_sh.all_latest_statuses().get(candidate, {})
-        _send(format_candidate_details(candidate, row, definition=_trigger_numeric_description(candidate), horizon=horizon, milestone=milestone))
+        live_entry = replay_state.load_battery_status().get("candidates", {}).get(candidate, {})
+        _send(format_candidate_details(candidate, row, definition=_replay_trigger_numeric_description(candidate), horizon=horizon,
+                                        milestone=milestone, tp_mult=live_entry.get("tp_mult"), sl_mult=live_entry.get("sl_mult")))
         return
 
     if text.lower() == "/replay_status":
@@ -528,7 +550,7 @@ def _dispatch_update(update: dict, client: Anthropic) -> None:
             _send("Usage: /details &lt;trigger_name&gt;  (e.g. /details c2_long -- see /summary for the exact names currently tracked)")
             return
         candidate = parts[1].strip()
-        result, _live_state, _meta = run_all()
+        result, live_state, _meta = run_all()
         status_summary = result.set_index("candidate").to_dict(orient="index") if len(result) else {}
         row = status_summary.get(candidate)
         if row is None:
@@ -539,7 +561,9 @@ def _dispatch_update(update: dict, client: Anthropic) -> None:
             return
         horizon = load_horizons().get(candidate)
         milestone = all_latest_statuses().get(candidate, {})
-        _send(format_candidate_details(candidate, row, definition=_trigger_numeric_description(candidate), horizon=horizon, milestone=milestone))
+        live_entry = live_state.get("candidates", {}).get(candidate, {})
+        _send(format_candidate_details(candidate, row, definition=_trigger_numeric_description(candidate), horizon=horizon,
+                                        milestone=milestone, tp_mult=live_entry.get("tp_mult"), sl_mult=live_entry.get("sl_mult")))
         return
 
     if text.lower() == "/summary":

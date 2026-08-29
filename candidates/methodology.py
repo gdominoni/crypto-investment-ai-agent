@@ -529,7 +529,8 @@ def explain_non_acceptance(row: dict, min_report_events: int = 50) -> str:
 
 
 def format_candidate_details(candidate: str, row: dict, definition: str | None = None, horizon: int | None = None,
-                              milestone: dict | None = None, min_report_events: int = 50) -> str:
+                              milestone: dict | None = None, tp_mult: float | None = None, sl_mult: float | None = None,
+                              min_report_events: int = 50) -> str:
     """Full numeric breakdown for one candidate, in bullet points --
     powers Telegram's `/details <name>`/`/replay_details <name>`.
     Deliberately the detail `_trigger_summary_line()`/`format_trigger_summary()`
@@ -546,10 +547,18 @@ def format_candidate_details(candidate: str, row: dict, definition: str | None =
     "accepted vs validated" entry): a real, observed case of exactly
     this confusion is why this parameter exists -- `status` can say
     'accepted' while the candidate is ALSO already validated, and
-    nothing about the word 'accepted' alone tells a reader that. All
-    three are passed in by the caller rather than looked up here: this
-    module has no dependency on candidates/definitions.py, the
-    dynamic-condition registry, or execution/live_test_state.py
+    nothing about the word 'accepted' alone tells a reader that.
+    `tp_mult`/`sl_mult` are the project's own walk-forward grid search's
+    chosen multipliers (against the duration-bucketed MFE/MAE anchors)
+    for the reference TP/SL backtest below -- only ever set for a
+    currently-`accepted` candidate (`live_state`/`battery["candidates"]`
+    from `run_all()`/`run_replay_battery()`'s own side effect,
+    `replay/state.py::load_battery_status()`, only ever populated when
+    `status == "accepted"`), so a real N/win_rate/Sortino number was
+    previously shown with no way to know what TP/SL structure actually
+    produced it. All five are passed in by the caller rather than looked
+    up here: this module has no dependency on candidates/definitions.py,
+    the dynamic-condition registry, or execution/live_test_state.py
     (production) / replay/state.py (replay) / candidates/status_history.py
     (production) / replay/status_history.py (replay) -- any of which
     would break the production/replay symmetry this module is shared
@@ -607,7 +616,8 @@ def format_candidate_details(candidate: str, row: dict, definition: str | None =
     if win_rate is not None and not (isinstance(win_rate, float) and np.isnan(win_rate)):
         expectancy = row.get("total_expectancy")
         expectancy_bit = f", total expectancy={expectancy:+.1%}" if expectancy is not None else ""
-        lines.append(f"• Reference TP/SL backtest: win rate={win_rate:.1%}, Sortino={sortino:.2f}{expectancy_bit}"
+        tpsl_bit = f"TP={tp_mult:.2f}x/SL={sl_mult:.2f}x (of the anchors), " if tp_mult is not None and sl_mult is not None else ""
+        lines.append(f"• Reference TP/SL backtest: {tpsl_bit}win rate={win_rate:.1%}, Sortino={sortino:.2f}{expectancy_bit}"
                       f"  (informational only, doesn't gate status -- see README's Phase 2)")
 
     if status in ("watch", "rejected"):
