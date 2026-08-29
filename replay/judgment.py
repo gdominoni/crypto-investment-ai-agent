@@ -156,7 +156,7 @@ def judge_event(event_description: str, client: Anthropic, as_of: pd.Timestamp |
         # all (extract_text raising "No text block"), or truncated the JSON mid-
         # string (json.loads raising). Headroom fixes both, whatever the model's
         # exact reason for thinking is -- see docs/case_study/methodology-decisions.md.
-        model=SONNET_MODEL, max_tokens=2000, system=REPLAY_SYSTEM_PROMPT,
+        model=SONNET_MODEL, max_tokens=2000, temperature=0, system=REPLAY_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_content}],
     )
     return json.loads(_strip_fences(extract_text(response)))
@@ -311,7 +311,7 @@ def answer_market_question(question: str, client: Anthropic) -> str:
         # ("list every open live test, split by trigger") -- thinking alone used
         # over half that budget. Same root cause as judge_event's own comment,
         # just needed more headroom than the earlier bump gave it.
-        model=SONNET_MODEL, max_tokens=2000, system=MARKET_CHECK_SYSTEM_PROMPT,
+        model=SONNET_MODEL, max_tokens=2000, temperature=0, system=MARKET_CHECK_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": f"USER QUESTION: {question}\n\nSTATE:\n{snapshot}\n\n{context}"}],
     )
     return escape_html(extract_text(response))

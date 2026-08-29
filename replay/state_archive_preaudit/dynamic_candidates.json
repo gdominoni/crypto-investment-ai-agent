@@ -1,0 +1,2458 @@
+{
+  "oversold_volume_spike_reversal": {
+    "label": "oversold_volume_spike_reversal",
+    "clauses": [
+      {
+        "indicator": "rsi_14d",
+        "op": "<",
+        "threshold": 30
+      },
+      {
+        "indicator": "volume_zscore_30d",
+        "op": ">",
+        "threshold": 2.0
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "blowoff_top_crash_reversal": {
+    "label": "blowoff_top_crash_reversal",
+    "clauses": [
+      {
+        "indicator": "shock_zscore",
+        "op": ">=",
+        "threshold": 3.0
+      },
+      {
+        "indicator": "rsi_14d",
+        "op": ">=",
+        "threshold": 70
+      },
+      {
+        "indicator": "bollinger_pctb_20d",
+        "op": ">=",
+        "threshold": 0.85
+      }
+    ],
+    "direction": "short",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "high_volume_oversold_reversal": {
+    "label": "high_volume_oversold_reversal",
+    "clauses": [
+      {
+        "indicator": "volume_zscore_30d",
+        "op": ">",
+        "threshold": 1.5
+      },
+      {
+        "indicator": "rsi_14d",
+        "op": "<",
+        "threshold": 40
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "extreme_volume_shock_low_efficiency": {
+    "label": "extreme_volume_shock_low_efficiency",
+    "clauses": [
+      {
+        "indicator": "shock_zscore",
+        "op": ">=",
+        "threshold": 4.5
+      },
+      {
+        "indicator": "volume_zscore_30d",
+        "op": ">=",
+        "threshold": 3.0
+      },
+      {
+        "indicator": "efficiency_ratio_20d",
+        "op": "<=",
+        "threshold": 0.3
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "extreme_shock_overbought_meanrevert": {
+    "label": "extreme_shock_overbought_meanrevert",
+    "clauses": [
+      {
+        "indicator": "shock_zscore",
+        "op": ">",
+        "threshold": 4.0
+      },
+      {
+        "indicator": "volume_zscore_30d",
+        "op": ">",
+        "threshold": 4.0
+      },
+      {
+        "indicator": "rsi_14d",
+        "op": ">",
+        "threshold": 70
+      },
+      {
+        "indicator": "bollinger_pctb_20d",
+        "op": ">",
+        "threshold": 1.2
+      }
+    ],
+    "direction": "short",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "extreme_shock_volume_bollinger_blowoff": {
+    "label": "extreme_shock_volume_bollinger_blowoff",
+    "clauses": [
+      {
+        "indicator": "shock_zscore",
+        "op": ">",
+        "threshold": 4.0
+      },
+      {
+        "indicator": "volume_zscore_30d",
+        "op": ">",
+        "threshold": 4.0
+      },
+      {
+        "indicator": "bollinger_pctb_20d",
+        "op": ">",
+        "threshold": 1.2
+      }
+    ],
+    "direction": "short",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "extreme_negative_funding_oversold_rsi_long": {
+    "label": "extreme_negative_funding_oversold_rsi_long",
+    "clauses": [
+      {
+        "indicator": "funding_zscore_30d",
+        "op": "<",
+        "threshold": -3.0
+      },
+      {
+        "indicator": "rsi_14d",
+        "op": "<",
+        "threshold": 30.0
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "macro_day_extreme_overbought_meanreversion": {
+    "label": "macro_day_extreme_overbought_meanreversion",
+    "clauses": [
+      {
+        "indicator": "is_macro_day",
+        "op": ">=",
+        "threshold": 1
+      },
+      {
+        "indicator": "bollinger_pctb_20d",
+        "op": ">",
+        "threshold": 1.0
+      },
+      {
+        "indicator": "rsi_14d",
+        "op": ">",
+        "threshold": 85
+      }
+    ],
+    "direction": "short",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "capitulation_bounce_shock_oversold_volume": {
+    "label": "capitulation_bounce_shock_oversold_volume",
+    "clauses": [
+      {
+        "indicator": "shock_zscore",
+        "op": ">",
+        "threshold": 5
+      },
+      {
+        "indicator": "rsi_14d",
+        "op": "<",
+        "threshold": 25
+      },
+      {
+        "indicator": "volume_zscore_30d",
+        "op": ">",
+        "threshold": 3
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "shock_oversold_bounce_long": {
+    "label": "shock_oversold_bounce_long",
+    "clauses": [
+      {
+        "indicator": "shock_zscore",
+        "op": ">",
+        "threshold": 1.2
+      },
+      {
+        "indicator": "rsi_14d",
+        "op": "<",
+        "threshold": 40
+      },
+      {
+        "indicator": "close_return_1d",
+        "op": ">",
+        "threshold": 0.1
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "shock_extension_breakout": {
+    "label": "shock_extension_breakout",
+    "clauses": [
+      {
+        "indicator": "shock_zscore",
+        "op": ">",
+        "threshold": 1.0
+      },
+      {
+        "indicator": "bollinger_pctb_20d",
+        "op": ">",
+        "threshold": 0.9
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "negative_funding_short_squeeze_breakout": {
+    "label": "negative_funding_short_squeeze_breakout",
+    "clauses": [
+      {
+        "indicator": "funding_zscore_30d",
+        "op": "<",
+        "threshold": -0.7
+      },
+      {
+        "indicator": "bollinger_pctb_20d",
+        "op": ">",
+        "threshold": 0.8
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "extreme_funding_volume_overbought_short": {
+    "label": "extreme_funding_volume_overbought_short",
+    "clauses": [
+      {
+        "indicator": "funding_zscore_30d",
+        "op": ">",
+        "threshold": 3.0
+      },
+      {
+        "indicator": "volume_zscore_30d",
+        "op": ">",
+        "threshold": 2.5
+      },
+      {
+        "indicator": "bollinger_pctb_20d",
+        "op": ">",
+        "threshold": 1.0
+      }
+    ],
+    "direction": "short",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "extreme_breakout_high_volume_long": {
+    "label": "extreme_breakout_high_volume_long",
+    "clauses": [
+      {
+        "indicator": "bollinger_pctb_20d",
+        "op": ">",
+        "threshold": 1.2
+      },
+      {
+        "indicator": "volume_zscore_30d",
+        "op": ">",
+        "threshold": 2.5
+      },
+      {
+        "indicator": "rsi_14d",
+        "op": ">",
+        "threshold": 70
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "extreme_funding_with_bollinger_overextension_short": {
+    "label": "extreme_funding_with_bollinger_overextension_short",
+    "clauses": [
+      {
+        "indicator": "funding_zscore_30d",
+        "op": ">",
+        "threshold": 3.0
+      },
+      {
+        "indicator": "bollinger_pctb_20d",
+        "op": ">",
+        "threshold": 1.2
+      }
+    ],
+    "direction": "short",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "overbought_crowded_long_reversion": {
+    "label": "overbought_crowded_long_reversion",
+    "clauses": [
+      {
+        "indicator": "rsi_14d",
+        "op": ">=",
+        "threshold": 80
+      },
+      {
+        "indicator": "funding_zscore_30d",
+        "op": ">=",
+        "threshold": 1.2
+      },
+      {
+        "indicator": "bollinger_pctb_20d",
+        "op": ">=",
+        "threshold": 0.95
+      }
+    ],
+    "direction": "short",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "high_volume_shock_oversold_reversion": {
+    "label": "high_volume_shock_oversold_reversion",
+    "clauses": [
+      {
+        "indicator": "volume_zscore_30d",
+        "op": ">",
+        "threshold": 2.5
+      },
+      {
+        "indicator": "shock_zscore",
+        "op": ">",
+        "threshold": 0.7
+      },
+      {
+        "indicator": "rsi_14d",
+        "op": "<",
+        "threshold": 35
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "extreme_funding_volume_spike_meanreversion": {
+    "label": "extreme_funding_volume_spike_meanreversion",
+    "clauses": [
+      {
+        "indicator": "funding_zscore_30d",
+        "op": ">",
+        "threshold": 2.5
+      },
+      {
+        "indicator": "volume_zscore_30d",
+        "op": ">",
+        "threshold": 1.0
+      }
+    ],
+    "direction": "short",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "extreme_funding_zscore_with_overbought_rsi": {
+    "label": "extreme_funding_zscore_with_overbought_rsi",
+    "clauses": [
+      {
+        "indicator": "funding_zscore_30d",
+        "op": ">",
+        "threshold": 4.0
+      },
+      {
+        "indicator": "rsi_14d",
+        "op": ">",
+        "threshold": 55
+      }
+    ],
+    "direction": "short",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "BTC extreme negative funding with overbought price action": {
+    "label": "BTC extreme negative funding with overbought price action",
+    "clauses": [
+      {
+        "indicator": "funding_zscore_30d",
+        "op": "<=",
+        "threshold": -3.0
+      },
+      {
+        "indicator": "rsi_14d",
+        "op": ">=",
+        "threshold": 70
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "macro_day_extreme_overbought_volume_breakout": {
+    "label": "macro_day_extreme_overbought_volume_breakout",
+    "clauses": [
+      {
+        "indicator": "rsi_14d",
+        "op": ">=",
+        "threshold": 80
+      },
+      {
+        "indicator": "bollinger_pctb_20d",
+        "op": ">=",
+        "threshold": 1.05
+      },
+      {
+        "indicator": "volume_zscore_30d",
+        "op": ">=",
+        "threshold": 3.0
+      },
+      {
+        "indicator": "is_macro_day",
+        "op": ">=",
+        "threshold": 1
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "high_efficiency_breakout_with_volume_confirmation": {
+    "label": "high_efficiency_breakout_with_volume_confirmation",
+    "clauses": [
+      {
+        "indicator": "bollinger_pctb_20d",
+        "op": ">",
+        "threshold": 0.95
+      },
+      {
+        "indicator": "volume_zscore_30d",
+        "op": ">",
+        "threshold": 1.0
+      },
+      {
+        "indicator": "efficiency_ratio_20d",
+        "op": ">",
+        "threshold": 0.5
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "extreme_overbought_volume_funding_blowoff": {
+    "label": "extreme_overbought_volume_funding_blowoff",
+    "clauses": [
+      {
+        "indicator": "shock_zscore",
+        "op": ">",
+        "threshold": 5.0
+      },
+      {
+        "indicator": "rsi_14d",
+        "op": ">",
+        "threshold": 85
+      },
+      {
+        "indicator": "volume_zscore_30d",
+        "op": ">",
+        "threshold": 4.0
+      },
+      {
+        "indicator": "funding_zscore_30d",
+        "op": ">",
+        "threshold": 3.0
+      }
+    ],
+    "direction": "short",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "crowded_long_unwind_shock": {
+    "label": "crowded_long_unwind_shock",
+    "clauses": [
+      {
+        "indicator": "funding_zscore_30d",
+        "op": ">",
+        "threshold": 1.5
+      },
+      {
+        "indicator": "shock_zscore",
+        "op": ">",
+        "threshold": 1.0
+      },
+      {
+        "indicator": "close_return_1d",
+        "op": "<",
+        "threshold": -0.05
+      }
+    ],
+    "direction": "short",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "extreme_shock_volume_oversold_reversion": {
+    "label": "extreme_shock_volume_oversold_reversion",
+    "clauses": [
+      {
+        "indicator": "shock_zscore",
+        "op": ">",
+        "threshold": 3.0
+      },
+      {
+        "indicator": "volume_zscore_30d",
+        "op": ">",
+        "threshold": 3.0
+      },
+      {
+        "indicator": "rsi_14d",
+        "op": "<",
+        "threshold": 30.0
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "extreme_shock_overbought_volume_spike": {
+    "label": "extreme_shock_overbought_volume_spike",
+    "clauses": [
+      {
+        "indicator": "shock_zscore",
+        "op": ">=",
+        "threshold": 6.0
+      },
+      {
+        "indicator": "rsi_14d",
+        "op": ">=",
+        "threshold": 85
+      },
+      {
+        "indicator": "volume_zscore_30d",
+        "op": ">=",
+        "threshold": 4.0
+      }
+    ],
+    "direction": "short",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "extreme_shock_overbought_exhaustion": {
+    "label": "extreme_shock_overbought_exhaustion",
+    "clauses": [
+      {
+        "indicator": "shock_zscore",
+        "op": ">=",
+        "threshold": 4.5
+      },
+      {
+        "indicator": "rsi_14d",
+        "op": ">=",
+        "threshold": 80
+      },
+      {
+        "indicator": "bollinger_pctb_20d",
+        "op": ">=",
+        "threshold": 1.2
+      }
+    ],
+    "direction": "short",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "extreme_funding_overbought_fade": {
+    "label": "extreme_funding_overbought_fade",
+    "clauses": [
+      {
+        "indicator": "funding_zscore_30d",
+        "op": ">",
+        "threshold": 3.0
+      },
+      {
+        "indicator": "rsi_14d",
+        "op": ">",
+        "threshold": 75
+      },
+      {
+        "indicator": "bollinger_pctb_20d",
+        "op": ">",
+        "threshold": 1.0
+      }
+    ],
+    "direction": "short",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "overbought_crowded_long_fade": {
+    "label": "overbought_crowded_long_fade",
+    "clauses": [
+      {
+        "indicator": "rsi_14d",
+        "op": ">",
+        "threshold": 85
+      },
+      {
+        "indicator": "bollinger_pctb_20d",
+        "op": ">",
+        "threshold": 1.0
+      },
+      {
+        "indicator": "funding_zscore_30d",
+        "op": ">",
+        "threshold": 1.5
+      }
+    ],
+    "direction": "short",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "macro_day_shock_with_negative_funding_long": {
+    "label": "macro_day_shock_with_negative_funding_long",
+    "clauses": [
+      {
+        "indicator": "shock_zscore",
+        "op": ">",
+        "threshold": 2.0
+      },
+      {
+        "indicator": "funding_zscore_30d",
+        "op": "<",
+        "threshold": -0.5
+      },
+      {
+        "indicator": "is_macro_day",
+        "op": ">=",
+        "threshold": 1
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "post-shock overbought fade": {
+    "label": "post-shock overbought fade",
+    "clauses": [
+      {
+        "indicator": "shock_zscore",
+        "op": ">",
+        "threshold": 2.5
+      },
+      {
+        "indicator": "bollinger_pctb_20d",
+        "op": ">",
+        "threshold": 0.75
+      },
+      {
+        "indicator": "rsi_14d",
+        "op": ">",
+        "threshold": 65
+      }
+    ],
+    "direction": "short",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "crash_shock_with_elevated_rsi_and_high_bollinger": {
+    "label": "crash_shock_with_elevated_rsi_and_high_bollinger",
+    "clauses": [
+      {
+        "indicator": "shock_zscore",
+        "op": ">=",
+        "threshold": 3.0
+      },
+      {
+        "indicator": "rsi_14d",
+        "op": ">",
+        "threshold": 60
+      },
+      {
+        "indicator": "bollinger_pctb_20d",
+        "op": ">",
+        "threshold": 0.6
+      }
+    ],
+    "direction": "short",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "high_shock_oversold_lowER_long": {
+    "label": "high_shock_oversold_lowER_long",
+    "clauses": [
+      {
+        "indicator": "shock_zscore",
+        "op": ">",
+        "threshold": 2.0
+      },
+      {
+        "indicator": "bollinger_pctb_20d",
+        "op": "<",
+        "threshold": 0.05
+      },
+      {
+        "indicator": "efficiency_ratio_20d",
+        "op": "<",
+        "threshold": 0.1
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "extreme_blowoff_meanreversion_short": {
+    "label": "extreme_blowoff_meanreversion_short",
+    "clauses": [
+      {
+        "indicator": "shock_zscore",
+        "op": ">",
+        "threshold": 8
+      },
+      {
+        "indicator": "volume_zscore_30d",
+        "op": ">",
+        "threshold": 3
+      },
+      {
+        "indicator": "bollinger_pctb_20d",
+        "op": ">",
+        "threshold": 1.3
+      }
+    ],
+    "direction": "short",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "extreme_funding_overbought_reversion": {
+    "label": "extreme_funding_overbought_reversion",
+    "clauses": [
+      {
+        "indicator": "funding_zscore_30d",
+        "op": ">",
+        "threshold": 2.0
+      },
+      {
+        "indicator": "bollinger_pctb_20d",
+        "op": ">",
+        "threshold": 1.2
+      }
+    ],
+    "direction": "short",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "extreme_funding_volume_overbought_blowoff": {
+    "label": "extreme_funding_volume_overbought_blowoff",
+    "clauses": [
+      {
+        "indicator": "funding_zscore_30d",
+        "op": ">",
+        "threshold": 3.0
+      },
+      {
+        "indicator": "volume_zscore_30d",
+        "op": ">",
+        "threshold": 2.0
+      },
+      {
+        "indicator": "rsi_14d",
+        "op": ">",
+        "threshold": 85
+      },
+      {
+        "indicator": "bollinger_pctb_20d",
+        "op": ">",
+        "threshold": 1.1
+      }
+    ],
+    "direction": "short",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "blowoff_top_after_macro_print": {
+    "label": "blowoff_top_after_macro_print",
+    "clauses": [
+      {
+        "indicator": "rsi_14d",
+        "op": ">=",
+        "threshold": 80
+      },
+      {
+        "indicator": "bollinger_pctb_20d",
+        "op": ">=",
+        "threshold": 1.0
+      },
+      {
+        "indicator": "shock_zscore",
+        "op": ">=",
+        "threshold": 2.5
+      }
+    ],
+    "direction": "short",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "crash_shock_with_overbought_uptrend_momentum": {
+    "label": "crash_shock_with_overbought_uptrend_momentum",
+    "clauses": [
+      {
+        "indicator": "shock_zscore",
+        "op": ">=",
+        "threshold": 3.0
+      },
+      {
+        "indicator": "rsi_14d",
+        "op": ">=",
+        "threshold": 70
+      },
+      {
+        "indicator": "close_return_5d",
+        "op": ">=",
+        "threshold": 0.15
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "shock_surge_high_efficiency_overbought_continuation": {
+    "label": "shock_surge_high_efficiency_overbought_continuation",
+    "clauses": [
+      {
+        "indicator": "shock_zscore",
+        "op": ">=",
+        "threshold": 3.0
+      },
+      {
+        "indicator": "efficiency_ratio_20d",
+        "op": ">=",
+        "threshold": 0.7
+      },
+      {
+        "indicator": "rsi_14d",
+        "op": ">=",
+        "threshold": 80
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "extreme_shock_with_crowded_funding_reversion": {
+    "label": "extreme_shock_with_crowded_funding_reversion",
+    "clauses": [
+      {
+        "indicator": "shock_zscore",
+        "op": ">",
+        "threshold": 3.0
+      },
+      {
+        "indicator": "funding_zscore_30d",
+        "op": ">",
+        "threshold": 1.0
+      }
+    ],
+    "direction": "short",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "extreme_negative_funding_with_shock_spike_long": {
+    "label": "extreme_negative_funding_with_shock_spike_long",
+    "clauses": [
+      {
+        "indicator": "funding_zscore_30d",
+        "op": "<=",
+        "threshold": -1.4
+      },
+      {
+        "indicator": "shock_zscore",
+        "op": ">=",
+        "threshold": 1.0
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "shock_volume_spike_reversion_long": {
+    "label": "shock_volume_spike_reversion_long",
+    "clauses": [
+      {
+        "indicator": "shock_zscore",
+        "op": ">",
+        "threshold": 2.0
+      },
+      {
+        "indicator": "volume_zscore_30d",
+        "op": ">",
+        "threshold": 1.0
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "extreme_shock_overbought_blowoff": {
+    "label": "extreme_shock_overbought_blowoff",
+    "clauses": [
+      {
+        "indicator": "shock_zscore",
+        "op": ">",
+        "threshold": 2.0
+      },
+      {
+        "indicator": "bollinger_pctb_20d",
+        "op": ">",
+        "threshold": 1.0
+      }
+    ],
+    "direction": "short",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "macro_day_overheated_long_funding_reversion": {
+    "label": "macro_day_overheated_long_funding_reversion",
+    "clauses": [
+      {
+        "indicator": "is_macro_day",
+        "op": ">=",
+        "threshold": 1
+      },
+      {
+        "indicator": "funding_zscore_30d",
+        "op": ">",
+        "threshold": 1.5
+      },
+      {
+        "indicator": "rsi_14d",
+        "op": ">",
+        "threshold": 80
+      },
+      {
+        "indicator": "bollinger_pctb_20d",
+        "op": ">",
+        "threshold": 1.0
+      }
+    ],
+    "direction": "short",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "extreme_overbought_blowoff_short": {
+    "label": "extreme_overbought_blowoff_short",
+    "clauses": [
+      {
+        "indicator": "rsi_14d",
+        "op": ">",
+        "threshold": 88
+      },
+      {
+        "indicator": "bollinger_pctb_20d",
+        "op": ">",
+        "threshold": 1.3
+      },
+      {
+        "indicator": "volume_zscore_30d",
+        "op": ">",
+        "threshold": 2.0
+      }
+    ],
+    "direction": "short",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "macro_shock_oversold_reversion": {
+    "label": "macro_shock_oversold_reversion",
+    "clauses": [
+      {
+        "indicator": "shock_zscore",
+        "op": ">",
+        "threshold": 1.2
+      },
+      {
+        "indicator": "rsi_14d",
+        "op": "<",
+        "threshold": 40
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "macro_day_high_shock_volume_breakout_long": {
+    "label": "macro_day_high_shock_volume_breakout_long",
+    "clauses": [
+      {
+        "indicator": "is_macro_day",
+        "op": ">=",
+        "threshold": 1
+      },
+      {
+        "indicator": "shock_zscore",
+        "op": ">",
+        "threshold": 2.0
+      },
+      {
+        "indicator": "volume_zscore_30d",
+        "op": ">",
+        "threshold": 2.0
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "extreme_crash_with_funding_capitulation_and_volume_spike": {
+    "label": "extreme_crash_with_funding_capitulation_and_volume_spike",
+    "clauses": [
+      {
+        "indicator": "shock_zscore",
+        "op": ">",
+        "threshold": 3.0
+      },
+      {
+        "indicator": "funding_zscore_30d",
+        "op": "<",
+        "threshold": -3.0
+      },
+      {
+        "indicator": "volume_zscore_30d",
+        "op": ">",
+        "threshold": 3.0
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "shock_capitulation_bounce_long": {
+    "label": "shock_capitulation_bounce_long",
+    "clauses": [
+      {
+        "indicator": "shock_zscore",
+        "op": ">",
+        "threshold": 2.5
+      },
+      {
+        "indicator": "close_return_5d",
+        "op": "<",
+        "threshold": -0.15
+      },
+      {
+        "indicator": "close_return_1d",
+        "op": ">",
+        "threshold": 0.05
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "post_cpi_overbought_funding_reversion": {
+    "label": "post_cpi_overbought_funding_reversion",
+    "clauses": [
+      {
+        "indicator": "bollinger_pctb_20d",
+        "op": ">",
+        "threshold": 1.1
+      },
+      {
+        "indicator": "funding_zscore_30d",
+        "op": ">",
+        "threshold": 2.0
+      }
+    ],
+    "direction": "short",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "extreme_funding_with_upper_band_stretch": {
+    "label": "extreme_funding_with_upper_band_stretch",
+    "clauses": [
+      {
+        "indicator": "funding_zscore_30d",
+        "op": ">=",
+        "threshold": 3.0
+      },
+      {
+        "indicator": "bollinger_pctb_20d",
+        "op": ">=",
+        "threshold": 0.9
+      }
+    ],
+    "direction": "short",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "macro_day_volume_spike_breakout": {
+    "label": "macro_day_volume_spike_breakout",
+    "clauses": [
+      {
+        "indicator": "is_macro_day",
+        "op": ">=",
+        "threshold": 1
+      },
+      {
+        "indicator": "volume_zscore_30d",
+        "op": ">",
+        "threshold": 3.0
+      },
+      {
+        "indicator": "donchian_pct_20d",
+        "op": ">",
+        "threshold": 0.95
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "extreme_overbought_volume_spike_post_cpi": {
+    "label": "extreme_overbought_volume_spike_post_cpi",
+    "clauses": [
+      {
+        "indicator": "bollinger_pctb_20d",
+        "op": ">=",
+        "threshold": 1.0
+      },
+      {
+        "indicator": "volume_zscore_30d",
+        "op": ">=",
+        "threshold": 3.0
+      },
+      {
+        "indicator": "rsi_14d",
+        "op": ">=",
+        "threshold": 70
+      }
+    ],
+    "direction": "short",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "CPI-day RSI oversold + negative funding capitulation long": {
+    "label": "CPI-day RSI oversold + negative funding capitulation long",
+    "clauses": [
+      {
+        "indicator": "rsi_14d",
+        "op": "<",
+        "threshold": 32
+      },
+      {
+        "indicator": "funding_zscore_30d",
+        "op": "<",
+        "threshold": -0.5
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "extreme_negative_funding_with_positive_momentum_post_cpi": {
+    "label": "extreme_negative_funding_with_positive_momentum_post_cpi",
+    "clauses": [
+      {
+        "indicator": "funding_zscore_30d",
+        "op": "<",
+        "threshold": -3
+      },
+      {
+        "indicator": "close_return_5d",
+        "op": ">",
+        "threshold": 0.05
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "extreme_negative_funding_on_macro_day": {
+    "label": "extreme_negative_funding_on_macro_day",
+    "clauses": [
+      {
+        "indicator": "funding_zscore_30d",
+        "op": "<",
+        "threshold": -3.0
+      },
+      {
+        "indicator": "is_macro_day",
+        "op": ">=",
+        "threshold": 1
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "extreme_negative_funding_with_oversold_rsi": {
+    "label": "extreme_negative_funding_with_oversold_rsi",
+    "clauses": [
+      {
+        "indicator": "funding_zscore_30d",
+        "op": "<",
+        "threshold": -2.5
+      },
+      {
+        "indicator": "rsi_14d",
+        "op": "<",
+        "threshold": 35
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "extreme_volume_shock_overbought_reversion": {
+    "label": "extreme_volume_shock_overbought_reversion",
+    "clauses": [
+      {
+        "indicator": "volume_zscore_30d",
+        "op": ">=",
+        "threshold": 3.0
+      },
+      {
+        "indicator": "shock_zscore",
+        "op": ">=",
+        "threshold": 1.0
+      },
+      {
+        "indicator": "bollinger_pctb_20d",
+        "op": ">=",
+        "threshold": 1.2
+      }
+    ],
+    "direction": "short",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "post_cpi_shock_overreaction_long": {
+    "label": "post_cpi_shock_overreaction_long",
+    "clauses": [
+      {
+        "indicator": "shock_zscore",
+        "op": ">",
+        "threshold": 2.0
+      },
+      {
+        "indicator": "close_return_1d",
+        "op": "<",
+        "threshold": -0.03
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "crash_shock_choppy_high_funding_meanrevert_long": {
+    "label": "crash_shock_choppy_high_funding_meanrevert_long",
+    "clauses": [
+      {
+        "indicator": "shock_zscore",
+        "op": ">=",
+        "threshold": 3.0
+      },
+      {
+        "indicator": "efficiency_ratio_20d",
+        "op": "<",
+        "threshold": 0.05
+      },
+      {
+        "indicator": "funding_zscore_30d",
+        "op": ">",
+        "threshold": 0.8
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "post-CPI shock+volume spike reversion": {
+    "label": "post-CPI shock+volume spike reversion",
+    "clauses": [
+      {
+        "indicator": "shock_zscore",
+        "op": ">",
+        "threshold": 1.5
+      },
+      {
+        "indicator": "volume_zscore_30d",
+        "op": ">",
+        "threshold": 1.0
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "extreme_short_funding_bounce_post_cpi": {
+    "label": "extreme_short_funding_bounce_post_cpi",
+    "clauses": [
+      {
+        "indicator": "funding_zscore_30d",
+        "op": "<",
+        "threshold": -3.0
+      },
+      {
+        "indicator": "close_return_1d",
+        "op": ">",
+        "threshold": 0.01
+      },
+      {
+        "indicator": "rsi_14d",
+        "op": "<",
+        "threshold": 45
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "high_shock_high_volume_oversold_bounce": {
+    "label": "high_shock_high_volume_oversold_bounce",
+    "clauses": [
+      {
+        "indicator": "shock_zscore",
+        "op": ">",
+        "threshold": 2.0
+      },
+      {
+        "indicator": "volume_zscore_30d",
+        "op": ">",
+        "threshold": 2.0
+      },
+      {
+        "indicator": "rsi_14d",
+        "op": "<",
+        "threshold": 45
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "funding_capitulation_shock_bounce": {
+    "label": "funding_capitulation_shock_bounce",
+    "clauses": [
+      {
+        "indicator": "funding_zscore_30d",
+        "op": "<=",
+        "threshold": -3.0
+      },
+      {
+        "indicator": "shock_zscore",
+        "op": ">=",
+        "threshold": 3.0
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "macro_day_volume_shock_oversold_reversion": {
+    "label": "macro_day_volume_shock_oversold_reversion",
+    "clauses": [
+      {
+        "indicator": "shock_zscore",
+        "op": ">",
+        "threshold": 1.5
+      },
+      {
+        "indicator": "volume_zscore_30d",
+        "op": ">",
+        "threshold": 3.0
+      },
+      {
+        "indicator": "rsi_14d",
+        "op": "<",
+        "threshold": 30
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "capitulation_oversold_bounce": {
+    "label": "capitulation_oversold_bounce",
+    "clauses": [
+      {
+        "indicator": "funding_zscore_30d",
+        "op": "<=",
+        "threshold": -3.0
+      },
+      {
+        "indicator": "rsi_14d",
+        "op": "<=",
+        "threshold": 27.0
+      },
+      {
+        "indicator": "volume_zscore_30d",
+        "op": ">=",
+        "threshold": 2.0
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "shock_surge_oversold_bbpctb_reversion": {
+    "label": "shock_surge_oversold_bbpctb_reversion",
+    "clauses": [
+      {
+        "indicator": "shock_zscore",
+        "op": ">=",
+        "threshold": 3.0
+      },
+      {
+        "indicator": "rsi_14d",
+        "op": "<",
+        "threshold": 35
+      },
+      {
+        "indicator": "bollinger_pctb_20d",
+        "op": "<",
+        "threshold": 0.1
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "shock_zscore_oversold_bounce_long": {
+    "label": "shock_zscore_oversold_bounce_long",
+    "clauses": [
+      {
+        "indicator": "shock_zscore",
+        "op": ">",
+        "threshold": 1.0
+      },
+      {
+        "indicator": "rsi_14d",
+        "op": "<",
+        "threshold": 40
+      },
+      {
+        "indicator": "close_return_1d",
+        "op": ">",
+        "threshold": 0.03
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "extreme_shock_with_large_down_day": {
+    "label": "extreme_shock_with_large_down_day",
+    "clauses": [
+      {
+        "indicator": "shock_zscore",
+        "op": ">",
+        "threshold": 2.5
+      },
+      {
+        "indicator": "close_return_1d",
+        "op": "<",
+        "threshold": -0.1
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "extreme_shock_oversold_reversal": {
+    "label": "extreme_shock_oversold_reversal",
+    "clauses": [
+      {
+        "indicator": "shock_zscore",
+        "op": ">",
+        "threshold": 2.0
+      },
+      {
+        "indicator": "rsi_14d",
+        "op": "<",
+        "threshold": 25
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "funding_capitulation_surge_long": {
+    "label": "funding_capitulation_surge_long",
+    "clauses": [
+      {
+        "indicator": "shock_zscore",
+        "op": ">=",
+        "threshold": 3.0
+      },
+      {
+        "indicator": "funding_zscore_30d",
+        "op": "<=",
+        "threshold": -2.0
+      },
+      {
+        "indicator": "rsi_14d",
+        "op": "<=",
+        "threshold": 25
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "shock_surge_negative_funding_oversold_long": {
+    "label": "shock_surge_negative_funding_oversold_long",
+    "clauses": [
+      {
+        "indicator": "shock_zscore",
+        "op": ">=",
+        "threshold": 3.5
+      },
+      {
+        "indicator": "funding_zscore_30d",
+        "op": "<=",
+        "threshold": -1.0
+      },
+      {
+        "indicator": "rsi_14d",
+        "op": "<=",
+        "threshold": 32
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "shock_driven_funding_squeeze_oversold": {
+    "label": "shock_driven_funding_squeeze_oversold",
+    "clauses": [
+      {
+        "indicator": "shock_zscore",
+        "op": ">",
+        "threshold": 2.0
+      },
+      {
+        "indicator": "funding_zscore_30d",
+        "op": "<",
+        "threshold": -1.0
+      },
+      {
+        "indicator": "rsi_14d",
+        "op": "<",
+        "threshold": 35
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "macro_hike_funding_capitulation_bounce": {
+    "label": "macro_hike_funding_capitulation_bounce",
+    "clauses": [
+      {
+        "indicator": "funding_zscore_30d",
+        "op": "<",
+        "threshold": -1.0
+      },
+      {
+        "indicator": "rsi_14d",
+        "op": "<",
+        "threshold": 32
+      },
+      {
+        "indicator": "shock_zscore",
+        "op": "<",
+        "threshold": -1.0
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "macro_day_negative_funding_squeeze": {
+    "label": "macro_day_negative_funding_squeeze",
+    "clauses": [
+      {
+        "indicator": "is_macro_day",
+        "op": ">=",
+        "threshold": 1
+      },
+      {
+        "indicator": "funding_zscore_30d",
+        "op": "<=",
+        "threshold": -1.5
+      },
+      {
+        "indicator": "close_return_1d",
+        "op": ">=",
+        "threshold": 0.03
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "high_shock_with_upper_band_extension": {
+    "label": "high_shock_with_upper_band_extension",
+    "clauses": [
+      {
+        "indicator": "shock_zscore",
+        "op": ">",
+        "threshold": 2.0
+      },
+      {
+        "indicator": "bollinger_pctb_20d",
+        "op": ">",
+        "threshold": 0.9
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "cooler_cpi_funding_squeeze_breakout": {
+    "label": "cooler_cpi_funding_squeeze_breakout",
+    "clauses": [
+      {
+        "indicator": "funding_zscore_30d",
+        "op": "<",
+        "threshold": -0.9
+      },
+      {
+        "indicator": "bollinger_pctb_20d",
+        "op": ">",
+        "threshold": 0.95
+      },
+      {
+        "indicator": "close_return_1d",
+        "op": ">",
+        "threshold": 0.05
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "macro_day_volume_shock_selloff": {
+    "label": "macro_day_volume_shock_selloff",
+    "clauses": [
+      {
+        "indicator": "is_macro_day",
+        "op": ">=",
+        "threshold": 1
+      },
+      {
+        "indicator": "volume_zscore_30d",
+        "op": ">",
+        "threshold": 2.0
+      },
+      {
+        "indicator": "shock_zscore",
+        "op": ">",
+        "threshold": 2.0
+      },
+      {
+        "indicator": "close_return_1d",
+        "op": "<",
+        "threshold": -0.05
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "extreme_negative_funding_with_high_volume_long": {
+    "label": "extreme_negative_funding_with_high_volume_long",
+    "clauses": [
+      {
+        "indicator": "funding_zscore_30d",
+        "op": "<=",
+        "threshold": -3.0
+      },
+      {
+        "indicator": "volume_zscore_30d",
+        "op": ">=",
+        "threshold": 1.5
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "extreme_shock_surge_with_negative_funding": {
+    "label": "extreme_shock_surge_with_negative_funding",
+    "clauses": [
+      {
+        "indicator": "shock_zscore",
+        "op": ">",
+        "threshold": 3.0
+      },
+      {
+        "indicator": "funding_zscore_30d",
+        "op": "<",
+        "threshold": -0.8
+      },
+      {
+        "indicator": "volume_zscore_30d",
+        "op": ">",
+        "threshold": 2.5
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "crash_shock_overbought_negative_funding": {
+    "label": "crash_shock_overbought_negative_funding",
+    "clauses": [
+      {
+        "indicator": "shock_zscore",
+        "op": ">=",
+        "threshold": 3.0
+      },
+      {
+        "indicator": "rsi_14d",
+        "op": ">=",
+        "threshold": 65
+      },
+      {
+        "indicator": "funding_zscore_30d",
+        "op": "<=",
+        "threshold": -1.0
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "extreme_overbought_volume_blowoff_short": {
+    "label": "extreme_overbought_volume_blowoff_short",
+    "clauses": [
+      {
+        "indicator": "rsi_14d",
+        "op": ">",
+        "threshold": 90
+      },
+      {
+        "indicator": "bollinger_pctb_20d",
+        "op": ">",
+        "threshold": 1.3
+      },
+      {
+        "indicator": "volume_zscore_30d",
+        "op": ">",
+        "threshold": 4
+      }
+    ],
+    "direction": "short",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "extreme_shock_overbought_volume_blowoff_short": {
+    "label": "extreme_shock_overbought_volume_blowoff_short",
+    "clauses": [
+      {
+        "indicator": "shock_zscore",
+        "op": ">",
+        "threshold": 3.0
+      },
+      {
+        "indicator": "rsi_14d",
+        "op": ">",
+        "threshold": 85.0
+      },
+      {
+        "indicator": "volume_zscore_30d",
+        "op": ">",
+        "threshold": 2.0
+      }
+    ],
+    "direction": "short",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "post_cpi_shock_short_squeeze": {
+    "label": "post_cpi_shock_short_squeeze",
+    "clauses": [
+      {
+        "indicator": "shock_zscore",
+        "op": ">",
+        "threshold": 3.0
+      },
+      {
+        "indicator": "funding_zscore_30d",
+        "op": "<",
+        "threshold": -3.0
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "macro_day_overextended_long_funding_fade": {
+    "label": "macro_day_overextended_long_funding_fade",
+    "clauses": [
+      {
+        "indicator": "is_macro_day",
+        "op": ">=",
+        "threshold": 1
+      },
+      {
+        "indicator": "bollinger_pctb_20d",
+        "op": ">=",
+        "threshold": 1.0
+      },
+      {
+        "indicator": "funding_zscore_30d",
+        "op": ">=",
+        "threshold": 1.0
+      }
+    ],
+    "direction": "short",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "post-CPI extreme volume+breakout momentum": {
+    "label": "post-CPI extreme volume+breakout momentum",
+    "clauses": [
+      {
+        "indicator": "volume_zscore_30d",
+        "op": ">",
+        "threshold": 3.0
+      },
+      {
+        "indicator": "bollinger_pctb_20d",
+        "op": ">",
+        "threshold": 1.3
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "macro_day_overbought_fade": {
+    "label": "macro_day_overbought_fade",
+    "clauses": [
+      {
+        "indicator": "is_macro_day",
+        "op": ">=",
+        "threshold": 1
+      },
+      {
+        "indicator": "rsi_14d",
+        "op": ">",
+        "threshold": 70
+      },
+      {
+        "indicator": "bollinger_pctb_20d",
+        "op": ">",
+        "threshold": 0.9
+      }
+    ],
+    "direction": "short",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "crowded_long_unwind_short": {
+    "label": "crowded_long_unwind_short",
+    "clauses": [
+      {
+        "indicator": "funding_zscore_30d",
+        "op": ">",
+        "threshold": 2.0
+      },
+      {
+        "indicator": "close_return_1d",
+        "op": "<",
+        "threshold": -0.02
+      },
+      {
+        "indicator": "volume_zscore_30d",
+        "op": ">",
+        "threshold": 2.0
+      }
+    ],
+    "direction": "short",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "crowded_low_efficiency_funding_spike_reversal": {
+    "label": "crowded_low_efficiency_funding_spike_reversal",
+    "clauses": [
+      {
+        "indicator": "funding_zscore_30d",
+        "op": ">",
+        "threshold": 2.0
+      },
+      {
+        "indicator": "efficiency_ratio_20d",
+        "op": "<",
+        "threshold": 0.1
+      },
+      {
+        "indicator": "bollinger_pctb_20d",
+        "op": ">",
+        "threshold": 0.85
+      }
+    ],
+    "direction": "short",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "extreme_shock_with_negative_funding": {
+    "label": "extreme_shock_with_negative_funding",
+    "clauses": [
+      {
+        "indicator": "shock_zscore",
+        "op": ">",
+        "threshold": 3.0
+      },
+      {
+        "indicator": "funding_zscore_30d",
+        "op": "<",
+        "threshold": -0.5
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "extreme_shock_reversal_after_runup": {
+    "label": "extreme_shock_reversal_after_runup",
+    "clauses": [
+      {
+        "indicator": "shock_zscore",
+        "op": ">",
+        "threshold": 3.0
+      },
+      {
+        "indicator": "close_return_1d",
+        "op": "<",
+        "threshold": 0
+      },
+      {
+        "indicator": "close_return_5d",
+        "op": ">",
+        "threshold": 0.15
+      }
+    ],
+    "direction": "short",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "macro_day_extreme_shock_overbought_fade": {
+    "label": "macro_day_extreme_shock_overbought_fade",
+    "clauses": [
+      {
+        "indicator": "is_macro_day",
+        "op": ">=",
+        "threshold": 1
+      },
+      {
+        "indicator": "shock_zscore",
+        "op": ">",
+        "threshold": 5
+      },
+      {
+        "indicator": "bollinger_pctb_20d",
+        "op": ">",
+        "threshold": 1.3
+      },
+      {
+        "indicator": "rsi_14d",
+        "op": ">",
+        "threshold": 80
+      }
+    ],
+    "direction": "short",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  }
+}

@@ -242,7 +242,7 @@ def haiku_scout(articles: list[dict], client: Anthropic) -> list[dict]:
         return []
     headlines_block = "\n".join(f"- {a['headline']}" for a in articles)
     response = client.messages.create(
-        model=HAIKU_MODEL, max_tokens=2048, system=HAIKU_SYSTEM_PROMPT,
+        model=HAIKU_MODEL, max_tokens=2048, temperature=0, system=HAIKU_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": headlines_block}],
     )
     return json.loads(_strip_fences(extract_text(response)))
@@ -279,7 +279,7 @@ def sonnet_strategist(flagged: dict, client: Anthropic) -> dict:
         # 2000, not 700 -- see replay/judgment.py::judge_event's comment: observed
         # live, the model emits a thinking block even though `thinking` is never
         # requested, and 700 sometimes left no budget for the actual JSON answer.
-        model=SONNET_MODEL, max_tokens=2000, system=SONNET_SYSTEM_PROMPT,
+        model=SONNET_MODEL, max_tokens=2000, temperature=0, system=SONNET_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_content}],
     )
     return json.loads(_strip_fences(extract_text(response)))
@@ -316,7 +316,7 @@ def sonnet_shock_response(shock: dict, client: Anthropic) -> dict:
     )
     response = client.messages.create(
         # 2000, not 700 -- see sonnet_strategist's comment above / replay/judgment.py.
-        model=SONNET_MODEL, max_tokens=2000, system=SHOCK_SYSTEM_PROMPT,
+        model=SONNET_MODEL, max_tokens=2000, temperature=0, system=SHOCK_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_content}],
     )
     return json.loads(_strip_fences(extract_text(response)))
@@ -343,7 +343,7 @@ def sonnet_prune_advice(candidate: str, years_tracked: float, recent_summary: st
     )
     response = client.messages.create(
         # 1000, not 600 -- same headroom reasoning as sonnet_strategist above.
-        model=SONNET_MODEL, max_tokens=1000, system=PRUNE_SYSTEM_PROMPT,
+        model=SONNET_MODEL, max_tokens=1000, temperature=0, system=PRUNE_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_content}],
     )
     return extract_text(response)
@@ -411,6 +411,11 @@ def run_shock_scan(coins: list[str] | None = None) -> None:
                                       direction=s["direction"])
                 pending_id = push_pending_test(spec, scan_coins, live_coin=shock["symbol"], signal_class="shock_reactive")
                 reply_markup = PROPOSAL_KEYBOARD_TEMPLATE(pending_id)
+            if assessment["recommended_action"] != "propose_novel_test":
+                # Nothing happened -- log it, do not notify. See replay/engine.py
+                # ::_handle_assessment for why silence is the right default here.
+                print(f"no_action: {assessment.get('assessment', '')[:120]}")
+                continue
             message = format_shock_message(shock, assessment)
             sent = send_telegram(message, reply_markup=reply_markup)
             status = "notified" if sent else "notify FAILED, see error above"
@@ -495,6 +500,11 @@ def run_once() -> None:
                                       direction=s["direction"])
                 pending_id = push_pending_test(spec, SHOCK_SCAN_COINS, live_coin=_asset_to_coin(item.get("asset", "")), signal_class="manual")
                 reply_markup = PROPOSAL_KEYBOARD_TEMPLATE(pending_id)
+            if assessment["recommended_action"] != "propose_novel_test":
+                # Nothing happened -- log it, do not notify. See replay/engine.py
+                # ::_handle_assessment for why silence is the right default here.
+                print(f"no_action: {assessment.get('assessment', '')[:120]}")
+                continue
             message = format_sonnet_message(item, assessment)
             sent = send_telegram(message, reply_markup=reply_markup)
             status = "notified" if sent else "notify FAILED, see error above"

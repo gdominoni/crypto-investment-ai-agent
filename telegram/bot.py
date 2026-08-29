@@ -113,12 +113,43 @@ def _chunk_message(text: str, limit: int = _SAFE_CHUNK_LENGTH) -> list[str]:
                 chunks.append(current)
                 current = ""
             while len(line) > limit:
-                chunks.append(line[:limit])
-                line = line[limit:]
+                cut = _safe_cut(line, limit)
+                chunks.append(line[:cut])
+                line = line[cut:]
             current = line
     if current:
         chunks.append(current)
     return chunks
+
+
+def _safe_cut(line: str, limit: int) -> int:
+    """Where to cut an oversized single line so the split never lands
+    inside an HTML tag or between a `<b>` and its `</b>`.
+
+    A real, reachable bug this fixes -- and the SECOND time this exact
+    silent-drop failure has been found. `_insufficient_data_block()`
+    emits ONE line listing every zero-N candidate, each wrapped in
+    `<b>...</b>`: at 90 tracked candidates that line is 4,884 characters,
+    and the previous raw `line[:limit]` cut produced chunk 1 with 65
+    `<b>` against 64 `</b>` and chunk 2 with the orphaned close. Telegram
+    rejects malformed HTML with a 400, and since almost no caller checks
+    `_send`'s return value the message simply never arrives -- exactly
+    the failure `_chunk_message` was written to prevent.
+
+    Prefers, in order: the last tag-boundary that leaves balanced markup,
+    then the last space, then the hard limit (only if a single unbroken
+    token really is longer than the limit, where no safe cut exists)."""
+    window = line[:limit]
+    # Walk back to a point where every opened tag is also closed.
+    for end in range(len(window), max(len(window) - 400, 0), -1):
+        head = window[:end]
+        if head.count("<") != head.count(">"):
+            continue  # mid-tag
+        if head.count("<b>") == head.count("</b>") and head.count("<i>") == head.count("</i>"):
+            # avoid cutting mid-word when a space is close by
+            sp = head.rfind(" ")
+            return sp + 1 if sp > end - 80 else end
+    return limit  # no safe boundary found -- one unbroken token longer than the limit
 
 
 def _send(text: str, reply_markup: dict | None = None, pin: bool = False) -> bool:
@@ -142,9 +173,28 @@ def _send(text: str, reply_markup: dict | None = None, pin: bool = False) -> boo
         payload = {"chat_id": chat_id, "text": chunk, "parse_mode": "HTML"}
         if reply_markup is not None and i == len(chunks) - 1:
             payload["reply_markup"] = reply_markup
-        resp = requests.post(url, json=payload, timeout=15)
+        try:
+            resp = requests.post(url, json=payload, timeout=15)
+        except Exception as e:
+            # A network blip must not take down whatever was calling us --
+            # notably live_daemon's poll loop or a mid-run scheduled job.
+            print(f"SEND FAILED (network): {type(e).__name__}: {e}")
+            return False
         if not resp.ok:
-            print(f"Send failed ({resp.status_code}): {resp.text[:300]}")
+            # Loud, and self-diagnosing. 44 of 47 call sites ignore this
+            # function's return value, so a quiet failure here is
+            # indistinguishable from "nothing to report" -- which is
+            # precisely how an entire /replay_summary section went missing
+            # once already. Callers that cannot act on it should at least
+            # leave a searchable trace in the log.
+            detail = resp.text[:300]
+            hint = ""
+            if resp.status_code == 400 and "parse" in detail.lower():
+                hint = ("  <-- malformed HTML, most likely a chunk boundary splitting a tag; "
+                        "see _safe_cut")
+            elif resp.status_code == 429:
+                hint = "  <-- rate limited by Telegram"
+            print(f"SEND FAILED ({resp.status_code}) on chunk {i + 1}/{len(chunks)}: {detail}{hint}")
             all_ok = False
             continue
         message_id = resp.json()["result"]["message_id"]
@@ -207,7 +257,7 @@ def handle_natural_language(text: str, client: Anthropic) -> str:
         # itemized question. The model emits a thinking block even without
         # `thinking` being requested, and it can consume over half the budget
         # on its own (see docs/case_study/methodology-decisions.md).
-        model=SONNET_MODEL, max_tokens=2000, system=MARKET_CHECK_SYSTEM_PROMPT,
+        model=SONNET_MODEL, max_tokens=2000, temperature=0, system=MARKET_CHECK_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": f"USER QUESTION: {text}\n\nSTATE:\n{snapshot}\n\n{live_tests}\n\n{context}"}],
     )
     return escape_html(extract_text(response))

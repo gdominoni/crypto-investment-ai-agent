@@ -335,3 +335,41 @@ class TestBenjaminiHochberg:
         rows = [{"candidate": f"c{i}", "status": "accepted", "pattern_p_value": 0.04} for i in range(40)]
         apply_fdr_demotion(rows, None)
         assert all(r["status"] == "accepted" for r in rows)
+
+
+class TestTelegramChunkingIsHtmlSafe:
+    """The SECOND time this silent-drop failure has been found. A chunk
+    boundary landing inside a `<b>...</b>` pair produces malformed HTML,
+    Telegram rejects it with a 400, and since almost no caller checks
+    `_send`'s return value the message simply never arrives."""
+
+    def _line(self, n):
+        from candidates.methodology import _insufficient_data_block
+        return _insufficient_data_block([(f"sonnet_proposed_condition_name_{i}", {"n": 0}) for i in range(n)])[-1]
+
+    def test_the_unbounded_name_list_line_never_splits_a_tag(self):
+        """`_insufficient_data_block` emits ONE line listing every zero-N
+        candidate, each bolded. At 90 tracked candidates it is ~4,900
+        characters -- comfortably past the limit, and the old raw
+        `line[:limit]` cut produced 65 `<b>` against 64 `</b>`."""
+        from telegram.bot import _chunk_message
+        for n in (60, 90, 150, 300):
+            for chunk in _chunk_message(self._line(n)):
+                assert chunk.count("<b>") == chunk.count("</b>"), f"unbalanced markup at n={n}"
+
+    def test_chunking_never_loses_content(self):
+        from telegram.bot import _chunk_message
+        line = self._line(150)
+        assert "".join(_chunk_message(line)).replace(" ", "") == line.replace(" ", "")
+
+    def test_no_chunk_exceeds_telegrams_hard_limit(self):
+        from telegram.bot import _chunk_message, TELEGRAM_MAX_MESSAGE_LENGTH
+        for chunk in _chunk_message(self._line(300)):
+            assert len(chunk) <= TELEGRAM_MAX_MESSAGE_LENGTH
+
+    def test_a_single_unbreakable_token_still_terminates(self):
+        """No safe boundary exists inside one enormous token -- the cut
+        must fall back to the hard limit rather than loop forever."""
+        from telegram.bot import _chunk_message, _SAFE_CHUNK_LENGTH
+        chunks = _chunk_message("x" * (_SAFE_CHUNK_LENGTH * 3))
+        assert len(chunks) == 3 and all(len(c) <= _SAFE_CHUNK_LENGTH for c in chunks)

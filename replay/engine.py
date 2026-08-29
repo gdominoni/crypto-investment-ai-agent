@@ -216,7 +216,13 @@ def _handle_assessment(as_of: pd.Timestamp, event_desc: str, assessment: dict, l
         state.save_pending_test({"spec": s, "coins": COINS, "live_coin": live_coin, "as_of": str(as_of.date())})
         _send(judgment.format_telegram_message(as_of, event_desc, assessment), reply_markup=REPLAY_PROPOSAL_KEYBOARD)
         return "STOP"
-    _send(judgment.format_telegram_message(as_of, event_desc, assessment))
+    # NO MESSAGE on no_action. A "nothing to see here" notification for every
+    # routine macro release and every shock -- hundreds over a full replay --
+    # trains a human to stop reading the channel, which costs them the
+    # notifications that DO matter (a proposal, a resolved live test, a
+    # consecutive-failure alert). Still printed to the run log, so the
+    # judgment is auditable; it just isn't pushed at anyone.
+    print(f"[{as_of.date()}] no_action: {assessment.get('assessment', '')[:120]}")
     return None
 
 
