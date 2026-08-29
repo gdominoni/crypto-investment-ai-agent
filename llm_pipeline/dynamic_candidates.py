@@ -20,6 +20,8 @@ from pathlib import Path
 
 from llm_pipeline.novel_condition_tester import ConditionSpec, clause_from_dict, clause_to_dict
 
+from candidates.atomic_json import write_json
+
 REGISTRY_PATH = Path(__file__).resolve().parent.parent / "candidates" / "dynamic_candidates.json"
 
 
@@ -52,7 +54,7 @@ def record_test_result(spec: ConditionSpec, status: str, source: str) -> None:
         "spec": _spec_to_dict(spec), "status": status, "source": source,
         "last_tested_at": datetime.now(timezone.utc).isoformat(),
     }
-    REGISTRY_PATH.write_text(json.dumps(registry, indent=2))
+    write_json(REGISTRY_PATH, registry)
 
 
 def registered_specs() -> list[ConditionSpec]:

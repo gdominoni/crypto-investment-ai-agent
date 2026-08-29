@@ -9,6 +9,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from candidates.atomic_json import write_json
+
 STATE_DIR = Path(__file__).resolve().parent / "state"
 CHECKPOINT_PATH = STATE_DIR / "checkpoint.json"
 BATTERY_STATUS_PATH = STATE_DIR / "battery_status.json"
@@ -24,8 +26,11 @@ def _read(path: Path, default):
 
 
 def _write(path: Path, data) -> None:
+    """Atomic -- the replay checkpoint is rewritten after EVERY simulated
+    day precisely so a crash can resume; a truncated one would invert that
+    guarantee into "resume is now impossible". See candidates/atomic_json."""
     STATE_DIR.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2, default=str))
+    write_json(path, data, default=str)
 
 
 def load_checkpoint() -> dict:

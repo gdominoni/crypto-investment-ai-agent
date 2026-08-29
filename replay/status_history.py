@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from candidates.atomic_json import write_json
 import pandas as pd
 
 HISTORY_PATH = Path(__file__).resolve().parent / "state" / "status_history.json"
@@ -28,7 +29,7 @@ def load_history() -> dict:
 
 def _save(history: dict) -> None:
     HISTORY_PATH.parent.mkdir(parents=True, exist_ok=True)
-    HISTORY_PATH.write_text(json.dumps(history, indent=2))
+    write_json(HISTORY_PATH, history)
 
 
 def record_status(candidate: str, status: str, as_of: str) -> None:

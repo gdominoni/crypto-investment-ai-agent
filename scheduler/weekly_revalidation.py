@@ -25,6 +25,7 @@ from pathlib import Path
 from anthropic import Anthropic
 from dotenv import load_dotenv
 
+from candidates.atomic_json import write_json
 from candidates.definitions import TRIGGER_DESCRIPTIONS
 from candidates.methodology import explain_non_acceptance
 from candidates.run_battery import ASSETS_DIR, run_all
@@ -83,19 +84,33 @@ def run_weekly_revalidation() -> None:
     except Exception as e:
         print(f"Market data refresh failed, continuing with existing data: {e}")
 
+    done: list[str] = []
     try:
-        _run_weekly_revalidation()
+        _run_weekly_revalidation(done)
     except Exception as e:
+        # The alert must not claim more than it knows. "Nothing was updated
+        # this run" was simply FALSE for a crash after the battery refresh:
+        # live_battery_state.json is rewritten early (deliberately -- the
+        # refresh is the durable work, and losing it to protect a
+        # notification would be the wrong trade), so a later failure in the
+        # keep/drop or milestone stages leaves real state already changed.
+        # Reporting that inaccurately is exactly the "a claim that doesn't
+        # match what happened" failure this project keeps finding.
+        completed = ", ".join(done) if done else "nothing"
         message = (f"<b>Weekly re-validation crashed and did not complete.</b>\n\n"
                     f"{escape_html(type(e).__name__)}: {escape_html(str(e))}\n\n"
-                    f"Nothing was updated this run -- check the process logs for the full traceback.")
+                    f"Completed before the failure: {escape_html(completed)}.\n"
+                    f"Anything after that did NOT run this week and will be retried next run -- "
+                    f"check the process logs for the full traceback.")
         sent = _send(message)
         print(f"Failure alert: {'sent' if sent else 'SEND FAILED'}")
         raise
 
 
-def _run_weekly_revalidation() -> None:
+def _run_weekly_revalidation(done: list[str] | None = None) -> None:
+    done = [] if done is None else done
     result, live_state, meta = run_all()
+    done.append("candidate battery re-run")
     if meta.get("already_shut_down"):
         print("Weekly re-validation: system already shut down, nothing to do.")
         return
@@ -104,7 +119,8 @@ def _run_weekly_revalidation() -> None:
     result.to_csv(ASSETS_DIR / "candidate_battery_status.csv", index=False)
 
     from candidates.run_battery import SIGNAL_STORE_PATH
-    SIGNAL_STORE_PATH.write_text(json.dumps(live_state, indent=2))
+    write_json(SIGNAL_STORE_PATH, live_state)
+    done.append("battery state written")
 
     if meta["shutdown_triggered"]:
         # `result` is empty here -- every candidate was dropped this run,
@@ -119,7 +135,7 @@ def _run_weekly_revalidation() -> None:
     current = dict(zip(result["candidate"], result["status"]))
     previous = json.loads(PREVIOUS_STATUS_PATH.read_text()) if PREVIOUS_STATUS_PATH.exists() else {}
     changes = [(c, previous.get(c, "never run"), s) for c, s in current.items() if previous.get(c) != s]
-    PREVIOUS_STATUS_PATH.write_text(json.dumps(current, indent=2))
+    write_json(PREVIOUS_STATUS_PATH, current)
 
     if changes:
         lines = ["Weekly re-validation -- status changes:"]
@@ -130,6 +146,7 @@ def _run_weekly_revalidation() -> None:
         _send(message)
     else:
         print("Weekly re-validation: no status changes.")
+    done.append("status diff notified")
 
     # Mirrors replay/engine.py's own horizon-change notice exactly -- run_all()
     # re-derives (and re-syncs to the file _open_live_test actually reads) every
@@ -181,11 +198,13 @@ def _run_weekly_revalidation() -> None:
             )
             print(f"Prune decision requested for '{candidate}': {'sent' if sent else 'SEND FAILED'}")
             mark_asked(candidate)
+    done.append("keep/drop decisions")
 
     load_dotenv()
     client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     status_summary = result.set_index("candidate").to_dict(orient="index")
     check_n50_milestones(status_summary, client)
+    done.append("validation checkpoints")
 
 
 if __name__ == "__main__":

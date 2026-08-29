@@ -37,6 +37,8 @@ from pathlib import Path
 
 from llm_pipeline.novel_condition_tester import ConditionSpec, clause_from_dict, clause_to_dict
 
+from candidates.atomic_json import write_json
+
 PENDING_TESTS_PATH = Path(__file__).resolve().parent / "pending_test.json"
 
 
@@ -48,7 +50,7 @@ def _load_queue() -> list[dict]:
 
 def _save_queue(queue: list[dict]) -> None:
     if queue:
-        PENDING_TESTS_PATH.write_text(json.dumps(queue))
+        write_json(PENDING_TESTS_PATH, queue, indent=None)
     elif PENDING_TESTS_PATH.exists():
         PENDING_TESTS_PATH.unlink()
 

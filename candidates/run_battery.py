@@ -21,7 +21,7 @@ on their own.
 """
 from __future__ import annotations
 
-import json
+from .atomic_json import write_json
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -265,7 +265,7 @@ if __name__ == "__main__":
     ASSETS_DIR.mkdir(parents=True, exist_ok=True)
     result.to_csv(ASSETS_DIR / "candidate_battery_status.csv", index=False)
     SIGNAL_STORE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    SIGNAL_STORE_PATH.write_text(json.dumps(live_state, indent=2))
+    write_json(SIGNAL_STORE_PATH, live_state)
 
     pd.set_option("display.width", 200)
     fmt = {

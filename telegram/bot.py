@@ -17,6 +17,7 @@ import requests
 from anthropic import Anthropic
 from dotenv import load_dotenv
 
+from candidates.atomic_json import write_json
 from candidates.definitions import TRIGGER_DESCRIPTIONS, TRIGGER_NUMERIC_DEFINITIONS
 from candidates.methodology import format_candidate_details, format_trigger_summary
 from candidates.status_history import drop_candidate, mark_asked, record_status
@@ -59,7 +60,7 @@ def _log_sent_message(message_id: int) -> None:
     `delete_recent_messages` possible at all."""
     log = json.loads(SENT_LOG_PATH.read_text()) if SENT_LOG_PATH.exists() else []
     log.append({"message_id": message_id, "sent_at": datetime.now(timezone.utc).isoformat()})
-    SENT_LOG_PATH.write_text(json.dumps(log))
+    write_json(SENT_LOG_PATH, log, indent=None)
 
 
 TELEGRAM_MAX_MESSAGE_LENGTH = 4096
@@ -238,7 +239,7 @@ def delete_recent_messages() -> dict:
         else:
             failed += 1
             remaining.append(entry)
-    SENT_LOG_PATH.write_text(json.dumps(remaining))
+    write_json(SENT_LOG_PATH, remaining, indent=None)
     return {"deleted": deleted, "too_old": too_old, "failed": failed}
 
 

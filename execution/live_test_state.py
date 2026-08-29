@@ -13,6 +13,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from candidates.atomic_json import write_json
+
 STATE_DIR = Path(__file__).resolve().parent
 TRADE_LOG_PATH = STATE_DIR / "live_tests.json"
 HORIZONS_PATH = STATE_DIR / "horizons.json"
@@ -23,7 +25,9 @@ def _read(path: Path, default):
 
 
 def _write(path: Path, data) -> None:
-    path.write_text(json.dumps(data, indent=2, default=str))
+    """Atomic -- see candidates/atomic_json for why a bare write_text is
+    not safe for a file that records real, unreproducible live tests."""
+    write_json(path, data, default=str)
 
 
 def load_trade_log() -> list[dict]:

@@ -16,6 +16,8 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
+from candidates.atomic_json import write_json
+
 HISTORY_PATH = Path(__file__).resolve().parent / "status_history.json"
 PRUNE_YEARS_THRESHOLD = 2.0
 RE_ASK_MONTHS = 6  # don't re-propose "keep or drop?" every single week once asked
@@ -28,7 +30,7 @@ def load_history() -> dict:
 
 
 def _save(history: dict) -> None:
-    HISTORY_PATH.write_text(json.dumps(history, indent=2))
+    write_json(HISTORY_PATH, history)
 
 
 def record_status(candidate: str, status: str) -> None:

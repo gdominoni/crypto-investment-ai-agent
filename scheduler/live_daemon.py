@@ -34,6 +34,7 @@ from pathlib import Path
 from anthropic import Anthropic
 from dotenv import load_dotenv
 
+from candidates.atomic_json import write_json
 from execution.live_testing import run_once as run_live_testing
 from llm_pipeline.haiku_sonnet_pipeline import run_once as run_headline_scan
 from llm_pipeline.haiku_sonnet_pipeline import run_shock_scan
@@ -55,7 +56,7 @@ def _load_state() -> dict:
 
 
 def _save_state(state: dict) -> None:
-    STATE_PATH.write_text(json.dumps(state, indent=2))
+    write_json(STATE_PATH, state)
 
 
 def _run_isolated(name: str, fn, alert_on_failure: bool = True) -> None:

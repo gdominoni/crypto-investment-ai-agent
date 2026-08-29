@@ -35,6 +35,7 @@ from candidates.definitions import CANDIDATE_DIRECTIONS
 from candidates.run_battery import COINS
 from execution.freqtrade_bridge import FT_DATADIR, FT_USERDIR, build_config, sync_data
 from llm_pipeline.dynamic_candidates import registered_specs
+from candidates.atomic_json import write_json
 
 STRATEGY_PATH = Path(__file__).resolve().parent / "freqtrade_userdir" / "strategies"
 CONFIG_PATH = FT_USERDIR / "hyperopt_config.json"
@@ -49,7 +50,7 @@ def load_results() -> dict:
 
 
 def _save_results(results: dict) -> None:
-    RESULTS_PATH.write_text(json.dumps(results, indent=2))
+    write_json(RESULTS_PATH, results)
 
 
 def _now() -> str:

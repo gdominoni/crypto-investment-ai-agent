@@ -373,3 +373,42 @@ class TestTelegramChunkingIsHtmlSafe:
         from telegram.bot import _chunk_message, _SAFE_CHUNK_LENGTH
         chunks = _chunk_message("x" * (_SAFE_CHUNK_LENGTH * 3))
         assert len(chunks) == 3 and all(len(c) <= _SAFE_CHUNK_LENGTH for c in chunks)
+
+
+class TestAtomicStateWrites:
+    """Every state file was a bare write_text: truncate, then write. A
+    crash in between leaves truncated JSON and the next read raises --
+    with the original contents already gone. status_history.json is
+    ~160KB rewritten on every status change; the replay checkpoint is
+    rewritten after every simulated day precisely so a crash can resume,
+    a guarantee corruption would invert."""
+
+    def test_a_reader_never_sees_a_partial_file(self, tmp_path):
+        from candidates.atomic_json import write_json, read_json
+        p = tmp_path / "state.json"
+        write_json(p, {"a": 1})
+        write_json(p, {"a": 2, "big": "x" * 100_000})
+        assert read_json(p, None)["a"] == 2
+
+    def test_a_failed_write_leaves_the_original_intact_and_no_tmp_behind(self, tmp_path):
+        from candidates.atomic_json import write_json, read_json
+        p = tmp_path / "state.json"
+        write_json(p, {"good": True})
+        class Unserializable: pass
+        with pytest.raises(TypeError):
+            write_json(p, {"bad": Unserializable()})
+        assert read_json(p, None) == {"good": True}, "the original must survive a failed write"
+        assert not list(tmp_path.glob(".*tmp*")), "no stray temp file left behind"
+
+    def test_a_missing_file_returns_the_default(self, tmp_path):
+        from candidates.atomic_json import read_json
+        assert read_json(tmp_path / "nope.json", {"d": 1}) == {"d": 1}
+
+    def test_corruption_is_loud_rather_than_silently_treated_as_missing(self, tmp_path):
+        """Swallowing a corrupt file would turn "state got damaged" into
+        "there is no state", quietly discarding real history."""
+        from candidates.atomic_json import read_json
+        p = tmp_path / "state.json"
+        p.write_text('{"truncated": ')
+        with pytest.raises(ValueError):
+            read_json(p, {})
