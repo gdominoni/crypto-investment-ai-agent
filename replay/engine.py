@@ -39,6 +39,7 @@ from execution import hyperopt_runner
 from llm_pipeline.haiku_sonnet_pipeline import escape_html, format_spec_clauses, sonnet_prune_advice
 from llm_pipeline.novel_condition_tester import (
     ConditionSpec, clause_from_dict, clause_signal_hourly, clause_to_dict, condition_desc, format_pattern_significance,
+    spec_from_proposal,
     test_novel_condition,
 )
 from replay import judgment, state
@@ -203,6 +204,15 @@ def _handle_assessment(as_of: pd.Timestamp, event_desc: str, assessment: dict, l
     condition for human approval, or does nothing."""
     if assessment["recommended_action"] == "propose_novel_test" and assessment.get("novel_condition_spec"):
         s = assessment["novel_condition_spec"]
+        # Validate BEFORE storing/halting. An off-thesis proposal (no news/macro
+        # event clause -- see novel_condition_tester.NEWS_EVENT_INDICATORS) is
+        # discarded here rather than parked as pending: halting the walk for a
+        # human decision about a hypothesis the system will refuse to test is
+        # both a waste and, before this guard, a crash at resolve time.
+        _spec, _err = spec_from_proposal(s)
+        if _spec is None:
+            print(f"[{as_of.date()}] proposal '{s.get('label')}' rejected, not tested: {_err}")
+            return None
         state.save_pending_test({"spec": s, "coins": COINS, "live_coin": live_coin, "as_of": str(as_of.date())})
         _send(judgment.format_telegram_message(as_of, event_desc, assessment), reply_markup=REPLAY_PROPOSAL_KEYBOARD)
         return "STOP"

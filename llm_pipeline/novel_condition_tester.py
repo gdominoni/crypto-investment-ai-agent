@@ -369,6 +369,27 @@ def clause_from_dict(d: dict) -> "Clause":
     return Clause(indicator=d["indicator"], op=d["op"], threshold=float(d["threshold"]), within_days=int(within))
 
 
+def spec_from_proposal(d: dict) -> "tuple[ConditionSpec | None, str | None]":
+    """Turn Sonnet's raw `novel_condition_spec` JSON into a validated
+    ConditionSpec, returning (spec, None) on success or (None, reason) on
+    rejection -- never raising.
+
+    Used at PROPOSAL time, not at test time, and that ordering matters. A
+    proposal that fails the necessary-condition rule must be discarded the
+    moment it is made: it should not be stored as pending, must not halt
+    the replay waiting for a human decision about a hypothesis the system
+    will refuse to test anyway, and must never surface as a Test It button
+    that would fail on press. Rejecting late instead of early was a live
+    crash risk in the replay, which saves the raw dict and halts before
+    anything validates it."""
+    try:
+        return ConditionSpec(label=str(d["label"]),
+                             clauses=tuple(clause_from_dict(c) for c in d["clauses"]),
+                             direction=str(d["direction"])), None
+    except (ValueError, KeyError, TypeError) as e:
+        return None, str(e)
+
+
 def reduced_clauses(spec: "ConditionSpec") -> "tuple[Clause, ...] | None":
     """`spec`'s clauses with the EVENT ones removed -- the CONTROL group
     for the incremental test ("same market state, no event").
