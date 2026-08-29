@@ -562,12 +562,20 @@ def format_candidate_details(candidate: str, row: dict, definition: str | None =
     lines.append(f"Status: {_escape_html(STATUS_PLAIN.get(status, status))}" + (f"  (direction: {direction})" if direction else ""))
     if horizon is not None:
         lines.append(f"Held for: {horizon}d (empirically-derived -- the last walk-forward fold's best-performing horizon; re-checked every week, see the README's Phase 3)")
-    if milestone and milestone.get("milestone_reported"):
+    # Gated on CURRENT status being 'accepted' -- milestone_reported/milestone_cleared
+    # can persist from a PAST checkpoint reached while this candidate used to be
+    # accepted, before later degrading to watch/rejected. Showing "VALIDATED"/"NOT
+    # validated" next to a currently-rejected candidate would read as describing
+    # today's status when it's really stale history -- the exact "two facts shown
+    # together that don't actually relate" confusion this project has caught
+    # (and fixed) more than once already; explain_non_acceptance() below already
+    # gives the real, current reason.
+    if status == "accepted" and milestone and milestone.get("milestone_reported"):
         n_reached, cleared = milestone.get("last_checkpoint_n"), milestone.get("milestone_cleared")
         verb = "VALIDATED" if cleared else "NOT validated"
         lines.append(f"{verb} -- {'cleared' if cleared else 'did not clear'} the acceptance bar at its {n_reached}-occurrence checkpoint "
                      f"(re-checked fresh again at {n_reached + 50}, not a permanent badge)")
-    elif milestone is not None:
+    elif status == "accepted" and milestone is not None:
         lines.append("Not yet validated -- hasn't reached its first 50-occurrence checkpoint yet")
     lines.append("")
 
@@ -632,7 +640,13 @@ def _trigger_summary_line(name: str, row: dict, milestone: dict | None = None) -
     # VALIDATED with nothing in /summary distinguishing it from one that's
     # merely accepted, a real gap caught the same way format_candidate_details's
     # own missing validated line was (a human noticing the mismatch live).
-    if milestone and milestone.get("milestone_reported"):
+    # Gated on CURRENT status being 'accepted' -- a real, separately-caught bug:
+    # milestone_reported/milestone_cleared can persist from a PAST checkpoint
+    # reached while a candidate USED to be accepted, before later degrading to
+    # watch/rejected. Tagging a currently-rejected line "not validated" reads as
+    # describing today's status when it's really stale history unrelated to the
+    # real reason (already given below via "Why:").
+    if row.get("status") == "accepted" and milestone and milestone.get("milestone_reported"):
         bits.append("VALIDATED" if milestone.get("milestone_cleared") else "not validated")
     line = f"  {_escape_html(name)} -- {', '.join(bits)}"
     if row.get("status") in ("watch", "rejected"):
