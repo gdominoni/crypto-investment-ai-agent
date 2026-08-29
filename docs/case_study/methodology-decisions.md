@@ -348,3 +348,62 @@ The audit tried to break the causality layer and could not. Recomputing all six 
 This is the outcome README's own Phase 1 "honest finding" predicted and the Dynamic Agent Thesis was built to test against. The correct response is to report it, not to relax a threshold until something passes: a 43% false-positive rate producing candidates is not a discovery, and a project whose entire stated purpose is distinguishing real patterns from flattering noise does not get to keep the flattering noise.
 
 **Type.** Critical statistical bug fix. Supersedes every previously-reported acceptance and validation result in this repository, including this log's own earlier entries on `_effective_milestone_count` and the consecutive-failure alert (both remain correct mechanisms -- they simply have no `accepted` candidate to act on right now). Found by audit, every claim above confirmed by execution against real data before being written down.
+
+
+---
+
+## 2026-08-29 (later the same day) -- making the actual thesis testable: sequences, the right control group, graded macro events, and multiplicity control
+
+The audit above fixed how a hypothesis is *tested*. This entry is about what could be *expressed* and *asked* at all -- five changes, four of them prompted by a single observation: this project's title promises patterns from **market conditions combined with events**, and the pipeline could not represent that claim.
+
+### The gap, measured
+
+Of the 92 conditions Sonnet actually proposed in the replay: 49 (53%) included `shock_zscore`, 12 (13%) `is_macro_day`, and **31 (34%) contained no event term at all** -- pure chart patterns, indistinguishable from something written directly in Freqtrade with no LLM involved. `high_efficiency_breakout_with_volume_confirmation`, the project's former validated candidate, was one of these.
+
+Worse, of **771 live tests** opened for Sonnet-discovered candidates, **zero** were news-linked. All 771 came from the mechanical hourly scan, which reads price, OHLC and funding only. Haiku's sentiment decides *which* condition gets proposed and then disappears entirely from both the test and the track record. Going live does not fix this: acceptance is always decided by a backtest, and there is no historical news archive to backtest against (verified: CryptoCompare's endpoint is live-only, `lTs` backward paging returns empty, 3,527 days missing).
+
+### 1. Sequenced conditions (`Clause.within_days`)
+
+Every clause was evaluated on the same bar, so the grammar could express *"news AND crash on the same day"* but not *"crash, THEN news"* -- the central case. `within_days=K` means "was true at any point in the last K days" (0 = today, the previous and default behaviour). All three orderings are now writable **and comparable**, so ordering itself becomes a testable hypothesis. Causality holds: the window looks strictly backward, the trigger bar is where the last clause becomes true, entry is still the next bar's open. Rendered explicitly to humans, because "crash then news" and "crash and news together" must never read identically.
+
+### 2. The incremental baseline -- the change that matters most
+
+`pattern_significance` compared every condition against the coin's **unconditional** forward returns. Testing `shock AND negative_news` that way is close to meaningless: the shock *alone* already differs from an ordinary day, so the news clause could be pure decoration and the test would still pass it. `baseline_events` switches the control to the **same condition with its event clause removed**, same period, with the treated events excluded so it is a genuine treatment-vs-control contrast. Demonstrated on a real hypothesis (macro-release day AND RSI<45 → long):
+
+| question | excess | p |
+|---|---|---|
+| unconditional -- "does anything happen at all?" | **+1.09%** | 0.356 |
+| incremental -- "what does the macro day ADD?" | **−0.23%** | 0.483 |
+
+The entire apparent effect belongs to the market state. The unconditional test would have credited it to the event. `baseline_kind` is now reported so the two claims are never worded identically.
+
+### 3. Graded macro surprises, from data already on disk
+
+`is_macro_day` is binary. The ALFRED vintages needed to grade *how far* a print moved were already downloaded, and `latest_release_with_prior` already computed the delta for Sonnet's prompt -- it was simply never a testable indicator. Three added (`cpi_surprise`, `rate_surprise`, `jobless_claims_surprise`), point-in-time correct on publication date with `shift(1)`-ed trailing stats, using each period's first print rather than its revision.
+
+*A real bug caught by reading the output rather than trusting it:* the Fed funds rate sits flat for years, collapsing its rolling std, and a bare `sd > 0` guard produced a surprise of **−2,613,348 sigma**. A scale-free floor now yields NaN when the trailing window is degenerate -- the honest answer when there is no scale to judge against. Deliberately *not* suppressed: jobless claims at +137.94 on 2020-03-26 (281,000 → 3,283,000) is the real COVID spike.
+
+### 4. Multiplicity control (Benjamini-Hochberg)
+
+Flagged as unaddressed in the audit entry above, and no longer optional now that the search space includes orderings and graded events. Testing ~98 candidates at p<0.05 is *expected* to manufacture ~5 significant results with nothing behind them. `apply_fdr_demotion` runs as a family-level second pass and is **demotion-only** -- BH is uniformly at least as strict as raw p<α, so it can remove a candidate from `accepted` but never add one. BH rather than Bonferroni: at n=98 Bonferroni implies a per-test threshold of 0.0005 and no power for the modest real effects being sought. Validated against the canonical Benjamini & Hochberg 1995 worked example (15 hypotheses → exactly 4 discoveries) and cross-checked against `scipy.stats.false_discovery_control`.
+
+### 5. A pre-existing bug found while verifying train/serve agreement -- worse than the one being looked for
+
+Four of twelve indicators were **not distributionally comparable** between the daily backtest and the hourly live scan (BTCUSDT, 1st–99th percentile):
+
+| indicator | daily | hourly@scale=24 | |
+|---|---|---|---|
+| `rsi_14d` | 22.3 – 85.4 | **42.6 – 58.5** | 0.25× spread |
+| `atr_pct_14d` | 0.021 – 0.151 | 0.004 – 0.032 | 0.22× |
+| `daily_range_pct` | 0.008 – 0.194 | 0.001 – 0.047 | 0.24× (ignores `scale` entirely) |
+| `efficiency_ratio_20d` | 0.003 – 0.760 | 0.001 – 0.185 | 0.24× |
+
+A condition accepted on `rsi_14d < 35` fires **289 times** in the daily backtest and fired **zero** times in the live scan -- a 336-period RSI mean-reverts to ~50 and never reaches the threshold. The candidate looks merely *rare*, not broken. `shock_zscore` already carried a hardcoded exception for exactly this reason; it was never generalised. `DAILY_NATIVE_INDICATORS` now covers all of them and both scanners delegate to one shared `clause_signal_hourly`. After: 289 → 289, zero missed, production and replay byte-identical.
+
+*Also found in the same pass:* all three serializers wrote only indicator/op/threshold, so a sequenced condition would round-trip back as a same-day one -- approved as "crash then news", then silently tested and tracked as "crash and news together". `clause_to_dict`/`clause_from_dict` are now the single pair everywhere, the latter doubling as the sanitiser for model output.
+
+### What is still missing, stated plainly
+
+**Headline sentiment remains untestable**, and therefore the "Market Sentiment" half of this project's title remains unproven. The whitelist has no sentiment term because there is no historical news archive to backtest one against. Closing it requires backfilling news history (GDELT 2.0 is the only free source plausibly covering 2017→present; scoring it with Haiku batched by day costs roughly $11–35, since ~3,500 daily calls is far cheaper than per-article scoring). Until then the honest scope of this system is **market conditions combined with market and macro events** -- which is now genuinely expressible and correctly tested, and was not before.
+
+**Type.** Capability + methodology. Four fixes make the project's own stated hypothesis representable and correctly controlled; one is a real pre-existing bug that silently prevented a whole class of accepted candidates from ever firing live. Tests 49 → 73.
