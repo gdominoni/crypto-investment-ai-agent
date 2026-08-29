@@ -128,9 +128,19 @@ python3 -m data_ingestion.market_data.binance_fetcher
 
 ## Step 8 — Run it
 
-There are two different ways to run this project. Pick the one that matches what you want to see.
+There are two parts. **Part 2 is the actual project** — Part 1 is optional and you can skip straight to Part 2 if you'd rather start from a clean slate and just watch it run forward from today.
 
-### Option A — Go live (the real thing)
+### Part 1 (optional) — Historical replay: backfill years of results in minutes
+
+This replays years of real historical data (from 2017 onward) day by day, as if it were happening live, running the exact same statistical/LLM pipeline Part 2 uses and sending the same kind of Telegram messages the live system would have sent at the time. The point of running this first is speed: instead of waiting hourly/weekly for real conditions to trigger and results to accumulate one at a time, this gives you years of tracked patterns, tested conditions, and resolved live tests in one sitting — a fully populated `/replay_summary` almost immediately, instead of an empty one you'd otherwise have to wait months to fill in for real.
+
+```bash
+python3 -m replay.orchestrator
+```
+
+**Check it worked:** the terminal prints one line per simulated step, and your Telegram bot starts receiving messages (proposed conditions, resolved live tests, periodic check-ins). This does call the real Anthropic API repeatedly, so it does cost real (small) amounts of credit — see [`PROJECT_MAP.md`](PROJECT_MAP.md)'s "Cost Optimization" section for real measured per-call costs. Stop it any time with `Ctrl+C`; it checkpoints its progress and resumes from where it stopped the next time you run it. This never touches live state — it's entirely isolated (`/replay_summary` vs. `/summary` on Telegram), so running it has no effect on Part 2 below, whether you run it before, after, or never.
+
+### Part 2 — Go live (the real thing)
 
 This is the one command that runs the whole system: the Telegram bot, the hourly scans, and the weekly re-validation, all in a single process, with no separate cron job or scheduler to configure.
 
@@ -139,18 +149,6 @@ python3 -m scheduler.live_daemon
 ```
 
 **Check it worked:** within a few seconds you should receive a Telegram message from your bot saying *"Live daemon started."* From here on, open your bot's chat and send `/help` to see every available command (including `/summary`, a plain-language snapshot of every pattern currently being tracked). Leave this terminal window open (or run it in the background, e.g. inside `tmux`/`screen`, or via `nohup python3 -m scheduler.live_daemon &`) — it needs to keep running to keep scanning and to answer you on Telegram. Stop it any time with `Ctrl+C`; restarting it later picks up exactly where it left off (it remembers when each job last ran).
-
-### Option B — Historical replay (case-study demo, no live data needed)
-
-This replays years of real historical data day by day, as if it were happening live, sending the same kind of Telegram messages the live system would have sent at the time. Useful for seeing the whole system in action quickly, without waiting for real market events to occur.
-
-```bash
-python3 -m replay.orchestrator
-```
-
-**Check it worked:** the terminal prints one line per simulated step, and your Telegram bot starts receiving messages (proposed conditions, resolved live tests, periodic check-ins). This does call the real Anthropic API repeatedly, so it does cost real (small) amounts of credit — see [`PROJECT_MAP.md`](PROJECT_MAP.md)'s "Cost Optimization" section for real measured per-call costs. Stop it any time with `Ctrl+C`; it checkpoints its progress and resumes from where it stopped the next time you run it.
-
-You can run Option A and Option B independently — they use separate, isolated state (`/summary` vs `/replay_summary` on Telegram), so running one doesn't affect the other.
 
 ---
 
@@ -162,7 +160,7 @@ You can run Option A and Option B independently — they use separate, isolated 
 | `KeyError: 'ANTHROPIC_API_KEY'` or similar at startup | `.env` is missing, misnamed, or in the wrong folder. It must be named exactly `.env` and sit in the project's root folder (Step 5). |
 | No message ever arrives on Telegram | Double-check `TELEGRAM_CHAT_ID` (Step 4c) — a wrong ID fails silently from Telegram's side. Also confirm you sent your bot at least one message before running `getUpdates`. |
 | `anthropic.BadRequestError: ... credit balance is too low` | Your Anthropic account needs more credit — add some at [console.anthropic.com](https://console.anthropic.com/) (Step 4a). No progress is lost; both run modes checkpoint and resume. |
-| Freqtrade install fails or hangs in Step 3 | It's only needed for the optional hyperopt cross-check (see README's Phase 3). Both `Option A` and `Option B` above work without it — you can install everything else first (`pip install -r requirements.txt --no-deps` is not recommended; instead just let it finish, or remove the `freqtrade[hyperopt]` line from `requirements.txt` if you don't need that feature). |
+| Freqtrade install fails or hangs in Step 3 | It's only needed for the optional hyperopt cross-check (see README's Phase 3). Both `Part 1` and `Part 2` above work without it — you can install everything else first (`pip install -r requirements.txt --no-deps` is not recommended; instead just let it finish, or remove the `freqtrade[hyperopt]` line from `requirements.txt` if you don't need that feature). |
 | Tests fail in Step 6 | Almost always a dependency issue, not a real bug — re-check Steps 2 and 3 (right Python version, virtual environment active, `pip install` completed without errors). |
 
 If something goes wrong that isn't listed here, [`PROJECT_MAP.md`](PROJECT_MAP.md) has a "Partial Failures & Crashes" section describing exactly how this system is designed to fail loudly (a Telegram alert) rather than silently — check your bot's chat for an alert message before assuming something is broken.
