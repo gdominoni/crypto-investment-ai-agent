@@ -9,6 +9,7 @@ execution/active_manual_signals.json
 llm_pipeline/pending_test.json
 telegram/sent_messages.json
 replay/state/
+scheduler/live_daemon_state.json
 execution/freqtrade_userdir/data/
 execution/freqtrade_userdir/hyperopt_results/
 execution/freqtrade_userdir/logs/
