@@ -165,6 +165,34 @@ Every candidate above passes the significance test (p < 0.05) — the interestin
 
 **A second, fully independent opinion — never load-bearing.** A periodic, local-only Freqtrade hyperopt run re-derives TP/SL multipliers for each tracked candidate using a genuinely different search method (Bayesian optimization over a continuous space vs. this project's own grid search) and a different, industry-standard backtesting engine — shown alongside the reference numbers above, purely informational, never gating acceptance and never touching live execution. Deliberately kept off any live host (see [`PROJECT_MAP.md`](PROJECT_MAP.md)'s "Cost Optimization" section) — run it yourself with `python3 -m execution.hyperopt_runner`.
 
+### Historical Replay: Results So Far
+
+The table above is production's — real, but young, with no live tests resolved yet. The historical replay (`replay/`, see [`HOW_TO_RUN.md`](HOW_TO_RUN.md) to run it yourself) exists specifically to answer this project's own question — does the adaptive system find real patterns? — against years of real history instead of waiting on real time to pass. As of the replay's current simulated date (2023-08-02, ~6.6 years into a run that started at 2017-01-01), it has evaluated **98 candidates** total: the 6 static ones above, plus 92 discovered live by Sonnet.
+
+**One has reached `validated`:**
+
+<table>
+<tr><td colspan="2"><b>high_efficiency_breakout_with_volume_confirmation</b> — long, Sonnet-discovered</td></tr>
+<tr><td>What triggers it</td><td>20-day Bollinger %B above 0.95 <b>AND</b> 30-day volume z-score above 1.0 <b>AND</b> 20-day trend efficiency ratio above 0.5</td></tr>
+<tr><td>Statistical significance</td><td>N=161, p=0.010 (significant vs. this coin's own baseline)</td></tr>
+<tr><td>Risk path (MFE/MAE)</td><td>2.47 (favorable — reward tends to exceed the risk taken to get there)</td></tr>
+<tr><td>Concentration</td><td>46% BTCUSDT, 52% 2020 — both under the 60% flag</td></tr>
+<tr><td>Held for</td><td>21 days (empirically-derived, re-checked weekly)</td></tr>
+<tr><td>Reference TP/SL backtest</td><td>TP=1.50x / SL=1.50x (of the anchors) — win rate=55.9%, Sortino=2.03 — informational only, doesn't gate status</td></tr>
+<tr><td><b>Validated</b></td><td>cleared its first 50-occurrence checkpoint, still <code>accepted</code> at that check — re-checked fresh again at 100</td></tr>
+</table>
+
+**Everything else, grouped:**
+
+| Status | Count | What it means |
+|---|---|---|
+| Accepted, not yet validated | 1 | Cleared the statistical bar; hasn't reached its first validation checkpoint yet |
+| Watch | 13 | A real, often significant pattern, but fails the concentration or risk-path check |
+| Rejected | 15 | No statistically significant pattern found, or too small a sample |
+| Insufficient data | 68 | Fewer historical occurrences than the minimum needed to test at all |
+
+The honest reading: out of 98 ideas tested against real history — the large majority of them Sonnet's own proposals, not hand-picked — exactly one has both cleared every statistical bar *and* held up under a genuinely prospective checkpoint. That is not a large number, and this project reports it as exactly that rather than rounding it up — see the Dynamic Agent Thesis above for why a low hit rate here is still the honest, useful result this system is built to produce.
+
 ---
 
 ## Phase 4: Interactive Telegram Interface
