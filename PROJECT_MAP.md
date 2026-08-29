@@ -34,11 +34,49 @@ A file-by-file guide to what each part of this codebase does. Companion referenc
 - **`dynamic_candidates.py`** — Persistent registry of conditions discovered live, re-tested weekly alongside the static candidates.
 - **`pending_tests.py`** — FIFO queue of novel-condition proposals awaiting a human's "test it" reply — a queue, not a single slot, so two proposals flagged close together can't silently overwrite each other. Entries expire after 48h so an unanswered proposal doesn't sit forever and get resolved against long-stale context.
 
+## Cost Optimization — what actually gets sent to Anthropic
+
+Pricing (verified against [platform.claude.com/docs/en/about-claude/pricing](https://platform.claude.com/docs/en/about-claude/pricing), not assumed): **Claude Sonnet 5** $2 / $10 per million tokens (input / output), **Claude Haiku 4.5** $1 / $5. Every number below is measured against this project's own real calls and real accumulated state, not a generic estimate — see `docs/case_study/methodology-decisions.md` for the incident that prompted this section (a Q&A call's context had grown to ~10,400 tokens by the time 96 candidates were tracked, discovered live while burning through this project's own Anthropic credit balance running the historical replay).
+
+This project's LLM calls split into two kinds with deliberately different context budgets, because they answer two different questions:
+
+**1. Automated per-event judgment** — `judge_event()` (`replay/judgment.py`), `sonnet_strategist()` / `sonnet_shock_response()` (`haiku_sonnet_pipeline.py`). Fires on every real macro release, volatility shock, or escalated headline — hundreds of times over any long observation window, so this is the actual cost driver. Its context answers one narrow question ("is *this* event worth escalating") and is built to stay **flat regardless of how much history has accumulated**:
+  - the one event description (a headline, a macro release, a shock reading)
+  - current indicator readings for the relevant coin(s) only — not a history of past readings
+  - macro releases from the last 10 days only — not the full calendar
+  - the currently-*accepted* candidate names, one line — not every candidate ever tracked
+  - a two-line aggregate stat, not a per-trade history
+
+  Measured real call (a macro event, all 7 coins' indicators): **~1,230 tokens** input, ~$0.01/call at current pricing. This number does not grow as the candidate registry or the live-test log grows — none of its five inputs are keyed to either.
+
+**2. Human-triggered Q&A** — `answer_market_question()` (`replay/judgment.py`), `handle_natural_language()` (`telegram/bot.py`). Fires only when a human asks something free-form on Telegram. This one legitimately needs more breadth, since it has to be ready for *any* question ("what's accepted", "how's candidate X doing", "which coin is dragging things down", "what's the market doing") — but "more breadth" turned out to mean "every candidate ever discovered, and every (candidate, coin) pair's full trade history, in full detail, every single call," which is what actually caused the growth. Fixed by capping the exhaustive parts, not the categories of information:
+  - `_trades_by_candidate_summary()` / `_trades_by_candidate_and_coin_summary()` (`replay/judgment.py`) and `build_live_test_summary()` (`context_builder.py`) now keep only the top 15 rows **ranked by `|mean_return|`** — the candidates/pairs most worth a human's attention either way (best or worst), never an arbitrary or alphabetical cut — with a note pointing to `/summary`/`/replay_summary` when the list was truncated.
+  - `_all_candidates_status_summary()` (`replay/judgment.py`) collapses the `insufficient_data` bucket (usually the large majority — 67 of 96 tracked candidates in one real measurement) into a single count-plus-name-list line instead of one detailed line each, since there's rarely anything candidate-specific to say about a trigger that simply hasn't fired enough times yet. `accepted`/`watch`/`rejected`/`dropped` candidates — the ones a question is actually likely to be about — keep full detail, uncapped.
+  - **Deliberately not capped:** the "already tested via 'test it' and not accepted" name list `build_context_summary()` (`context_builder.py`) gives Sonnet. This one is functional, not just informational — it's how Sonnet avoids re-proposing a condition a human already tested. Capping it risks a real regression (a duplicate proposal), unlike the other two lists, which exist purely for a human's convenience and have a free local alternative.
+
+  Measured on this project's own real, accumulated state (96 tracked candidates, 1,728 logged live tests): **~10,400 tokens before this fix → ~2,700 tokens after (-74%)**, and now bounded — it will not keep growing as more candidates get discovered or more live tests resolve, because every uncapped block above has a hard ceiling.
+
+**Why this covers every question, not just the ones anticipated in advance:** nothing is omitted *categorically* — Sonnet still sees the full picture at summary level (every candidate's status, every candidate's aggregate performance, current prices, open/closed test counts) on every single call. Only the exhaustive *tail* of per-row detail is capped, and only past the point where a human is realistically going to ask about that specific row: a candidate or pair with a huge |mean_return| (good or bad) is exactly the kind of thing worth asking about, and is guaranteed to survive the top-15 cut; a candidate sitting at N=2 with a near-zero return is unlikely to be the subject of a question, and if it genuinely is, the truncation note tells the reader (and Sonnet) exactly where to get the complete list instead of guessing or silently omitting it.
+
+**For genuinely exhaustive questions, the answer is a free command, not a bigger LLM prompt.** `/summary` and `/replay_summary` (`telegram/bot.py`, via `format_trigger_summary()` in `candidates/methodology.py`) recompute the full battery fresh on demand — real statistics, no LLM call at all, no truncation, no cap — and cost **$0** in API terms (measured: ~4.4 seconds of local computation for 38 tracked candidates). The design split is deliberate: Sonnet answers *"what does this mean, why, what should I make of it"*; the local commands answer *"give me everything, exhaustively"* — the two questions don't need the same context budget, so they don't share one.
+
+**A related correctness fix that's also a cost fix:** every Sonnet call in this project sets `max_tokens=2000` (not the 700-800 first used), after live testing showed the model spending an unpredictable, sometimes-large share of its output budget on an unrequested "thinking" block, occasionally leaving too little room for the actual JSON/text answer and truncating it (`stop_reason="max_tokens"`, observed live, not theoretical). A truncated call that then needs a retry effectively doubles its own cost; the fixed budget avoids that failure mode outright rather than paying for it via retries.
+
+**Rough live-production estimate**, built from the numbers above rather than assumed: hourly shock scan (Sonnet only called on an actual detected shock, rare) + hourly headline screening (Haiku, cheap, batched) + a handful of escalations/day + occasional weekly keep/drop or milestone advice ≈ **$8-15/month** in moderate activity, likely under $25/month even in an unusually volatile month — a small fraction of the historical-replay demo's own cost, which compresses years of events into a short, continuous burst and is not representative of live, one-event-at-a-time operation.
+
 ## Trade Execution (Phase 2, Module B) — `execution/`
 
-- **`strategies/sentiment_agent_strategy.py`** — The Freqtrade `IStrategy` implementation. `populate_indicators()` computes triggers on live data Freqtrade fetches itself; `populate_entry_trend()` decides entries (static battery or an approved manual signal); `custom_exit()` / `custom_exit_price()` implement the duration-bucketed TP/SL ladder.
-- **`signal_store.py`** — Bridge between the LLM layer and live execution: a pending/active signal split so an approval is consumed exactly once and its anchors stay recoverable at exit time, days later.
-- **`config_live.json`** — Freqtrade configuration: futures/isolated margin mode, dry-run, 7-coin pair whitelist.
+This project never opens a funded position (see [methodology-decisions.md](docs/case_study/methodology-decisions.md)) — the files below are grouped by which of the two live models they belong to.
+
+**Live testing (the actual current model — no TP/SL, no funded position):**
+- **`live_testing.py`** — Production's real-data counterpart to `replay/engine.py`'s day-by-day walker: `_open_live_test()`/`_check_live_tests()` (hold for the horizon `pattern_significance` found significant, resolve by measuring real forward return/MFE/MAE), `_scan_mechanical_triggers()` (unattended, no LLM, hourly detection), `find_backdated_entry()` (retroactively anchors a newly-discovered condition's own triggering occurrence to the real hour it first became true, using already-recorded price history — never something a funded order could do, legitimate here since nothing real is ever placed), `check_n50_milestones()`.
+- **`live_test_state.py`** — Persistent state for the above (`live_tests.json`, `horizons.json`) — mirrors `replay/state.py`'s equivalent subset against real, not simulated, data.
+- **`hyperopt_runner.py`** / **`freqtrade_bridge.py`** / **`freqtrade_userdir/strategies/hyperopt_candidate_strategy.py`** — A periodic, local-only, purely informational cross-check: runs Freqtrade's own (independent) Bayesian hyperopt against this project's real data to re-derive TP/SL multipliers for each tracked candidate, as a second opinion alongside this project's own walk-forward grid search. `freqtrade` is imported lazily (inside function bodies) so nothing else in this project gains a hard dependency on it.
+
+**Superseded (kept, not deleted — the underlying TP/SL/anchor machinery is what the hyperopt cross-check above now reuses):**
+- **`strategies/sentiment_agent_strategy.py`** — The Freqtrade `IStrategy` implementation this project's live execution used before the live-testing model above. `populate_indicators()` computes triggers on live data Freqtrade fetches itself; `populate_entry_trend()` decides entries (static battery or an approved manual signal); `custom_exit()` / `custom_exit_price()` implement the duration-bucketed TP/SL ladder. Not currently loaded for live trading.
+- **`signal_store.py`** — Bridge between the LLM layer and the strategy above: a pending/active signal split so an approval is consumed exactly once and its anchors stay recoverable at exit time, days later.
+- **`config_live.json`** — Freqtrade configuration for the strategy above: futures/isolated margin mode, dry-run, 7-coin pair whitelist.
 
 ## Telegram Interface (Phase 4) — `telegram/`
 
@@ -52,6 +90,7 @@ A file-by-file guide to what each part of this codebase does. Companion referenc
 ## Documentation — `docs/case_study/`
 
 - **`PLAN.md`** — Full build plan and the reasoning behind every methodology choice.
+- **`methodology-decisions.md`** — Dated log of every non-obvious methodology number/design choice (why N=50, why the shock threshold is 3.0, why live tests hold for a fixed horizon instead of a TP/SL ladder, etc.) — each entry says plainly whether it's a statistical justification or a stated cost/data compromise, and why.
 - **`assets/`** — Screenshots, the architecture diagram, and the current battery results table.
 
 ## Tests — `tests/`
