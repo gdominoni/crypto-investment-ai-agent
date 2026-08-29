@@ -66,6 +66,8 @@ def _normalize_coin(coin: str) -> str | None:
 
 
 PLACEHOLDER_HORIZON_DAYS = 7  # neutral default (middle of HORIZONS_DAYS) -- see docs/case_study/methodology-decisions.md
+CONSECUTIVE_FAILURE_ALERT_THRESHOLD = 2  # see docs/case_study/methodology-decisions.md
+CONSECUTIVE_FAILURE_CONTEXT_WINDOW = 5
 
 
 def _open_live_test(candidate: str, coin: str, direction: str, decision_date: pd.Timestamp) -> dict:
@@ -102,6 +104,51 @@ def _open_live_test(candidate: str, coin: str, direction: str, decision_date: pd
             "entry_date": entry_date, "horizon": horizon}
 
 
+def _check_consecutive_failures(candidate: str, d: pd.Timestamp) -> None:
+    """Mirrors execution/live_testing.py::_check_consecutive_failures
+    exactly, against the replay's own simulated trade log/clock. Fires
+    immediately after a live test resolves, only for a VALIDATED
+    candidate (milestone_cleared) -- a fast, purely informational
+    early-warning for a genuine losing streak, since a well-established
+    candidate's own aggregate significance test is, by design, resistant
+    to short-term noise (verified: can absorb 20-30 consecutive
+    worst-case-magnitude failures before flipping -- see
+    docs/case_study/methodology-decisions.md), which is correct against
+    noise but too slow to react to an actual regime change on its own.
+    Never changes any candidate's status itself."""
+    if not sh.all_latest_statuses().get(candidate, {}).get("milestone_cleared"):
+        return
+    closed = sorted((t for t in state.load_trade_log() if t["candidate"] == candidate and t["status"] == "closed"),
+                     key=lambda t: t["close_date"])
+    streak = 0
+    for t in reversed(closed):
+        if t["forward_return"] >= 0:
+            break
+        streak += 1
+    if streak < CONSECUTIVE_FAILURE_ALERT_THRESHOLD:
+        return
+    window = closed[-max(streak, CONSECUTIVE_FAILURE_CONTEXT_WINDOW):]
+    mean_return = sum(t["forward_return"] for t in window) / len(window)
+    mean_mfe = sum(t["mfe"] for t in window) / len(window)
+    mean_mae = sum(t["mae"] for t in window) / len(window)
+    ratio = mean_mfe / mean_mae if mean_mae else float("nan")
+    lines = [
+        f"<b>{d.date()}</b>\n",
+        f"<b>Consecutive-failure alert -- {escape_html(candidate)}</b>\n",
+        f"The last <b>{streak}</b> live test(s) for this VALIDATED candidate resolved negative in a row.\n",
+        f"Last {len(window)} occurrence(s) for context:",
+    ]
+    for t in window:
+        lines.append(f"  {t['close_date']}  {escape_html(t['coin'])}  return={t['forward_return']:+.2%}  "
+                      f"MFE={t['mfe']:+.2%}  MAE={t['mae']:+.2%}")
+    lines.append(f"\nOver these {len(window)}: mean return={mean_return:+.2%}, MFE/MAE={ratio:.2f} (favorable if > 1.0)")
+    lines.append(f"\nInformational only -- this does not change {escape_html(candidate)}'s status. The full "
+                 f"aggregate statistics (see /replay_details {escape_html(candidate)}) are far more resistant to a "
+                 f"short streak by design; this exists specifically to surface a genuine losing run long before "
+                 f"the aggregate ever would.")
+    _send("\n".join(lines))
+
+
 def _check_live_tests(d: pd.Timestamp) -> None:
     """Runs on EVERY simulated day (not just event days) -- resolves a
     live test the moment its horizon has fully elapsed, no earlier and no
@@ -131,6 +178,7 @@ def _check_live_tests(d: pd.Timestamp) -> None:
               f"Forward return: <b>{outcome['forward_return']:+.2%}</b>\n"
               f"Best point reached: {outcome['mfe']:+.2%}\n"
               f"Worst point reached: {outcome['mae']:+.2%}")
+        _check_consecutive_failures(trade["candidate"], d)
 
 
 # Only one replay proposal can ever be pending at a time (the replay

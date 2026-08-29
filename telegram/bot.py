@@ -422,7 +422,8 @@ def _dispatch_update(update: dict, client: Anthropic) -> None:
         if row is None:
             _send(f"No candidate named '{escape_html(candidate)}' found in the replay's current battery. Check /replay_summary for exact names.")
             return
-        _send(format_candidate_details(candidate, row, definition=_trigger_numeric_description(candidate)))
+        horizon = replay_state.load_horizons().get(candidate)
+        _send(format_candidate_details(candidate, row, definition=_trigger_numeric_description(candidate), horizon=horizon))
         return
 
     if text.lower() == "/replay_status":
@@ -444,6 +445,7 @@ def _dispatch_update(update: dict, client: Anthropic) -> None:
 
     if text.lower().startswith("/details"):
         from candidates.run_battery import run_all
+        from execution.live_test_state import load_horizons
         parts = text.split(maxsplit=1)
         if len(parts) < 2:
             _send("Usage: /details &lt;trigger_name&gt;  (e.g. /details c2_long -- see /summary for the exact names currently tracked)")
@@ -455,7 +457,8 @@ def _dispatch_update(update: dict, client: Anthropic) -> None:
         if row is None:
             _send(f"No candidate named '{escape_html(candidate)}' found in the current battery. Check /summary for exact names.")
             return
-        _send(format_candidate_details(candidate, row, definition=_trigger_numeric_description(candidate)))
+        horizon = load_horizons().get(candidate)
+        _send(format_candidate_details(candidate, row, definition=_trigger_numeric_description(candidate), horizon=horizon))
         return
 
     if text.lower() == "/summary":

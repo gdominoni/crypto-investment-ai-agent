@@ -245,6 +245,8 @@ You:     [taps "Test It"]
           Worst point reached: -1.80%
 ```
 
+**A VALIDATED candidate's own aggregate is, by design, resistant to a short losing streak — a separate, fast alert covers the gap that creates.** Measured directly: a well-established candidate can absorb 20-30 consecutive worst-case losses before its own significance test would ever flip status — correct behavior against noise, but too slow to flag a genuine regime change (a market-structure shift, a new rule, an arbitraged-away inefficiency) on its own. So immediately after any live test resolves, if a VALIDATED candidate's last 2+ resolved live tests came back negative in a row, it fires a purely informational alert — the last several occurrences with their return/MFE/MAE, never a status change — long before the aggregate statistics would ever say anything.
+
 ### 4.3 Natural-language conversation
 
 ```
@@ -291,6 +293,7 @@ You:     /details c1_long
           history, not a fixed absolute rate.
           Status: watch -- a real pattern signal, but fails a
           robustness check (direction: long)
+          Held for: 21d (empirically-derived, re-checked weekly)
 
           • Historical occurrences (N): 325
           • Statistical significance: significant (p=0.010), excess

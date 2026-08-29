@@ -37,6 +37,8 @@ from telegram.bot import _send, escape_html
 
 PLACEHOLDER_HORIZON_DAYS = 7  # neutral default (middle of HORIZONS_DAYS) -- see docs/case_study/methodology-decisions.md
 BACKDATE_LOOKBACK_DAYS = 14  # how far back a newly-discovered condition's own triggering occurrence may be backdated
+CONSECUTIVE_FAILURE_ALERT_THRESHOLD = 2  # see docs/case_study/methodology-decisions.md
+CONSECUTIVE_FAILURE_CONTEXT_WINDOW = 5
 
 
 def _normalize_coin(coin: str) -> str | None:
@@ -102,6 +104,53 @@ def _open_live_test(candidate: str, coin: str, direction: str, decision_date: pd
             "candidate": candidate, "entry_date": entry_date, "horizon": horizon}
 
 
+def _check_consecutive_failures(candidate: str) -> None:
+    """Fires immediately after a live test resolves, only for a
+    VALIDATED candidate (milestone_cleared -- see status_history.py),
+    only for those: a well-established candidate's own aggregate
+    significance test is, by design, resistant to a short losing streak
+    (verified directly: a strong candidate can absorb 20-30 consecutive
+    worst-case-magnitude failures before its p-value or MFE/MAE ratio
+    would ever move enough to flip status -- see
+    docs/case_study/methodology-decisions.md) -- which is exactly the
+    right behavior against ordinary noise, but means the aggregate alone
+    would be far too slow to surface a genuine regime change (a real
+    shift in market structure, a rule change, an arbitraged-away
+    inefficiency). This is a fast, purely informational early-warning a
+    human can act on long before the aggregate statistics ever would --
+    it never changes any candidate's status itself."""
+    if not sh.all_latest_statuses().get(candidate, {}).get("milestone_cleared"):
+        return
+    closed = sorted((t for t in state.load_trade_log() if t["candidate"] == candidate and t["status"] == "closed"),
+                     key=lambda t: t["close_date"])
+    streak = 0
+    for t in reversed(closed):
+        if t["forward_return"] >= 0:
+            break
+        streak += 1
+    if streak < CONSECUTIVE_FAILURE_ALERT_THRESHOLD:
+        return
+    window = closed[-max(streak, CONSECUTIVE_FAILURE_CONTEXT_WINDOW):]
+    mean_return = sum(t["forward_return"] for t in window) / len(window)
+    mean_mfe = sum(t["mfe"] for t in window) / len(window)
+    mean_mae = sum(t["mae"] for t in window) / len(window)
+    ratio = mean_mfe / mean_mae if mean_mae else float("nan")
+    lines = [
+        f"<b>Consecutive-failure alert -- {escape_html(candidate)}</b>\n",
+        f"The last <b>{streak}</b> live test(s) for this VALIDATED candidate resolved negative in a row.\n",
+        f"Last {len(window)} occurrence(s) for context:",
+    ]
+    for t in window:
+        lines.append(f"  {t['close_date']}  {escape_html(t['coin'])}  return={t['forward_return']:+.2%}  "
+                      f"MFE={t['mfe']:+.2%}  MAE={t['mae']:+.2%}")
+    lines.append(f"\nOver these {len(window)}: mean return={mean_return:+.2%}, MFE/MAE={ratio:.2f} (favorable if > 1.0)")
+    lines.append(f"\nInformational only -- this does not change {escape_html(candidate)}'s status. The full "
+                 f"aggregate statistics (see /details {escape_html(candidate)}) are far more resistant to a short "
+                 f"streak by design; this exists specifically to surface a genuine losing run long before the "
+                 f"aggregate ever would.")
+    _send("\n".join(lines))
+
+
 def _check_live_tests() -> None:
     """Resolves any open live test whose horizon has fully elapsed as of
     today -- same forward-return/MFE/MAE measure pattern_significance
@@ -128,6 +177,7 @@ def _check_live_tests() -> None:
               f"Forward return: <b>{outcome['forward_return']:+.2%}</b>\n"
               f"Best point reached: {outcome['mfe']:+.2%}\n"
               f"Worst point reached: {outcome['mae']:+.2%}")
+        _check_consecutive_failures(trade["candidate"])
 
 
 def _dynamic_trigger_hourly(spec: ConditionSpec, hourly: pd.DataFrame, daily: pd.DataFrame, funding) -> pd.Series:

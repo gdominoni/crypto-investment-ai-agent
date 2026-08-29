@@ -528,7 +528,8 @@ def explain_non_acceptance(row: dict, min_report_events: int = 50) -> str:
     return "did not clear the acceptance bar (see the current status above)"
 
 
-def format_candidate_details(candidate: str, row: dict, definition: str | None = None, min_report_events: int = 50) -> str:
+def format_candidate_details(candidate: str, row: dict, definition: str | None = None, horizon: int | None = None,
+                              min_report_events: int = 50) -> str:
     """Full numeric breakdown for one candidate, in bullet points --
     powers Telegram's `/details <name>`/`/replay_details <name>`.
     Deliberately the detail `_trigger_summary_line()`/`format_trigger_summary()`
@@ -536,16 +537,22 @@ def format_candidate_details(candidate: str, row: dict, definition: str | None =
     concentration" or "not statistically significant" in a proposal or
     summary line has no way to ask "how elevated, exactly?" without
     this. `definition` is the trigger's own numeric definition (e.g.
-    "funding z-score below -2.0"), passed in by the caller rather than
-    looked up here -- this module has no dependency on
-    candidates/definitions.py or the dynamic-condition registry, and
-    isn't the place to add one just for this."""
+    "funding z-score below -2.0"), and `horizon` is the empirically-
+    derived number of bars a new live test is currently held for -- both
+    passed in by the caller rather than looked up here: this module has
+    no dependency on candidates/definitions.py, the dynamic-condition
+    registry, or execution/live_test_state.py (production) /
+    replay/state.py (replay) -- either of which would break the
+    production/replay symmetry this module is shared by, and isn't the
+    place to add one just for this."""
     status = row.get("status", "unknown")
     lines = [f"<b>{_escape_html(candidate)}</b>"]
     if definition:
         lines.append(f"What triggers it: {_escape_html(definition)}")
     direction = row.get("direction")
     lines.append(f"Status: {_escape_html(STATUS_PLAIN.get(status, status))}" + (f"  (direction: {direction})" if direction else ""))
+    if horizon is not None:
+        lines.append(f"Held for: {horizon}d (empirically-derived -- the last walk-forward fold's best-performing horizon; re-checked every week, see the README's Phase 3)")
     lines.append("")
 
     n = row.get("n")
