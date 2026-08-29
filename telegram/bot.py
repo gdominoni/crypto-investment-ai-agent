@@ -62,24 +62,94 @@ def _log_sent_message(message_id: int) -> None:
     SENT_LOG_PATH.write_text(json.dumps(log))
 
 
+TELEGRAM_MAX_MESSAGE_LENGTH = 4096
+_SAFE_CHUNK_LENGTH = 3500  # real margin below Telegram's hard 4096 limit
+
+
+def _chunk_message(text: str, limit: int = _SAFE_CHUNK_LENGTH) -> list[str]:
+    """Splits `text` into Telegram-safe pieces -- a real, observed
+    failure this exists to prevent: `/replay_summary`'s own 'still under
+    test' message reached 6,880 characters once the dynamic registry
+    grew large enough (96 tracked candidates), Telegram's `sendMessage`
+    rejected it outright (over its real 4,096-char limit), and because
+    nothing checked `_send()`'s own return value at that call site, the
+    failure was completely silent -- the human just never received that
+    message, with no error anywhere. `format_trigger_summary()`'s own
+    docstring already reasoned about the SAME risk for one giant combined
+    message and split into two for exactly that reason -- this fixes the
+    case that one split alone didn't cover: either half growing past the
+    limit on its own as the registry keeps growing, which two fixed
+    messages can't protect against no matter how the split is drawn.
+    Prefers paragraph ("\\n\\n") boundaries, then line boundaries, so an
+    HTML tag opened on one line is never split across two Telegram
+    messages -- every multi-line tagged block in this project's own
+    messages (e.g. kpi_queries.py's `<pre>...</pre>` table) stays well
+    under the limit on its own. A single oversized line (no real
+    precedent yet, but not impossible -- e.g. a very large
+    'no historical occurrences yet' name list) falls back to a raw
+    character split as a last resort, since at that point there's no
+    safe boundary left to prefer."""
+    if len(text) <= limit:
+        return [text]
+    chunks: list[str] = []
+    current = ""
+    for paragraph in text.split("\n\n"):
+        candidate = f"{current}\n\n{paragraph}" if current else paragraph
+        if len(candidate) <= limit:
+            current = candidate
+            continue
+        if current:
+            chunks.append(current)
+            current = ""
+        if len(paragraph) <= limit:
+            current = paragraph
+            continue
+        for line in paragraph.split("\n"):
+            candidate = f"{current}\n{line}" if current else line
+            if len(candidate) <= limit:
+                current = candidate
+                continue
+            if current:
+                chunks.append(current)
+                current = ""
+            while len(line) > limit:
+                chunks.append(line[:limit])
+                line = line[limit:]
+            current = line
+    if current:
+        chunks.append(current)
+    return chunks
+
+
 def _send(text: str, reply_markup: dict | None = None, pin: bool = False) -> bool:
     """`pin=True` best-effort pins the message after sending (Telegram's
     own `pinChatMessage`, no special permission needed in a private 1:1
     chat like this bot's -- only in groups/channels would the bot need
     'can_pin_messages'). A pin failure never turns a successful send into
     a failed one -- it's a convenience on top, not part of what "sent"
-    means, so this function's return value still reflects only the send."""
+    means, so this function's return value still reflects only the send.
+    `text` longer than Telegram's real limit is split (`_chunk_message`)
+    and sent as several messages -- `reply_markup` (if any) attaches
+    only to the LAST chunk, so buttons appear once, where a human would
+    expect to act on them, not repeated on every piece. Returns True
+    only if every chunk sent successfully."""
     load_dotenv()
     token, chat_id = os.environ["TELEGRAM_BOT_TOKEN"], os.environ["TELEGRAM_CHAT_ID"]
     url = f"https://api.telegram.org/bot{token}/sendMessage"
-    payload = {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
-    if reply_markup is not None:
-        payload["reply_markup"] = reply_markup
-    resp = requests.post(url, json=payload, timeout=15)
-    if resp.ok:
+    chunks = _chunk_message(text)
+    all_ok = True
+    for i, chunk in enumerate(chunks):
+        payload = {"chat_id": chat_id, "text": chunk, "parse_mode": "HTML"}
+        if reply_markup is not None and i == len(chunks) - 1:
+            payload["reply_markup"] = reply_markup
+        resp = requests.post(url, json=payload, timeout=15)
+        if not resp.ok:
+            print(f"Send failed ({resp.status_code}): {resp.text[:300]}")
+            all_ok = False
+            continue
         message_id = resp.json()["result"]["message_id"]
         _log_sent_message(message_id)
-        if pin:
+        if pin and i == 0:
             try:
                 pin_resp = requests.post(
                     f"https://api.telegram.org/bot{token}/pinChatMessage",
@@ -89,7 +159,7 @@ def _send(text: str, reply_markup: dict | None = None, pin: bool = False) -> boo
                     print(f"Pin failed ({pin_resp.status_code}): {pin_resp.text[:300]} -- message itself was still sent.")
             except Exception as e:
                 print(f"Pin failed: {e} -- message itself was still sent.")
-    return resp.ok
+    return all_ok
 
 
 def delete_recent_messages() -> dict:
