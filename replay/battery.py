@@ -28,6 +28,18 @@ from replay import status_history as sh
 from replay.time_sandbox import daily_as_of, funding_as_of
 
 
+def _concentration_for(pattern: dict, oos: pd.DataFrame) -> tuple[dict, dict]:
+    """Mirrors candidates/run_battery.py::_concentration_for exactly --
+    duplicated rather than imported for the same reason this whole module
+    mirrors run_battery.py rather than importing it (that module is
+    hardwired to production's full-history loaders and output paths)."""
+    frame = pattern.get("oos_events") if pattern.get("status") == "ok" else None
+    if frame is not None and len(frame):
+        return (concentration_check(frame, "group", value_col="forward_return"),
+                concentration_check(frame, "period", value_col="forward_return"))
+    return concentration_check(oos, "group"), concentration_check(oos, "period")
+
+
 def run_replay_battery(as_of: pd.Timestamp) -> dict:
     as_of_str = str(as_of.date())
     cfg = MethodologyConfig(horizons=HORIZONS_DAYS)
@@ -57,11 +69,12 @@ def run_replay_battery(as_of: pd.Timestamp) -> dict:
             events = pd.concat(all_events, ignore_index=True)
             oos, params_log = walk_forward(events, ohlc_by_coin, direction, cfg)
             rep = report(oos)
-            coin_conc = concentration_check(oos, "group")
-            year_conc = concentration_check(oos, "period")
             # pattern_significance is the actual acceptance gate now --
             # see classify_status's own docstring.
             pattern = pattern_significance(events, ohlc_by_coin, direction, cfg)
+            # Concentration measured on the same forward returns the gate reads,
+            # mirroring candidates/run_battery.py exactly.
+            coin_conc, year_conc = _concentration_for(pattern, oos)
             status = classify_status(rep, coin_conc, year_conc, pattern, cfg)
             status_summary[variant] = {"status": status, "n": rep["n"], "win_rate": rep["win_rate"],
                                         "strict_win_rate": rep["strict_win_rate"], "sortino": rep["sortino"],

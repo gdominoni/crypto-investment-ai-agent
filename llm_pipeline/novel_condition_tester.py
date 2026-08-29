@@ -204,12 +204,21 @@ def format_pattern_significance(pattern: dict) -> str:
     if pattern.get("status") != "ok":
         return "Pattern signal: not enough data to test independently of the TP/SL structure."
     verdict = "significant" if pattern["significant"] else "not significant"
+    ratio = pattern.get("mfe_mae_ratio")
+    if ratio is None or ratio != ratio:  # NaN -- no fold had a usable excursion pair
+        risk = "Risk profile: MFE/MAE ratio couldn't be computed for this condition."
+    else:
+        risk = (f"Risk profile: Sortino={pattern['sortino']:.2f} on the raw path (no fee, no TP/SL), "
+                f"MFE/MAE ratio={ratio:.2f} (favorable vs. adverse excursion during the hold -- "
+                f"{'reward tends to exceed the risk taken to get there' if ratio > 1 else 'the path risk exceeds the eventual reward, even if the ending return looks fine'}).")
+    # The test is one-sided in the direction this candidate actually trades, so a
+    # NEGATIVE excess return means the effect runs the wrong way -- never dressed
+    # up as a near-miss on significance (see pattern_significance's own docstring).
+    direction_note = ("" if pattern["excess_return"] > 0 else
+                      "\nNote: this effect runs OPPOSITE to the direction this condition trades.")
     return (f"Pattern signal (independent of TP/SL): excess return {pattern['excess_return']:+.2%} vs. this "
             f"coin's own baseline over the same period, p={pattern['p_value']:.3f} ({verdict} at the 5% level, "
-            f"N={pattern['n']}).\n"
-            f"Risk profile: Sortino={pattern['sortino']:.2f} on the raw path (no fee, no TP/SL), "
-            f"MFE/MAE ratio={pattern['mfe_mae_ratio']:.2f} (favorable vs. adverse excursion during the hold -- "
-            f"{'reward tends to exceed the risk taken to get there' if pattern['mfe_mae_ratio'] > 1 else 'the path risk exceeds the eventual reward, even if the ending return looks fine'}).")
+            f"one-sided in the traded direction, N={pattern['n']}).{direction_note}\n{risk}")
 
 
 def condition_desc(spec: ConditionSpec) -> str:
@@ -278,13 +287,21 @@ def test_novel_condition(spec: ConditionSpec, coins: list[str], as_of: pd.Timest
     events = pd.concat(all_events, ignore_index=True)
     oos, params_log = walk_forward(events, ohlc_by_coin, spec.direction, cfg)
     rep = report(oos)
-    coin_conc = concentration_check(oos, "group")
-    year_conc = concentration_check(oos, "period")
     # pattern_significance is now the actual acceptance gate -- see
     # classify_status's own docstring. `rep` (Sortino/win_rate, from the
     # TP/SL-conditioned backtest) is still computed and still reported,
     # but no longer decides accepted/watch/rejected.
     pattern = pattern_significance(events, ohlc_by_coin, spec.direction, cfg)
+    # Concentration on the same forward returns the gate reads -- mirrors
+    # candidates/run_battery.py::_concentration_for (see concentration_check's
+    # own `value_col` note for why the TP/SL basis genuinely disagrees).
+    _pat_frame = pattern.get("oos_events") if pattern.get("status") == "ok" else None
+    if _pat_frame is not None and len(_pat_frame):
+        coin_conc = concentration_check(_pat_frame, "group", value_col="forward_return")
+        year_conc = concentration_check(_pat_frame, "period", value_col="forward_return")
+    else:
+        coin_conc = concentration_check(oos, "group")
+        year_conc = concentration_check(oos, "period")
     status = classify_status(rep, coin_conc, year_conc, pattern, cfg)
 
     # Full-data anchors + the most recent fold's multipliers -- what a

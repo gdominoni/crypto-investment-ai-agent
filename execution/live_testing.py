@@ -166,6 +166,12 @@ def _check_live_tests() -> None:
         if today not in ohlc.index:
             continue
         outcome = path_outcome(trade["entry_price"], trade["entry_loc"], ohlc, trade["direction"], trade["horizon"])
+        if outcome["forward_return"] != outcome["forward_return"]:
+            # NaN: the full horizon hasn't actually elapsed in the data yet
+            # (path_outcome no longer silently clamps to the last bar -- see its
+            # docstring). Leave the test OPEN and retry on the next run rather
+            # than recording a partial hold as a resolved, full-horizon result.
+            continue
         state.update_trade(trade["id"], {
             "status": "closed", "close_date": str(today.date()),
             "forward_return": outcome["forward_return"], "mfe": outcome["mfe"], "mae": outcome["mae"],

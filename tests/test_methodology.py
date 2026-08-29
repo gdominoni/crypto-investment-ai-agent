@@ -12,7 +12,8 @@ import pytest
 
 from candidates.methodology import (
     MethodologyConfig, barrier_prices, bucket_for_elapsed, build_events, classify_regime,
-    classify_status, compute_anchors, concentration_check, report, shock_zscore_series, sortino_ratio,
+    classify_status, compute_anchors, concentration_check, path_outcome, report,
+    shock_zscore_series, sortino_ratio,
 )
 
 
@@ -90,8 +91,19 @@ class TestBucketForElapsed:
 
 
 class TestSortinoRatio:
-    def test_all_positive_returns_has_no_downside_deviation_to_divide_by(self):
-        assert np.isnan(sortino_ratio(np.array([0.01, 0.02, 0.03])))
+    def test_a_candidate_that_never_loses_scores_infinite_not_nan(self):
+        """`downside_dev == 0` has two genuinely different causes that must
+        not return the same thing: an empty sample (nothing to say -> nan)
+        versus a sample with no losing trade at all (unboundedly good ->
+        +inf). Collapsing both into nan made classify_status REJECT a
+        flawless candidate, since it treats a nan Sortino as unusable."""
+        assert sortino_ratio(np.array([0.01, 0.02, 0.03])) == float("inf")
+
+    def test_an_empty_sample_is_nan_not_infinite(self):
+        assert np.isnan(sortino_ratio(np.array([])))
+
+    def test_no_downside_and_no_upside_is_nan(self):
+        assert np.isnan(sortino_ratio(np.array([0.0, 0.0])))
 
     def test_penalizes_a_downside_outlier_more_than_an_equal_upside_one(self):
         upside_outlier = np.array([0.01, -0.01, 0.01, 0.50])
@@ -111,6 +123,26 @@ class TestConcentrationCheck:
         result = concentration_check(oos, "group")
         assert result["concentrated"] is False
 
+    def test_no_positive_return_anywhere_is_unassessable_not_a_pass(self):
+        """A candidate losing money on every single group has nothing for
+        one group to concentrate -- that is "cannot assess", not "passed".
+        Returning False here let an all-negative candidate clear both
+        concentration checks."""
+        oos = pd.DataFrame({"group": ["A", "B", "C"], "net_return": [-0.1, -0.5, -0.5]})
+        assert concentration_check(oos, "group")["concentrated"] is None
+
+    def test_measures_whichever_return_column_the_caller_names(self):
+        """Acceptance is decided on pattern_significance's forward returns,
+        so concentration must be measurable on the same quantity -- the two
+        bases genuinely disagree on identical events."""
+        events = pd.DataFrame({
+            "group": ["A"] * 3 + ["B"] * 3,
+            "net_return": [0.30, 0.30, 0.30, 0.01, 0.01, 0.01],   # TP/SL view: A dominates
+            "forward_return": [0.05] * 6,                          # forward view: even
+        })
+        assert concentration_check(events, "group")["concentrated"] is True
+        assert concentration_check(events, "group", value_col="forward_return")["concentrated"] is False
+
 
 class TestClassifyStatus:
     """classify_status's acceptance gate is pattern_significance now, not
@@ -121,7 +153,9 @@ class TestClassifyStatus:
     ran fine", since its own P&L numbers no longer decide the verdict."""
     cfg = MethodologyConfig(horizons=(1, 3, 7))
     ok_rep = {"n": 150, "sortino": 5.0, "strict_win_rate": 0.9, "win_rate": 0.9}
-    sig_pattern = {"status": "ok", "significant": True, "mfe_mae_ratio": 2.0}
+    # `excess_return` is part of the contract now, not decoration: the effect
+    # must point the SAME way as the direction the candidate trades.
+    sig_pattern = {"status": "ok", "significant": True, "mfe_mae_ratio": 2.0, "excess_return": 0.03}
 
     def test_between_10_and_min_report_events_is_rejected_not_insufficient(self):
         rep = {**self.ok_rep, "n": 15}
@@ -147,15 +181,59 @@ class TestClassifyStatus:
         assert classify_status(self.ok_rep, {"concentrated": True}, {"concentrated": False}, self.sig_pattern, self.cfg) == "watch"
 
     def test_not_significant_pattern_is_rejected(self):
-        pattern = {"status": "ok", "significant": False, "mfe_mae_ratio": 2.0}
+        pattern = {**self.sig_pattern, "significant": False}
         assert classify_status(self.ok_rep, {"concentrated": False}, {"concentrated": False}, pattern, self.cfg) == "rejected"
 
     def test_unfavorable_mfe_mae_ratio_is_watch_even_when_significant(self):
-        pattern = {"status": "ok", "significant": True, "mfe_mae_ratio": 0.8}
+        pattern = {**self.sig_pattern, "mfe_mae_ratio": 0.8}
         assert classify_status(self.ok_rep, {"concentrated": False}, {"concentrated": False}, pattern, self.cfg) == "watch"
 
     def test_significant_and_favorable_risk_and_not_concentrated_is_accepted(self):
         assert classify_status(self.ok_rep, {"concentrated": False}, {"concentrated": False}, self.sig_pattern, self.cfg) == "accepted"
+
+    def test_a_pattern_running_opposite_to_its_own_direction_is_never_accepted(self):
+        """The headline audit finding. `_forward_return` signs its output by
+        direction, so a NEGATIVE excess return means the effect runs the wrong
+        way for what this candidate trades. Before the fix, `excess_return` was
+        computed, shown to humans, and never read by the gate -- a pattern with
+        p=0.001, a favorable risk path and a -5% excess return was `accepted`.
+        Four of six real static candidates were 'significant' this way."""
+        wrong_way = {**self.sig_pattern, "p_value": 0.001, "excess_return": -0.05}
+        assert classify_status(self.ok_rep, {"concentrated": False}, {"concentrated": False}, wrong_way, self.cfg) == "rejected"
+
+    def test_a_missing_excess_return_is_rejected_not_silently_accepted(self):
+        no_excess = {k: v for k, v in self.sig_pattern.items() if k != "excess_return"}
+        assert classify_status(self.ok_rep, {"concentrated": False}, {"concentrated": False}, no_excess, self.cfg) == "rejected"
+
+    def test_unassessable_concentration_holds_at_watch_rather_than_passing(self):
+        """`concentrated=None` means "cannot assess" (no positive return
+        anywhere for a single group to concentrate), NOT "passed" -- an
+        all-negative candidate used to sail through both concentration
+        checks because they returned False."""
+        assert classify_status(self.ok_rep, {"concentrated": None}, {"concentrated": False}, self.sig_pattern, self.cfg) == "watch"
+
+    def test_an_infinite_sortino_is_not_treated_as_unusable(self):
+        """A candidate with no losing trade at all now scores +inf rather
+        than nan, and must not be rejected by the nan-Sortino early exit."""
+        rep = {**self.ok_rep, "sortino": float("inf")}
+        assert classify_status(rep, {"concentrated": False}, {"concentrated": False}, self.sig_pattern, self.cfg) == "accepted"
+
+
+class TestPathOutcome:
+    def test_an_incomplete_horizon_is_nan_not_a_silently_clamped_short_hold(self):
+        """path_outcome used to clamp exit_loc to the last available bar, so
+        a live test resolved at the very edge of the data returned a partial
+        hold dressed up as a full-horizon result -- with a real-looking
+        forward_return. A caller must be able to tell "not ready yet" from
+        "resolved", so it can leave the test open instead of recording it."""
+        ohlc = _flat_ohlc(10)
+        out = path_outcome(100.0, 8, ohlc, "long", 21)
+        assert np.isnan(out["forward_return"])
+
+    def test_a_complete_horizon_still_resolves_normally(self):
+        ohlc = _flat_ohlc(30)
+        out = path_outcome(100.0, 2, ohlc, "long", 7)
+        assert not np.isnan(out["forward_return"])
 
 
 class TestShockRegime:

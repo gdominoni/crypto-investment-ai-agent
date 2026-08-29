@@ -47,6 +47,20 @@ ASSETS_DIR = Path(__file__).resolve().parent.parent / "docs" / "case_study" / "a
 SIGNAL_STORE_PATH = Path(__file__).resolve().parent.parent / "execution" / "live_battery_state.json"
 
 
+def _concentration_for(pattern: dict, oos: pd.DataFrame) -> tuple[dict, dict]:
+    """Coin/year concentration measured on `pattern_significance`'s own
+    per-event OOS forward returns -- the exact quantity the acceptance
+    gate reads -- rather than on `walk_forward`'s TP/SL-conditioned
+    `net_return`. Shared by the static and dynamic loops below, and
+    mirrored in `replay/battery.py`. See concentration_check's docstring
+    for why the two bases genuinely disagree."""
+    frame = pattern.get("oos_events") if pattern.get("status") == "ok" else None
+    if frame is not None and len(frame):
+        return (concentration_check(frame, "group", value_col="forward_return"),
+                concentration_check(frame, "period", value_col="forward_return"))
+    return concentration_check(oos, "group"), concentration_check(oos, "period")
+
+
 def run_all() -> tuple[pd.DataFrame, dict, dict]:
     """Returns (status_table, live_state, meta). `live_state` is what the
     execution engine actually reads at trade time -- per (candidate,
@@ -100,13 +114,18 @@ def run_all() -> tuple[pd.DataFrame, dict, dict]:
 
             oos, params_log = walk_forward(events, ohlc_by_coin, direction, cfg)
             rep = report(oos)
-            coin_conc = concentration_check(oos, "group")
-            year_conc = concentration_check(oos, "period")
             # pattern_significance is now the actual acceptance gate --
             # see classify_status's own docstring. `rep` (Sortino/win_rate)
             # is still computed and still reported below, but no longer
             # decides accepted/watch/rejected.
             pattern = pattern_significance(events, ohlc_by_coin, direction, cfg)
+            # Concentration is measured on the SAME forward returns the
+            # acceptance gate is decided on, not on walk_forward's
+            # TP/SL-conditioned net_return -- the two genuinely disagree
+            # (see concentration_check's own `value_col` note). Falls back to
+            # the TP/SL basis only when the pattern test couldn't run at all,
+            # where classify_status returns 'watch' regardless.
+            coin_conc, year_conc = _concentration_for(pattern, oos)
             status = classify_status(rep, coin_conc, year_conc, pattern, cfg)
             record_status(variant, status)
 

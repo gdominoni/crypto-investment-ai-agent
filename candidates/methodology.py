@@ -6,10 +6,20 @@ candidate's own discipline:
 1. Entry is always the bar AFTER the one a trigger condition examines.
    A trigger that reads a bar's own close cannot fire an entry at that
    bar's close -- there is no code path in this module that allows it.
-2. Exit barriers are duration-bucketed anchors (mean MFE / mean |MAE| per
-   horizon, fit from a train set only) -- there is no flat-percentage
-   barrier option.
-3. `report()` always returns win_rate, strict_win_rate, sortino, and
+2. `pattern_significance()` is the acceptance gate, and its test is
+   DIRECTIONAL: the horizon is selected by signed (not absolute) mean
+   forward return, and the p-value is a pre-specified upper tail in the
+   direction the candidate actually trades. A pattern running opposite
+   to its own direction can never be `significant`, and `classify_status`
+   independently re-checks the sign of `excess_return`.
+3. The TP/SL barrier machinery below (`barrier_prices`, `simulate_trade`,
+   `bucket_for_elapsed`, the tp/sl grids) does NOT gate anything and is
+   not how a live test opens or resolves -- a live test holds for a fixed
+   horizon with no barrier at all. It survives solely to produce the
+   informational "if this were traded with a barrier structure" reference
+   line, and to be reused by the local-only Freqtrade hyperopt cross-check
+   (`execution/hyperopt_runner.py`). Do not read it as the exit model.
+4. `report()` always returns win_rate, strict_win_rate, sortino, and
    timeout_fraction together. Nothing in this module returns a win rate
    on its own.
 
@@ -23,6 +33,34 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
+
+
+# The single source of truth for the concentration rule. Previously the
+# number lived in three places (concentration_check's own default, plus a
+# hardcoded 0.6 AND a hardcoded "60%" string in explain_non_acceptance) --
+# exactly the duplicated-threshold drift hazard already documented for
+# TRIGGER_NUMERIC_DEFINITIONS. Every reader and every gate now reads this.
+MAX_GROUP_SHARE = 0.6
+
+# Block length for the baseline bootstrap, as a multiple of the holding
+# horizon. NOT a guess -- calibrated by measuring the false-positive rate
+# under a TRUE null (observed sample drawn from the same process as the
+# baseline, so there is no effect to find) on overlapping forward-return
+# windows, target 5%:
+#
+#   i.i.d. resampling (what this module shipped)  -> 43.3%  <- 9x over-rejecting
+#   block_len = 1x horizon                        -> 15.3%
+#   block_len = 3x horizon                        ->  8.7%   <- chosen
+#   block_len = 4x horizon                        ->  7.7%   (power 23.5%)
+#
+# Power against a real +4% effect falls from 39% (1x) to 25% (3x) to 23.5%
+# (4x), so 3x is where calibration stops improving materially but power is
+# still being paid for. The residual ~8.7% is stated honestly rather than
+# rounded to "5%": the calibration harness draws the observed sample as a
+# fully CONTIGUOUS slice (maximum serial dependence), while real trigger
+# events are clustered but scattered, so the real-world rate sits below
+# this figure -- it is an upper bound, not the expected value.
+BASELINE_BLOCK_HORIZON_MULTIPLE = 3
 
 
 @dataclass(frozen=True)
@@ -179,10 +217,21 @@ def sortino_ratio(returns: np.ndarray, periods_per_year: float = 252.0) -> float
     """Semi-deviation over the full sample (not just the losing subset) --
     a sample std of just the negative returns can collapse toward zero
     when many losses land on an identical barrier value, blowing the
-    ratio up to nonsense."""
+    ratio up to nonsense.
+
+    `downside_dev == 0` has TWO genuinely different causes that must not
+    return the same thing (a real bug, caught by audit): an empty sample
+    (nothing to say -> nan) versus a sample with no losing trade at all
+    (a flawless candidate -> +inf, an unboundedly good Sortino). The old
+    unconditional `nan` meant `classify_status`'s `np.isnan(sortino)`
+    branch REJECTED a candidate precisely because it never lost."""
     returns = np.asarray(returns, dtype=float)
+    if returns.size == 0:
+        return float("nan")
     downside_dev = np.sqrt(np.mean(np.minimum(returns, 0.0) ** 2))
-    return float(returns.mean() / downside_dev * np.sqrt(periods_per_year)) if downside_dev > 0 else float("nan")
+    if downside_dev > 0:
+        return float(returns.mean() / downside_dev * np.sqrt(periods_per_year))
+    return float("inf") if returns.mean() > 0 else float("nan")
 
 
 def walk_forward(events: pd.DataFrame, ohlc_by_group: dict[str, pd.DataFrame], direction: str,
@@ -221,8 +270,19 @@ def walk_forward(events: pd.DataFrame, ohlc_by_group: dict[str, pd.DataFrame], d
 
 
 def _forward_return(entry_loc: int, ohlc: pd.DataFrame, direction: str, horizon: int) -> float:
+    """NaN (not a silently-clamped short hold) when the full horizon
+    isn't available yet -- a real audit finding: this used to clamp
+    `exit_loc` to the last bar, so an event at the very end of the
+    series returned a 0-bar hold dressed up as a full-horizon result and
+    was pooled into the significance test as if it were one.
+    `build_events`'s own `entry_loc + max_h >= len(idx)` filter means
+    this is unreachable from the battery (verified), but it IS reachable
+    from live resolution, which is exactly where a wrong number would be
+    recorded as real evidence."""
     idx = ohlc.index
-    exit_loc = min(entry_loc + horizon, len(idx) - 1)
+    exit_loc = entry_loc + horizon
+    if exit_loc > len(idx) - 1:
+        return float("nan")
     entry_price, exit_price = ohlc["close"].iloc[entry_loc], ohlc["close"].iloc[exit_loc]
     return (exit_price / entry_price - 1) if direction == "long" else (1 - exit_price / entry_price)
 
@@ -238,9 +298,17 @@ def path_outcome(entry_price: float, entry_loc: int, ohlc: pd.DataFrame, directi
     what actually gets recorded when a live test resolves (see
     replay/engine.py's _check_live_tests). `entry_loc`/`entry_price`
     should be exactly what was recorded when the live test was opened,
-    not re-derived here."""
+    not re-derived here.
+
+    Returns all-NaN when the full horizon hasn't elapsed in the data
+    yet, rather than clamping to the last available bar -- see
+    `_forward_return`'s own note. A caller that gets NaN back should
+    leave the live test OPEN and retry once the bar exists, never record
+    the partial hold as a resolved result."""
     idx = ohlc.index
-    exit_loc = min(entry_loc + horizon, len(idx) - 1)
+    exit_loc = entry_loc + horizon
+    if exit_loc > len(idx) - 1:
+        return {"forward_return": float("nan"), "mfe": float("nan"), "mae": float("nan")}
     seg_hi = ohlc["high"].iloc[entry_loc + 1: entry_loc + 1 + horizon]
     seg_lo = ohlc["low"].iloc[entry_loc + 1: entry_loc + 1 + horizon]
     exit_price = float(ohlc["close"].iloc[exit_loc])
@@ -274,6 +342,40 @@ def _baseline_forward_returns(ohlc: pd.DataFrame, direction: str, horizon: int, 
     return (exit_ / entry - 1) if direction == "long" else (1 - exit_ / entry)
 
 
+def _block_bootstrap_means(chunks: list[np.ndarray], n: int, n_bootstrap: int, block_len: int,
+                            rng: np.random.Generator) -> np.ndarray:
+    """Moving-block bootstrap over the baseline chunks, replacing an
+    i.i.d. `rng.choice` draw. Overlapping h-day forward-return windows
+    are strongly serially dependent (day 2's 7-day window shares 6 days
+    with day 1's), so resampling them independently understates the
+    null distribution's own variance and therefore biases every p-value
+    DOWNWARD -- the module previously acknowledged this in a docstring
+    but did nothing about it, while simultaneously running a test whose
+    threshold (p<0.05) is exactly where that bias does damage.
+
+    Sampling contiguous blocks of length ~= the holding horizon keeps
+    that dependence inside the resample. Blocks are drawn within a
+    single chunk, never across a boundary, since chunks are separate
+    (fold, coin) stretches with no real continuity between them."""
+    usable = [c for c in chunks if len(c) > 0]
+    if not usable:
+        return np.array([])
+    lengths = np.array([len(c) for c in usable], dtype=float)
+    weights = lengths / lengths.sum()
+    means = np.empty(n_bootstrap, dtype=float)
+    for b in range(n_bootstrap):
+        drawn, total = [], 0
+        while total < n:
+            c = usable[rng.choice(len(usable), p=weights)]
+            L = min(block_len, len(c))
+            start = int(rng.integers(0, len(c) - L + 1))
+            piece = c[start:start + L]
+            drawn.append(piece)
+            total += len(piece)
+        means[b] = np.concatenate(drawn)[:n].mean()
+    return means
+
+
 def pattern_significance(events: pd.DataFrame, ohlc_by_group: dict[str, pd.DataFrame], direction: str,
                           cfg: MethodologyConfig, min_train_periods: int = 3, n_bootstrap: int = 2000,
                           seed: int = 0) -> dict:
@@ -290,18 +392,43 @@ def pattern_significance(events: pd.DataFrame, ohlc_by_group: dict[str, pd.DataF
     barrier structure fit to the same noise. The two are meant to be
     read together, not as a single verdict.
 
-    The horizon is chosen empirically per fold, ON THE TRAIN SET ONLY
-    (whichever horizon shows the strongest |mean forward return| there),
+    The horizon is chosen empirically per fold, ON THE TRAIN SET ONLY,
     then evaluated out-of-sample on the held-out test fold -- the same
     walk-forward discipline already used for tp_mult/sl_mult, extended
     to horizon selection, specifically to avoid picking-and-testing on
     the same data (the exact trap an earlier version of this project's
-    own methodology fell into)."""
+    own methodology fell into).
+
+    THE TEST IS DIRECTIONAL, in the direction this candidate actually
+    trades. Both halves of that used to be broken (found by audit,
+    confirmed against the real battery -- see
+    docs/case_study/methodology-decisions.md):
+
+      * the horizon was selected by the strongest |mean| forward return,
+        so a `long` candidate could have its horizon chosen precisely
+        BECAUSE the effect was strongly negative there;
+      * the p-value's tail was picked after seeing which way the effect
+        went (`>= observed` if above baseline else `<= observed`), which
+        is a two-sided procedure priced as one-sided.
+
+    Together those let a pattern that runs OPPOSITE to its own traded
+    direction be labelled `significant`, and `classify_status` never
+    read `excess_return` to notice. Four of six static candidates were
+    "significant" with a negative excess return. `_forward_return` already
+    signs its output by direction, so a positive excess always means
+    "works in the direction actually traded" -- selecting the horizon by
+    signed mean and testing a pre-specified upper tail fixes both, and
+    needs no doubling because the side is now fixed in advance rather
+    than read off the data.
+
+    `p_value_two_sided` is still reported alongside, as the honest answer
+    to the different question "does the market behave differently after
+    this condition AT ALL, either way" -- a diagnostic, never the gate."""
     periods = sorted(events["period"].unique())
     if len(periods) <= min_train_periods:
         return {"status": "insufficient_data"}
     rng = np.random.default_rng(seed)
-    oos_returns, oos_mfe, oos_mae, baseline_chunks = [], [], [], []
+    oos_rows, baseline_chunks, fold_ratios, horizons_used = [], [], [], []
     chosen_horizon = None
     for test_period in periods[min_train_periods:]:
         train = events[events["period"] < test_period]
@@ -311,23 +438,39 @@ def pattern_significance(events: pd.DataFrame, ohlc_by_group: dict[str, pd.DataF
         best_h, best_score = cfg.horizons[0], -np.inf
         for h in cfg.horizons:
             rets = [_forward_return(r.entry_loc, ohlc_by_group[r.group], direction, h) for r in train.itertuples()]
-            score = abs(float(np.mean(rets))) if rets else -np.inf
+            rets = [x for x in rets if x == x]  # drop NaN (horizon not fully available)
+            score = float(np.mean(rets)) if rets else -np.inf  # SIGNED, not abs() -- see docstring
             if score > best_score:
                 best_h, best_score = h, score
         chosen_horizon = best_h  # persists as the LAST fold's choice -- what a live occurrence discovered now should be held for
+        horizons_used.append(int(best_h))
+        fold_mfe, fold_mae = [], []
         for r in test.itertuples():
-            oos_returns.append(_forward_return(r.entry_loc, ohlc_by_group[r.group], direction, best_h))
-            oos_mfe.append(getattr(r, f"mfe_{best_h}"))
-            oos_mae.append(abs(getattr(r, f"mae_{best_h}")))
+            fr = _forward_return(r.entry_loc, ohlc_by_group[r.group], direction, best_h)
+            if fr != fr:
+                continue
+            oos_rows.append({"group": r.group, "period": test_period, "forward_return": fr})
+            mfe, mae = getattr(r, f"mfe_{best_h}"), abs(getattr(r, f"mae_{best_h}"))
+            if mfe == mfe and mae == mae:
+                fold_mfe.append(mfe)
+                fold_mae.append(mae)
+        # MFE/MAE is aggregated PER FOLD, at that fold's own horizon, then
+        # averaged across folds -- never pooled raw across folds. Excursions
+        # scale with sqrt(horizon), so pooling a 1-day MFE with a 21-day one
+        # (a real case: c1_long's folds chose 21, 14, 1, 21, 21) produced a
+        # single "risk path" number blending incomparable magnitudes.
+        if fold_mfe and float(np.mean(fold_mae)) > 0:
+            fold_ratios.append(float(np.mean(fold_mfe)) / float(np.mean(fold_mae)))
         for group in test["group"].unique():
             locs = test.loc[test["group"] == group, "entry_loc"]
             chunk = _baseline_forward_returns(ohlc_by_group[group], direction, best_h, int(locs.min()), int(locs.max()) + 1)
             if len(chunk):
                 baseline_chunks.append(chunk)
 
-    if not oos_returns or not baseline_chunks:
+    if not oos_rows or not baseline_chunks:
         return {"status": "insufficient_data"}
-    oos_returns = np.array(oos_returns)
+    oos_frame = pd.DataFrame(oos_rows)
+    oos_returns = oos_frame["forward_return"].to_numpy()
     baseline_pool = np.concatenate(baseline_chunks)
     if len(baseline_pool) < 20:
         return {"status": "insufficient_data"}
@@ -335,12 +478,21 @@ def pattern_significance(events: pd.DataFrame, ohlc_by_group: dict[str, pd.DataF
     observed_mean = float(oos_returns.mean())
     baseline_mean = float(baseline_pool.mean())
     n = len(oos_returns)
-    boot_means = rng.choice(baseline_pool, size=(n_bootstrap, n), replace=True).mean(axis=1)
-    p_value = float(np.mean(boot_means >= observed_mean) if observed_mean >= baseline_mean else np.mean(boot_means <= observed_mean))
-    mean_mfe, mean_mae = float(np.mean(oos_mfe)), float(np.mean(oos_mae))
+    boot_means = _block_bootstrap_means(
+        baseline_chunks, n, n_bootstrap,
+        block_len=max(int(chosen_horizon) * BASELINE_BLOCK_HORIZON_MULTIPLE, 1), rng=rng)
+    if boot_means.size == 0:
+        return {"status": "insufficient_data"}
+    # Pre-specified upper tail in the traded direction -- NOT a tail chosen
+    # from the data. A negative excess return now correctly yields a large p.
+    p_value = float(np.mean(boot_means >= observed_mean))
+    p_two_sided = float(np.mean(np.abs(boot_means - baseline_mean) >= abs(observed_mean - baseline_mean)))
+    mfe_mae_ratio = float(np.mean(fold_ratios)) if fold_ratios else float("nan")
     return {
         "status": "ok", "n": n, "mean_return": observed_mean, "baseline_mean_return": baseline_mean,
-        "excess_return": observed_mean - baseline_mean, "p_value": p_value, "significant": bool(p_value < 0.05),
+        "excess_return": observed_mean - baseline_mean, "p_value": p_value,
+        "significant": bool(p_value < 0.05 and observed_mean > baseline_mean),
+        "p_value_two_sided": p_two_sided,
         # Risk dimension, deliberately separate from the directional significance test above:
         # `sortino` here is computed on the RAW forward returns (no fee -- these were never
         # executed trades, no TP/SL/win/loss classification needed, unlike report()'s Sortino which
@@ -348,8 +500,15 @@ def pattern_significance(events: pd.DataFrame, ohlc_by_group: dict[str, pd.DataF
         # excursion during the hold exceeds the typical adverse one -- a good path-risk sign
         # independent of what the ending return at horizon H happens to be; < 1 is a red flag on
         # the path even when the ending return looks fine.
-        "sortino": sortino_ratio(oos_returns), "mean_mfe": mean_mfe, "mean_mae": mean_mae,
-        "mfe_mae_ratio": float(mean_mfe / mean_mae) if mean_mae > 0 else float("nan"),
+        "sortino": sortino_ratio(oos_returns), "mfe_mae_ratio": mfe_mae_ratio,
+        # Per-event OOS forward returns, so the concentration check can run on the
+        # SAME quantity the acceptance gate is decided on (see concentration_check's
+        # own `value_col` note) rather than on walk_forward's TP/SL-conditioned returns.
+        "oos_events": oos_frame,
+        # Which horizons the folds actually chose. More than one distinct value means
+        # the "risk path" number above is an average across differently-scaled folds --
+        # worth seeing rather than hiding behind a single figure.
+        "horizons_used": horizons_used,
         # The horizon a live occurrence of this pattern should be held for --
         # the same one this test was actually evaluated at (the last fold's
         # choice), so live testing measures the identical concept.
@@ -382,20 +541,38 @@ def report(oos: pd.DataFrame) -> dict:
     }
 
 
-def concentration_check(oos: pd.DataFrame, group_col: str, max_share: float = 0.6) -> dict:
+def concentration_check(oos: pd.DataFrame, group_col: str, max_share: float = MAX_GROUP_SHARE,
+                         value_col: str = "net_return") -> dict:
     """Flags whether one group (a coin, a year) is carrying more than
-    `max_share` of total net return -- the failure mode that invalidated
-    several nominally-positive candidates in the prior research (one coin
-    or one year dressed up as a general result). Uses summed, not
-    compounded, per-group return -- see `report()`'s `total_expectancy`
-    for why."""
-    if len(oos) == 0 or group_col not in oos.columns:
+    `max_share` of total positive return -- the failure mode that
+    invalidated several nominally-positive candidates in the prior
+    research (one coin or one year dressed up as a general result). Uses
+    summed, not compounded, per-group return -- see `report()`'s
+    `total_expectancy` for why.
+
+    `value_col`: WHICH return to measure concentration on. This matters
+    and was a real audit finding: acceptance is decided by
+    `pattern_significance`'s raw forward returns, but this check used to
+    only ever run on `walk_forward`'s TP/SL-conditioned `net_return` --
+    two different quantities that genuinely disagree (measured on real
+    events: 96.8% concentration on the TP/SL basis vs. 50.0% on the
+    forward-return basis for the identical sample). The acceptance gate
+    and its robustness check now read the SAME numbers; the TP/SL basis
+    is still computed and reported, but purely as a diagnostic.
+
+    `concentrated=None` means "cannot assess", NOT "passed": with no
+    positive return anywhere there is nothing for a single group to
+    concentrate. The old code returned `False` here, so a candidate
+    losing money on every single coin sailed through both concentration
+    checks -- harmless while significance was a real gate, not harmless
+    once combined with a significance test that ignored direction."""
+    if len(oos) == 0 or group_col not in oos.columns or value_col not in oos.columns:
         return {"concentrated": None, "max_group_share": np.nan, "dominant_group": None}
-    per_group_return = oos.groupby(group_col)["net_return"].sum()
+    per_group_return = oos.groupby(group_col)[value_col].sum()
     positive = per_group_return[per_group_return > 0]
     total_positive = positive.sum()
     if total_positive <= 0:
-        return {"concentrated": False, "max_group_share": 0.0, "dominant_group": None}
+        return {"concentrated": None, "max_group_share": np.nan, "dominant_group": None}
     share = (positive / total_positive).sort_values(ascending=False)
     return {"concentrated": bool(share.iloc[0] > max_share), "max_group_share": float(share.iloc[0]),
             "dominant_group": share.index[0]}
@@ -415,6 +592,16 @@ STATUS_PLAIN: dict[str, str] = {
     "error": "error -- this run failed to process it, will retry automatically next time",
     "dropped": "dropped -- a human explicitly removed it from testing, it will never be re-tested automatically",
 }
+
+
+def _sortino_unusable(sortino: float) -> bool:
+    """NaN Sortino means "couldn't be computed" -- but +inf means the
+    opposite: a candidate with no losing trade at all. The old check was
+    a bare `np.isnan(...)`, which was correct only because sortino_ratio
+    used to collapse both cases into NaN and therefore REJECTED a
+    flawless candidate. Now that the two are distinguished, only the
+    genuinely-unusable one gates."""
+    return sortino is None or (isinstance(sortino, float) and np.isnan(sortino))
 
 
 def classify_status(rep: dict, coin_concentration: dict, period_concentration: dict, pattern: dict,
@@ -448,15 +635,29 @@ def classify_status(rep: dict, coin_concentration: dict, period_concentration: d
     watch: a real pattern signal that fails a robustness check
     (concentration, or an unfavorable risk path), or too little data for
     the pattern test to say either way.
-    rejected: no significant pattern, or no edge at the sample-size gate
-    below."""
-    if rep["n"] <= cfg.min_report_events or np.isnan(rep["sortino"]):
+    rejected: no significant pattern, a pattern pointing the WRONG WAY
+    for the direction this candidate trades, or no edge at the
+    sample-size gate below."""
+    if rep["n"] <= cfg.min_report_events or _sortino_unusable(rep["sortino"]):
         return "rejected" if rep["n"] >= 10 else "insufficient_data"
     if pattern.get("status") != "ok":
         return "watch"
+    # `concentrated is None` means "cannot assess" (no positive return anywhere
+    # for a single group to concentrate), NOT "passed" -- an unassessable
+    # robustness check holds a candidate at `watch` rather than waving it through.
+    if coin_concentration.get("concentrated") is None or period_concentration.get("concentrated") is None:
+        return "watch"
     if coin_concentration.get("concentrated") or period_concentration.get("concentrated"):
         return "watch"
-    if not pattern.get("significant"):
+    # Belt-and-braces alongside pattern_significance's own directional test: a
+    # candidate whose measured effect runs OPPOSITE to the direction it trades
+    # must never be `accepted`, whatever its p-value says. This gate used to be
+    # absent entirely -- `excess_return` was computed, reported to humans, and
+    # never once read here (four of six static candidates were "significant"
+    # with a negative excess return; a synthetic case with p=0.001 and
+    # excess=-5% returned `accepted`).
+    excess = pattern.get("excess_return")
+    if not pattern.get("significant") or excess is None or excess <= 0:
         return "rejected"
     mfe_mae_ratio = pattern.get("mfe_mae_ratio")
     if mfe_mae_ratio is None or np.isnan(mfe_mae_ratio) or mfe_mae_ratio <= 1:
@@ -508,12 +709,21 @@ def explain_non_acceptance(row: dict, min_report_events: int = 50) -> str:
     # of its p-value, but the wrong order made it look like "not significant" was
     # the reason even when the true (and often unrelated) p-value said otherwise.
     max_coin_share, max_year_share = row.get("max_coin_share") or 0, row.get("max_year_share") or 0
-    if max_coin_share > 0.6 or max_year_share > 0.6:
+    if max_coin_share > MAX_GROUP_SHARE or max_year_share > MAX_GROUP_SHARE:
         qualifier = "a statistically significant pattern" if significant else "a pattern"
-        rule = "no single coin or year may carry more than 60% of the positive return"
+        rule = f"no single coin or year may carry more than {MAX_GROUP_SHARE:.0%} of the positive return"
         if max_coin_share >= max_year_share:
             return f"{qualifier}, but {max_coin_share:.0%} of it comes from a single coin ({row.get('dominant_coin')}) -- too concentrated to trust as general ({rule})"
         return f"{qualifier}, but {max_year_share:.0%} of it comes from a single year ({_format_dominant_year(row.get('dominant_year'))}) -- too concentrated to trust as general ({rule})"
+    # A pattern pointing the WRONG WAY for the direction this candidate trades is
+    # its own distinct, non-interchangeable reason -- and the most misleading one
+    # to collapse into "not significant", since the effect may be strongly real,
+    # just inverted. Checked before the generic significance line for that reason.
+    excess = row.get("pattern_excess_return")
+    if excess is not None and excess <= 0:
+        return (f"a real effect was measured, but it runs OPPOSITE to this candidate's own direction "
+                f"({excess:+.2%} vs. this coin's own baseline) -- the pattern may well be real, it just "
+                f"doesn't work the way this candidate trades it")
     if not significant:
         p_value = row.get("pattern_p_value")
         return (f"a real pattern was tested for but not found -- not statistically significant vs. this coin's own "
@@ -602,15 +812,22 @@ def format_candidate_details(candidate: str, row: dict, definition: str | None =
     if ratio is not None and not (isinstance(ratio, float) and np.isnan(ratio)):
         lines.append(f"• Risk path (mean favorable / mean adverse excursion): {ratio:.2f}  (favorable if > 1.0)")
 
+    # "-- flagged above 60%" used to print unconditionally, so a perfectly
+    # diversified 32% read as "32% ... flagged" at a glance. Say whether THIS
+    # value trips the rule, not merely what the rule is.
+    def _conc_verdict(share: float) -> str:
+        return (f"  -- OVER the {MAX_GROUP_SHARE:.0%} limit" if share > MAX_GROUP_SHARE
+                else f"  -- within the {MAX_GROUP_SHARE:.0%} limit")
+
     max_coin_share, dominant_coin = row.get("max_coin_share"), row.get("dominant_coin")
     if max_coin_share is not None and not (isinstance(max_coin_share, float) and np.isnan(max_coin_share)):
         coin_bit = f" ({_escape_html(dominant_coin)})" if dominant_coin else ""
-        lines.append(f"• Coin concentration: {max_coin_share:.0%} of total positive return comes from a single coin{coin_bit}  -- flagged above 60%")
+        lines.append(f"• Coin concentration: {max_coin_share:.0%} of total positive return comes from a single coin{coin_bit}{_conc_verdict(max_coin_share)}")
 
     max_year_share, dominant_year = row.get("max_year_share"), row.get("dominant_year")
     if max_year_share is not None and not (isinstance(max_year_share, float) and np.isnan(max_year_share)):
         year_bit = f" ({_escape_html(_format_dominant_year(dominant_year))})" if dominant_year else ""
-        lines.append(f"• Year concentration: {max_year_share:.0%} of total positive return comes from a single year{year_bit}  -- flagged above 60%")
+        lines.append(f"• Year concentration: {max_year_share:.0%} of total positive return comes from a single year{year_bit}{_conc_verdict(max_year_share)}")
 
     win_rate, sortino = row.get("win_rate"), row.get("sortino")
     if win_rate is not None and not (isinstance(win_rate, float) and np.isnan(win_rate)):

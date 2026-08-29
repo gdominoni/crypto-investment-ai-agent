@@ -167,6 +167,10 @@ def _check_live_tests(d: pd.Timestamp) -> None:
         if d not in ohlc.index:
             continue
         outcome = path_outcome(trade["entry_price"], trade["entry_loc"], ohlc, trade["direction"], trade["horizon"])
+        if outcome["forward_return"] != outcome["forward_return"]:
+            # NaN: full horizon not actually available yet -- leave open, retry
+            # next simulated day. Mirrors execution/live_testing.py exactly.
+            continue
         state.update_trade(trade["id"], {
             "status": "closed", "close_date": str(d.date()),
             "forward_return": outcome["forward_return"], "mfe": outcome["mfe"], "mae": outcome["mae"],
