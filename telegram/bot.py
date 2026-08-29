@@ -407,6 +407,7 @@ def _dispatch_update(update: dict, client: Anthropic) -> None:
     if text.lower().startswith("/replay_details"):
         from replay.battery import run_replay_battery
         from replay import state as replay_state
+        from replay import status_history as replay_sh
         parts = text.split(maxsplit=1)
         if len(parts) < 2:
             _send("Usage: /replay_details &lt;trigger_name&gt;  (e.g. /replay_details c2_long -- see /replay_summary for the exact names currently tracked)")
@@ -423,7 +424,8 @@ def _dispatch_update(update: dict, client: Anthropic) -> None:
             _send(f"No candidate named '{escape_html(candidate)}' found in the replay's current battery. Check /replay_summary for exact names.")
             return
         horizon = replay_state.load_horizons().get(candidate)
-        _send(format_candidate_details(candidate, row, definition=_trigger_numeric_description(candidate), horizon=horizon))
+        milestone = replay_sh.all_latest_statuses().get(candidate, {})
+        _send(format_candidate_details(candidate, row, definition=_trigger_numeric_description(candidate), horizon=horizon, milestone=milestone))
         return
 
     if text.lower() == "/replay_status":
@@ -445,6 +447,7 @@ def _dispatch_update(update: dict, client: Anthropic) -> None:
 
     if text.lower().startswith("/details"):
         from candidates.run_battery import run_all
+        from candidates.status_history import all_latest_statuses
         from execution.live_test_state import load_horizons
         parts = text.split(maxsplit=1)
         if len(parts) < 2:
@@ -458,7 +461,8 @@ def _dispatch_update(update: dict, client: Anthropic) -> None:
             _send(f"No candidate named '{escape_html(candidate)}' found in the current battery. Check /summary for exact names.")
             return
         horizon = load_horizons().get(candidate)
-        _send(format_candidate_details(candidate, row, definition=_trigger_numeric_description(candidate), horizon=horizon))
+        milestone = all_latest_statuses().get(candidate, {})
+        _send(format_candidate_details(candidate, row, definition=_trigger_numeric_description(candidate), horizon=horizon, milestone=milestone))
         return
 
     if text.lower() == "/summary":
