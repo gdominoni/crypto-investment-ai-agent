@@ -33,7 +33,10 @@ from .methodology import (
     MethodologyConfig, build_events, classify_status, compute_anchors, concentration_check,
     pattern_significance, report, shock_zscore_series, walk_forward,
 )
-from .status_history import candidates_due_for_prune_decision, is_dropped, is_shut_down, record_status, trigger_shutdown
+from .status_history import (
+    candidates_due_for_prune_decision, is_dropped, is_shut_down, record_horizon, record_status, trigger_shutdown,
+)
+from execution.live_test_state import load_horizons, save_horizons
 from llm_pipeline.dynamic_candidates import record_test_result, registered_specs
 from llm_pipeline.novel_condition_tester import test_novel_condition
 
@@ -107,7 +110,23 @@ def run_all() -> tuple[pd.DataFrame, dict, dict]:
             status = classify_status(rep, coin_conc, year_conc, pattern, cfg)
             record_status(variant, status)
 
-            rows.append({
+            # Horizon is re-derived (and, if it changed, re-synced to the file
+            # `_open_live_test` actually reads) every run this candidate has
+            # enough data for pattern_significance to compute one -- independent
+            # of accepted/watch/rejected. Without this, a live occurrence would
+            # keep being held for whatever horizon was empirically best the
+            # FIRST time this candidate was ever evaluated, never updated as
+            # more history accumulates -- exactly mirrors replay/battery.py,
+            # which already does this on every run.
+            horizon_changed_to = None
+            if pattern.get("status") == "ok":
+                horizons = load_horizons()
+                horizons[variant] = pattern["horizon"]
+                save_horizons(horizons)
+                if record_horizon(variant, pattern["horizon"]):
+                    horizon_changed_to = pattern["horizon"]
+
+            row = {
                 "candidate": variant, "direction": direction, "status": status,
                 "n": rep["n"], "win_rate": rep["win_rate"], "strict_win_rate": rep["strict_win_rate"],
                 "sortino": rep["sortino"], "total_expectancy": rep["total_expectancy"], "timeout_fraction": rep["timeout_fraction"],
@@ -116,7 +135,10 @@ def run_all() -> tuple[pd.DataFrame, dict, dict]:
                 "n_shock_excluded": n_shock_events,
                 "pattern_significant": pattern.get("significant"), "pattern_p_value": pattern.get("p_value"),
                 "pattern_excess_return": pattern.get("excess_return"), "pattern_mfe_mae_ratio": pattern.get("mfe_mae_ratio"),
-            })
+            }
+            if horizon_changed_to is not None:
+                row["horizon_changed_to"] = horizon_changed_to
+            rows.append(row)
 
             if status == "accepted":
                 full_anchors = compute_anchors(events, HORIZONS_DAYS)
@@ -158,14 +180,30 @@ def run_all() -> tuple[pd.DataFrame, dict, dict]:
                 rows.append({"candidate": spec.label, "status": status, "n": 0, "n_shock_excluded": result.get("n_shock_excluded", 0)})
                 continue
             coin_conc, year_conc = result["coin_concentration"], result["year_concentration"]
-            rows.append({
+            # Same horizon re-sync as the static loop above -- a dynamic
+            # candidate's horizon was previously only ever set once, at the
+            # moment a human approved "Test It", and never refreshed by this
+            # weekly run afterward.
+            pattern = result.get("pattern_significance") or {}
+            horizon_changed_to = None
+            if pattern.get("status") == "ok":
+                horizons = load_horizons()
+                horizons[spec.label] = pattern["horizon"]
+                save_horizons(horizons)
+                if record_horizon(spec.label, pattern["horizon"]):
+                    horizon_changed_to = pattern["horizon"]
+
+            row = {
                 "candidate": spec.label, "direction": spec.direction, "status": status,
                 "n": result["n"], "win_rate": result["win_rate"], "strict_win_rate": result["strict_win_rate"],
                 "sortino": result["sortino"], "total_expectancy": result["total_expectancy"], "timeout_fraction": result["timeout_fraction"],
                 "dominant_coin": coin_conc.get("dominant_group"), "max_coin_share": coin_conc.get("max_group_share"),
                 "dominant_year": year_conc.get("dominant_group"), "max_year_share": year_conc.get("max_group_share"),
                 "n_shock_excluded": result.get("n_shock_excluded", 0),  # 0 by construction when the spec's own indicator IS shock_zscore -- see novel_condition_tester.py
-            })
+            }
+            if horizon_changed_to is not None:
+                row["horizon_changed_to"] = horizon_changed_to
+            rows.append(row)
             if status == "accepted" and result.get("live_anchors"):
                 live_state["candidates"][spec.label] = {
                     "direction": spec.direction, "horizon": result["pattern_significance"]["horizon"],

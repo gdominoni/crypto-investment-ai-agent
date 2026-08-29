@@ -5,6 +5,7 @@ __pycache__/
 *.sqlite3
 execution/pending_manual_signals.json
 execution/active_manual_signals.json
+execution/horizons.json
 .DS_Store
 llm_pipeline/pending_test.json
 telegram/sent_messages.json

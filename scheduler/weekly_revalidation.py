@@ -131,6 +131,17 @@ def _run_weekly_revalidation() -> None:
     else:
         print("Weekly re-validation: no status changes.")
 
+    # Mirrors replay/engine.py's own horizon-change notice exactly -- run_all()
+    # re-derives (and re-syncs to the file _open_live_test actually reads) every
+    # tracked candidate's horizon this run, independent of accepted/watch/rejected;
+    # this surfaces it to a human only on the runs it actually changed.
+    if "horizon_changed_to" in result.columns:
+        for _, r in result[result["horizon_changed_to"].notna()].iterrows():
+            _send(f"<b>Horizon updated -- {escape_html(r['candidate'])}</b>\n\n"
+                  f"({escape_html(_trigger_description(r['candidate']))})\n\n"
+                  f"Now held for <b>{int(r['horizon_changed_to'])}d</b> going forward (empirically "
+                  f"re-derived from accumulated history, replacing the previous value).")
+
     if meta.get("failed_candidates"):
         failed_msg = (f"<b>{len(meta['failed_candidates'])} candidate(s) failed to process this run "
                        f"(will retry next week):</b> {escape_html(', '.join(meta['failed_candidates']))}")
