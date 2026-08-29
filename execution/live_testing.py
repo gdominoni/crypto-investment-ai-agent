@@ -25,14 +25,14 @@ from anthropic import Anthropic
 
 from candidates.data_loading import load_daily, load_funding, load_hourly
 from candidates.definitions import CANDIDATE_DIRECTIONS, TRIGGER_DESCRIPTIONS, compute_triggers
-from candidates.methodology import path_outcome, shock_zscore_series
+from candidates.methodology import path_outcome
 from candidates.run_battery import COINS
 from candidates import status_history as sh
 from execution import hyperopt_runner
 from execution import live_test_state as state
 from llm_pipeline.dynamic_candidates import registered_specs
 from llm_pipeline.haiku_sonnet_pipeline import sonnet_prune_advice
-from llm_pipeline.novel_condition_tester import SUPPORTED_INDICATORS, ConditionSpec, _OPERATORS
+from llm_pipeline.novel_condition_tester import ConditionSpec, clause_signal_hourly
 from telegram.bot import _send, escape_html
 
 PLACEHOLDER_HORIZON_DAYS = 7  # neutral default (middle of HORIZONS_DAYS) -- see docs/case_study/methodology-decisions.md
@@ -187,15 +187,20 @@ def _check_live_tests() -> None:
 
 
 def _dynamic_trigger_hourly(spec: ConditionSpec, hourly: pd.DataFrame, daily: pd.DataFrame, funding) -> pd.Series:
-    """Identical logic to replay/engine.py's own version -- see its
-    docstring. `shock_zscore` stays a daily concept even here."""
+    """Identical logic to replay/engine.py's own version -- both now
+    delegate every clause to `clause_signal_hourly`, the ONE shared
+    implementation, which owns both the `DAILY_NATIVE_INDICATORS`
+    exception and the `within_days` lag.
+
+    Both used to be hand-rolled here and in the replay, and the
+    daily-native set was a single hardcoded `shock_zscore` check -- which
+    silently left four other indicators (rsi_14d, atr_pct_14d,
+    daily_range_pct, efficiency_ratio_20d) measuring a DIFFERENT
+    statistic live than the one the backtest accepted on. See that
+    constant's own note for the measured distributions."""
     trigger = pd.Series(True, index=hourly.index)
     for clause in spec.clauses:
-        if clause.indicator == "shock_zscore":
-            signal = shock_zscore_series(daily).reindex(hourly.index, method="ffill")
-        else:
-            signal = SUPPORTED_INDICATORS[clause.indicator](hourly, funding, scale=24)
-        trigger &= _OPERATORS[clause.op](signal, clause.threshold).fillna(False)
+        trigger &= clause_signal_hourly(clause, hourly, daily, funding)
     return trigger
 
 

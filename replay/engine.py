@@ -38,7 +38,7 @@ from candidates.run_battery import COINS
 from execution import hyperopt_runner
 from llm_pipeline.haiku_sonnet_pipeline import escape_html, format_spec_clauses, sonnet_prune_advice
 from llm_pipeline.novel_condition_tester import (
-    SUPPORTED_INDICATORS, Clause, ConditionSpec, _OPERATORS, condition_desc, format_pattern_significance,
+    Clause, ConditionSpec, clause_signal_hourly, condition_desc, format_pattern_significance,
     test_novel_condition,
 )
 from replay import judgment, state
@@ -398,17 +398,19 @@ def _dynamic_trigger_hourly(spec: ConditionSpec, hourly: pd.DataFrame, daily: pd
     """Same AND-of-clauses logic as novel_condition_tester.test_novel_condition,
     but evaluated hour-by-hour for live detection (scale=24 reinterprets
     every day-defined indicator window in hours -- see
-    docs/case_study/methodology-decisions.md). `shock_zscore` is the one
-    exception: it stays a DAILY concept even here (per that same doc),
-    so its value is computed once on the daily frame and forward-filled
-    across each day's hours."""
+    docs/case_study/methodology-decisions.md). `shock_zscore` is no
+    longer the ONLY such exception: `DAILY_NATIVE_INDICATORS` now covers
+    every indicator that isn't distributionally comparable at scale=24
+    (rsi_14d, atr_pct_14d, daily_range_pct, efficiency_ratio_20d too) --
+    a real, measured train/serve skew documented at that constant.
+
+    Delegates every clause to `clause_signal_hourly`, the ONE shared
+    implementation execution/live_testing.py also uses -- so a sequenced
+    or daily-native condition can never mean one thing in the backtest
+    that accepted it and another in the scan that tracks it."""
     trigger = pd.Series(True, index=hourly.index)
     for clause in spec.clauses:
-        if clause.indicator == "shock_zscore":
-            signal = shock_zscore_series(daily).reindex(hourly.index, method="ffill")
-        else:
-            signal = SUPPORTED_INDICATORS[clause.indicator](hourly, funding, scale=24)
-        trigger &= _OPERATORS[clause.op](signal, clause.threshold).fillna(False)
+        trigger &= clause_signal_hourly(clause, hourly, daily, funding)
     return trigger
 
 

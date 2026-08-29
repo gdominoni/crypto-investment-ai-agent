@@ -162,17 +162,112 @@ def build_indicator_snapshot(coin: str, as_of: pd.Timestamp | None = None) -> st
     return f"{coin} current indicator readings: " + ", ".join(parts)
 
 
+MAX_WITHIN_DAYS = 14  # a "sequence" longer than this stops being one event and becomes a regime
+
+
 @dataclass(frozen=True)
 class Clause:
+    """`within_days=0` (the default, and the only behaviour that existed
+    before) means "true on the trigger bar itself". `within_days=K` means
+    "was true at any point in the last K days, inclusive of today" --
+    which is what makes an ORDERED hypothesis expressible at all.
+
+    This exists because the conjunction-only grammar could express
+    `news AND crash on the same day` but not `crash, THEN news` -- and
+    the second is the central case this project is about (a violent move
+    happens, and the explanation arrives a day or two later). With this,
+    all three orderings are writable and, more importantly, *comparable*:
+
+        crash then news : shock_zscore >= 3 [within 3d] AND news [today]
+        news then crash : is_macro_day = 1  [within 2d] AND shock [today]
+        simultaneous    : is_macro_day = 1  [today]     AND shock [today]
+
+    Causality is preserved by construction: the rolling window looks
+    strictly BACKWARD, the trigger bar is the day the last clause becomes
+    true, and `build_events` still enters at the following bar's open."""
     indicator: str
     op: str
     threshold: float
+    within_days: int = 0
 
     def __post_init__(self):
         if self.indicator not in SUPPORTED_INDICATORS:
             raise ValueError(f"Unsupported indicator '{self.indicator}' -- must be one of {list(SUPPORTED_INDICATORS)}")
         if self.op not in _OPERATORS:
             raise ValueError(f"Unsupported operator '{self.op}' -- must be one of {list(_OPERATORS)}")
+        if not isinstance(self.within_days, int) or self.within_days < 0:
+            raise ValueError(f"within_days must be a non-negative integer, got {self.within_days!r}")
+        if self.within_days > MAX_WITHIN_DAYS:
+            raise ValueError(f"within_days must be at most {MAX_WITHIN_DAYS} -- a longer lookback is a market regime, not an event sequence")
+
+
+# Indicators that are NOT distributionally comparable when recomputed on an
+# hourly frame with scale=24, and must therefore be computed on the DAILY
+# frame and forward-filled for live detection -- generalising the exception
+# `shock_zscore` already had. This is a real, measured train/serve skew, not
+# a theoretical concern (BTCUSDT, 1st-99th percentile, daily vs hourly@24):
+#
+#   rsi_14d              22.3 .. 85.4   ->   42.6 .. 58.5   (0.25x the spread)
+#   atr_pct_14d          0.021 .. 0.151 ->   0.004 .. 0.032 (0.22x)
+#   daily_range_pct      0.008 .. 0.194 ->   0.001 .. 0.047 (0.24x)
+#   efficiency_ratio_20d 0.003 .. 0.760 ->   0.001 .. 0.185 (0.24x)
+#
+# A condition accepted on `rsi_14d < 30` fires 173 times in the daily
+# backtest and CAN NEVER fire in the hourly live scan, because a 336-period
+# RSI mean-reverts to ~50 and never reaches 30. The candidate would look
+# merely rare rather than broken. Two distinct causes, same consequence:
+# a longer window smooths an oscillator toward its midpoint (rsi,
+# efficiency_ratio), and a per-bar magnitude measures ONE HOUR's range
+# instead of one day's (atr_pct, daily_range_pct -- the latter ignores
+# `scale` entirely, since it has no window to scale).
+#
+# The remaining eight are genuinely comparable and stay hourly-native, which
+# is the whole point of hourly detection: they can cross intraday and revert
+# before the daily close (see docs/case_study/methodology-decisions.md).
+DAILY_NATIVE_INDICATORS = frozenset({
+    "shock_zscore", "rsi_14d", "atr_pct_14d", "daily_range_pct", "efficiency_ratio_20d",
+})
+
+
+def clause_signal_hourly(clause: Clause, hourly: pd.DataFrame, daily: pd.DataFrame,
+                          funding: pd.Series | None) -> pd.Series:
+    """One clause -> a boolean Series on an HOURLY index, for live/replay
+    trigger detection. THE single shared implementation -- both
+    `execution/live_testing.py` and `replay/engine.py` call this rather
+    than each hand-rolling the daily-native exception, so production and
+    the replay cannot drift apart on what a condition means.
+
+    A `DAILY_NATIVE_INDICATORS` clause is evaluated on the daily frame and
+    forward-filled across that day's hours: the condition genuinely means
+    "the DAILY statistic crossed its threshold", and there is no valid
+    intraday version of it to detect. Everything else is evaluated
+    hourly-native at scale=24."""
+    if clause.indicator in DAILY_NATIVE_INDICATORS:
+        signal = SUPPORTED_INDICATORS[clause.indicator](daily, funding)
+        fired = _OPERATORS[clause.op](signal, clause.threshold).fillna(False)
+        if clause.within_days:
+            fired = fired.rolling(clause.within_days + 1, min_periods=1).max().astype(bool)
+        return fired.reindex(hourly.index, method="ffill").fillna(False).astype(bool)
+    return clause_signal(clause, hourly, funding, scale=24)
+
+
+def clause_signal(clause: Clause, daily: pd.DataFrame, funding: pd.Series | None, scale: int = 1) -> pd.Series:
+    """One clause -> a boolean Series, applying its own backward-looking
+    `within_days` window. THE single implementation, shared by the
+    backtest (`scale=1`, daily bars) and the live/replay hourly scans
+    (`scale=24`) -- so a sequenced condition can never mean one thing in
+    the test and a different thing in live tracking.
+
+    `within_days` is expressed in DAYS and converted by `scale`, matching
+    how every indicator window in this module is already reinterpreted on
+    an hourly frame."""
+    signal = SUPPORTED_INDICATORS[clause.indicator](daily, funding, scale) if scale != 1 else \
+        SUPPORTED_INDICATORS[clause.indicator](daily, funding)
+    fired = _OPERATORS[clause.op](signal, clause.threshold).fillna(False)
+    if clause.within_days:
+        bars = clause.within_days * scale
+        fired = fired.rolling(bars + 1, min_periods=1).max().astype(bool)
+    return fired
 
 
 @dataclass(frozen=True)
@@ -228,8 +323,23 @@ def condition_desc(spec: ConditionSpec) -> str:
     2-clause spec never silently gets rendered as if it had one. Each
     clause's indicator is translated through INDICATOR_PLAIN_NAMES and
     its comparison through OPERATOR_PLAIN, so the rendering never assumes
-    the reader already knows what "rsi_14d" or a raw "<"/">" means."""
-    return " AND ".join(f"{INDICATOR_PLAIN_NAMES.get(c.indicator, c.indicator)} {OPERATOR_PLAIN.get(c.op, c.op)} {c.threshold}" for c in spec.clauses)
+    the reader already knows what "rsi_14d" or a raw "<"/">" means.
+
+    A lagged clause renders its window explicitly ("at any point in the
+    last 3 days") -- without that, "crash then news" and "crash and news
+    on the same day" would read identically to a human while testing two
+    completely different hypotheses."""
+    return " AND ".join(
+        f"{INDICATOR_PLAIN_NAMES.get(c.indicator, c.indicator)} {OPERATOR_PLAIN.get(c.op, c.op)} {c.threshold}{_within_phrase(c.within_days)}"
+        for c in spec.clauses)
+
+
+def _within_phrase(within_days: int) -> str:
+    """Shared by both renderers (typed spec and raw dict) so the two can
+    never describe the same lag differently."""
+    if not within_days:
+        return ""
+    return f" (at any point in the last {within_days} day{'s' if within_days > 1 else ''})"
 
 
 def test_novel_condition(spec: ConditionSpec, coins: list[str], as_of: pd.Timestamp | None = None) -> dict:
@@ -267,8 +377,7 @@ def test_novel_condition(spec: ConditionSpec, coins: list[str], as_of: pd.Timest
             funding = funding.loc[:as_of]
         trigger = pd.Series(True, index=daily.index)
         for clause in spec.clauses:
-            signal = SUPPORTED_INDICATORS[clause.indicator](daily, funding)
-            trigger &= _OPERATORS[clause.op](signal, clause.threshold).fillna(False)
+            trigger &= clause_signal(clause, daily, funding)
         shock_z = None if is_shock_indicator else shock_zscore_series(daily)
         ev = build_events(daily, trigger, spec.direction, spec.horizons,
                            shock_z=shock_z, shock_threshold=SHOCK_ZSCORE_THRESHOLD)

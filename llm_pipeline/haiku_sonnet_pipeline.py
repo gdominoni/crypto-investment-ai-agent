@@ -170,8 +170,10 @@ def format_spec_clauses(spec: dict) -> str:
     INDICATOR_PLAIN_NAMES), and the comparison is never a raw "<"/">"
     symbol (see OPERATOR_PLAIN's own docstring for why -- a real,
     observed Telegram rendering bug, not just a style choice)."""
+    from llm_pipeline.novel_condition_tester import _within_phrase
     return " AND ".join(
         f"{escape_html(INDICATOR_PLAIN_NAMES.get(c['indicator'], c['indicator']))} {OPERATOR_PLAIN.get(c['op'], c['op'])} {c['threshold']}"
+        f"{_within_phrase(int(c.get('within_days') or 0))}"
         for c in spec["clauses"]
     )
 
