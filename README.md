@@ -12,6 +12,23 @@ Whether an LLM-driven architecture — reading real market news and recognizing 
 
 A prior, static rule-based research phase (Phase 1 below) tested six categories of deterministic market triggers — scheduled macro releases, futures-market crowding, trend-efficiency continuation — across seven-plus years of crypto data, under full walk-forward validation, and found no fully persistent, unconditional edge. This project's response to that finding is the adaptive system described below: a continuously re-validated statistical baseline, a bootstrap significance test that asks whether a pattern is *real* (not merely profitable-looking in one backtest), an LLM judgment layer (Claude Haiku → Claude Sonnet) that discovers and proposes genuinely new conditions, and a human supervisor at exactly one decision point — observed live rather than assumed from a backtest.
 
+### The System, Live on Telegram — Real Screenshots
+
+Every message below is a real, unedited screenshot from this project's own Telegram bot — nothing staged, nothing mocked up for this README.
+
+<table>
+<tr>
+<td width="33%" align="center"><img src="docs/case_study/assets/telegram_novel_condition_proposal.png" alt="Sonnet proposing a novel condition, with Test It / Don't Test It buttons" width="280"><br><sub>Sonnet proposes a novel condition — human approves with a button, never free text</sub></td>
+<td width="33%" align="center"><img src="docs/case_study/assets/telegram_live_test_resolved.png" alt="A live test resolved, with real forward return, best and worst point reached" width="280"><br><sub>A live test resolves — real forward return, best/worst point reached, no TP/SL</sub></td>
+<td width="33%" align="center"><img src="docs/case_study/assets/telegram_prune_decision.png" alt="A keep-or-drop decision after 2+ years untested, with Sonnet's advisory opinion" width="280"><br><sub>2+ years untested — Sonnet's advisory opinion, human decides Keep or Drop</sub></td>
+</tr>
+<tr>
+<td width="33%" align="center"><img src="docs/case_study/assets/telegram_replay_summary.png" alt="/replay_summary showing one VALIDATED candidate and thirteen on watch" width="280"><br><sub><code>/replay_summary</code> — real battery status, one candidate already VALIDATED</sub></td>
+<td width="33%" align="center"><img src="docs/case_study/assets/telegram_replay_details.png" alt="/replay_details showing the full numeric breakdown of the validated candidate" width="280"><br><sub><code>/replay_details</code> — the exact numbers behind that VALIDATED verdict</sub></td>
+<td width="33%" align="center"><img src="docs/case_study/assets/telegram_help_pinned.png" alt="The pinned /help reference listing every standard command" width="280"><br><sub>The pinned <code>/help</code> reference — every command, always one scroll away</sub></td>
+</tr>
+</table>
+
 ## Target Objectives
 
 1. Determine whether adaptive re-validation and LLM-mediated discovery surface real, statistically significant patterns the static baseline missed.
@@ -19,10 +36,6 @@ A prior, static rule-based research phase (Phase 1 below) tested six categories 
 3. Keep every classification traceable to a specific, real number — on demand, in plain language, never invented.
 
 The human gate sits on exactly one kind of decision: whether a genuinely new, LLM-proposed condition is worth testing at all. Once a condition is being tracked — whether from the original static battery or a human-approved test — everything downstream (the statistical classification, whether it opens a live test, whether it earns "validated" status) is fully deterministic and code-driven, with no further human input needed. Gating every individual classification on a human would test human-plus-LLM judgment, not the LLM's own, defeating the point of objective 1.
-
-<p align="center">
-  <img src="docs/case_study/assets/hero_telegram_trade_open.png" alt="Sonnet Strategist proposing a novel condition on Telegram, with Test It / Don't Test It buttons" width="360">
-</p>
 
 Every non-obvious methodology or design decision — why 50, why 60%, why a fixed horizon instead of a TP/SL ladder, why no funded position is ever opened — is logged with its own stated reasoning in [`docs/case_study/methodology-decisions.md`](docs/case_study/methodology-decisions.md). File-by-file guide to the whole codebase: [`PROJECT_MAP.md`](PROJECT_MAP.md). Want to run this yourself, step by step, no prior knowledge of the code assumed? See [`HOW_TO_RUN.md`](HOW_TO_RUN.md).
 
