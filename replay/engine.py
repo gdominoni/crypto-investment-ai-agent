@@ -628,7 +628,8 @@ TEST_RESULT_DELAY_DAYS = 3
 
 
 def resolve_pending_test() -> str | None:
-    """Called when the human replies "test it" -- acknowledges
+    """Called when the human presses the "Test It" button (never a
+    free-text reply) -- acknowledges
     immediately (the backtest itself is computed right away too, since
     it's free -- querying history that already exists, nothing to wait
     for), but the RESULT is queued for `TEST_RESULT_DELAY_DAYS` later and

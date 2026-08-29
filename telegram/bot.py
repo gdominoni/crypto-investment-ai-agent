@@ -295,8 +295,9 @@ def handle_replay_propose_callback(callback_data: str) -> str:
 
 def handle_test_it_confirmation(pending_spec: ConditionSpec, coins: list[str], approved_by: str,
                                  live_coin: str | None = None, signal_class: str = "manual") -> str:
-    """Fired when a human replies "test it" -- this calls Phase 1's own
-    methodology engine directly (test_novel_condition -> the same
+    """Fired when a human presses the "Test It" button (never a free-text
+    reply -- see handle_propose_callback's own docstring for why) -- this
+    calls Phase 1's own methodology engine directly (test_novel_condition -> the same
     build_events/walk_forward/classify_status pipeline run_battery.py
     uses for the static candidates), never routing back through Sonnet:
     Sonnet's job ended when it proposed the spec, the actual acceptance
