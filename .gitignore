@@ -7,3 +7,16 @@ execution/pending_manual_signals.json
 execution/active_manual_signals.json
 .DS_Store
 llm_pipeline/pending_test.json
+telegram/sent_messages.json
+replay/state/
+execution/freqtrade_userdir/data/
+execution/freqtrade_userdir/hyperopt_results/
+execution/freqtrade_userdir/logs/
+execution/freqtrade_userdir/backtest_results/
+execution/freqtrade_userdir/notebooks/
+execution/freqtrade_userdir/plot/
+execution/freqtrade_userdir/freqaimodels/
+execution/freqtrade_userdir/hyperopts/
+execution/freqtrade_userdir/hyperopt_config.json
+execution/freqtrade_userdir/hyperopt.lock
+execution/freqtrade_userdir/strategies/*.json

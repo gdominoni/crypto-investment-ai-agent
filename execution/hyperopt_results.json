@@ -1,0 +1,15 @@
+{
+  "high_efficiency_breakout_with_volume_confirmation": {
+    "status": "ok",
+    "at": "2026-08-28T19:36:00.951370+00:00",
+    "tp_mult": 1.98,
+    "sl_mult": 0.62,
+    "n": 154,
+    "winrate": 0.474025974025974,
+    "sortino": 1.4755000367004134,
+    "profit_total": 1.10103230085,
+    "expectancy": 7.14956039512987,
+    "epochs_run": 50,
+    "timerange": "20180101-"
+  }
+}

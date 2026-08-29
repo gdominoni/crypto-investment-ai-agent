@@ -27,6 +27,21 @@ FUNDING_DIR = DATA_DIR / "market/binance/funding"
 
 COINS = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "XRPUSDT", "DOGEUSDT", "ADAUSDT", "LTCUSDT"]
 
+# A safely-before-any-real-listing anchor for a from-scratch backfill (a
+# new coin added to COINS, or this repo cloned somewhere `data/` isn't
+# already populated) -- asking Binance for data "since" a date before a
+# pair's real listing isn't an error, it just returns from wherever real
+# history actually begins, so one fixed anchor works for every coin,
+# matching this project's own "earliest available real data" convention
+# used elsewhere (see replay/engine.py::advance()).
+BACKFILL_SINCE = "2017-01-01"
+
+# Hard cap on pagination loops per call -- real safety net against an
+# unbounded loop if some future API quirk ever stops `since` from
+# advancing, not expected to bind in practice (2500 pages x 1000 daily
+# candles is centuries of history).
+MAX_FETCH_PAGES = 2500
+
 
 def _ccxt_symbol(symbol: str) -> str:
     """'BTCUSDT' -> 'BTC/USDT', ccxt's unified symbol notation."""
@@ -35,16 +50,41 @@ def _ccxt_symbol(symbol: str) -> str:
 
 def update_ohlcv(symbol: str, timeframe: str = "1d") -> int:
     """Appends new candles since the last one already on disk,
-    deduplicated by timestamp. Returns the number of rows added."""
+    deduplicated by timestamp. Returns the number of rows added.
+
+    Paginates until genuinely caught up, rather than one bounded call --
+    verified live (2026-08-29): `since=None` does NOT return a coin's
+    earliest history, it returns Binance's MOST RECENT candles (the last
+    5 days, when tested with limit=5). A from-scratch backfill (a new
+    coin, or this repo cloned somewhere `data/` isn't already populated)
+    would otherwise silently truncate to ~1000 candles (~2.7 years of
+    daily bars) of the *newest* history instead of this project's full
+    multi-year depth -- exactly backwards from what every downstream
+    walk-forward/pattern_significance computation assumes, with no error
+    or warning. `since` now always anchors to BACKFILL_SINCE when there's
+    no existing file (Binance simply returns from wherever a pair's real
+    listing history begins if asked for an earlier date, so one fixed
+    anchor is safe for every coin), and the fetch loop keeps paging until
+    a page comes back short of `limit` (genuinely caught up to "now") or
+    MAX_FETCH_PAGES is hit (safety net, not expected to bind)."""
     path = SPOT_DIR / f"{symbol}_{timeframe}.parquet"
     existing = pd.read_parquet(path) if path.exists() else pd.DataFrame(
         columns=["timestamp", "open", "high", "low", "close", "volume"])
-    since = None
     if len(existing):
-        since = int(pd.to_datetime(existing["timestamp"], utc=True).max().timestamp() * 1000)
+        since = int(pd.to_datetime(existing["timestamp"], utc=True).max().timestamp() * 1000) + 1
+    else:
+        since = int(pd.Timestamp(BACKFILL_SINCE, tz="utc").timestamp() * 1000)
 
     exchange = ccxt.binance({"enableRateLimit": True})
-    candles = exchange.fetch_ohlcv(_ccxt_symbol(symbol), timeframe=timeframe, since=since, limit=1000)
+    candles: list = []
+    for _ in range(MAX_FETCH_PAGES):
+        page = exchange.fetch_ohlcv(_ccxt_symbol(symbol), timeframe=timeframe, since=since, limit=1000)
+        if not page:
+            break
+        candles.extend(page)
+        if len(page) < 1000:
+            break  # short page -- caught up to "now", nothing more to fetch
+        since = page[-1][0] + 1  # advance past the last candle received
     if not candles:
         return 0
 
@@ -65,22 +105,42 @@ def update_funding(symbol: str) -> int:
     """Appends new funding-rate entries since the last one on disk.
     Binance's public funding-rate-history endpoint caps each call at
     ~1000 entries -- fine for keeping an already-backfilled file current
-    (a handful of new entries per call), but a symbol with NO prior file
-    only gets ~1000 entries' worth of history back (funding posts every
-    8h, so roughly the trailing year), not the multi-year depth the
-    already-backfilled coins have. Real, honestly-reported partial
-    coverage, not silently assumed complete."""
+    (a handful of new entries per call), which is why this paginates the
+    same way update_ohlcv does: `since=None` returns Binance's MOST
+    RECENT entries, not the earliest (verified live, same as OHLCV
+    above), so a from-scratch backfill anchors to BACKFILL_SINCE and
+    pages until caught up, rather than silently keeping only the last
+    ~1000 entries (funding posts every 8h, so roughly the trailing year)
+    of a symbol with no prior file. Coverage still genuinely varies by
+    coin -- DOGE/ADA/LTC's perpetual futures listed later than
+    BTC/ETH/BNB/XRP's, a real difference in what Binance actually has,
+    not an artifact of this function's own call limit anymore."""
     path = FUNDING_DIR / f"{symbol}_funding.csv"
     existing = pd.read_csv(path) if path.exists() else pd.DataFrame(
         columns=["timestamp", "datetime", "symbol", "fundingRate"])
-    since = int(existing["timestamp"].max()) + 1 if len(existing) else None
+    if len(existing):
+        since = int(existing["timestamp"].max()) + 1
+    else:
+        since = int(pd.Timestamp(BACKFILL_SINCE, tz="utc").timestamp() * 1000)
 
     exchange = ccxt.binance({"enableRateLimit": True, "options": {"defaultType": "future"}})
+    history: list = []
     try:
-        history = exchange.fetch_funding_rate_history(_ccxt_symbol(symbol), since=since, limit=1000)
+        for _ in range(MAX_FETCH_PAGES):
+            page = exchange.fetch_funding_rate_history(_ccxt_symbol(symbol), since=since, limit=1000)
+            if not page:
+                break
+            history.extend(page)
+            if len(page) < 1000:
+                break  # short page -- caught up to "now"
+            since = page[-1]["timestamp"] + 1
     except ccxt.BaseError as e:
         print(f"funding fetch failed for {symbol}: {e}")
-        return 0
+        if not history:
+            return 0
+        # Partial pages already fetched before the error are still worth
+        # keeping (real data, isolated the same way update_all() isolates
+        # one coin's failure from the others) -- fall through to save them.
     if not history:
         return 0
 

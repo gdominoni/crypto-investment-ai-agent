@@ -1,6 +1,6 @@
 """Freqtrade execution engine for the candidate battery + Sonnet-approved
 manual signals. Runs on the daily timeframe -- the same granularity the
-candidate battery is validated on, so no informative-pair merge or
+candidate battery is backtested on, so no informative-pair merge or
 cross-timeframe shift is needed: Freqtrade's own default behavior (a
 signal set on a fully-formed candle fills at the NEXT candle's open) is
 already the causally correct entry timing this project requires, with
@@ -8,7 +8,7 @@ nothing extra to get wrong.
 
 Two independent entry sources, both gated:
   1. A candidate from `candidates/definitions.py` whose pooled status is
-     'validated' in `execution/live_battery_state.json` (refreshed
+     'accepted' in `execution/live_battery_state.json` (refreshed
      weekly) fires on its own trigger condition for a given pair.
   2. A Sonnet-approved manual signal (`execution/signal_store.py`) for
      that exact pair+direction -- covers both a routine Sonnet trade

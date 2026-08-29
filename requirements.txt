@@ -4,5 +4,5 @@ requests>=2.31
 anthropic>=0.40
 python-dotenv>=1.0
 ccxt>=4.0
-freqtrade>=2024.1
+freqtrade[hyperopt]>=2024.1
 pytest>=8.0

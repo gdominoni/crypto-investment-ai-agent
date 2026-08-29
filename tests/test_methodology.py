@@ -113,27 +113,49 @@ class TestConcentrationCheck:
 
 
 class TestClassifyStatus:
+    """classify_status's acceptance gate is pattern_significance now, not
+    Sortino/win_rate (see the function's own docstring for why) -- `rep`
+    below is only ever used for the sample-size gate and for the
+    Sortino-is-NaN early exit; a `rep` with n > min_report_events and a
+    real (non-NaN) sortino is otherwise just a stand-in for "the backtest
+    ran fine", since its own P&L numbers no longer decide the verdict."""
     cfg = MethodologyConfig(horizons=(1, 3, 7))
+    ok_rep = {"n": 150, "sortino": 5.0, "strict_win_rate": 0.9, "win_rate": 0.9}
+    sig_pattern = {"status": "ok", "significant": True, "mfe_mae_ratio": 2.0}
 
     def test_between_10_and_min_report_events_is_rejected_not_insufficient(self):
-        rep = {"n": 15, "sortino": 5.0, "strict_win_rate": 0.9}
-        assert classify_status(rep, {"concentrated": False}, {"concentrated": False}, self.cfg) == "rejected"
+        rep = {**self.ok_rep, "n": 15}
+        assert classify_status(rep, {"concentrated": False}, {"concentrated": False}, self.sig_pattern, self.cfg) == "rejected"
 
     def test_under_10_events_is_insufficient_data(self):
-        rep = {"n": 5, "sortino": 5.0, "strict_win_rate": 0.9}
-        assert classify_status(rep, {"concentrated": False}, {"concentrated": False}, self.cfg) == "insufficient_data"
+        rep = {**self.ok_rep, "n": 5}
+        assert classify_status(rep, {"concentrated": False}, {"concentrated": False}, self.sig_pattern, self.cfg) == "insufficient_data"
 
-    def test_negative_sortino_is_rejected_regardless_of_win_rate(self):
-        rep = {"n": 100, "sortino": -0.5, "strict_win_rate": 0.9}
-        assert classify_status(rep, {"concentrated": False}, {"concentrated": False}, self.cfg) == "rejected"
+    def test_n_at_exactly_the_threshold_is_rejected_not_accepted(self):
+        rep = {**self.ok_rep, "n": 50}
+        assert classify_status(rep, {"concentrated": False}, {"concentrated": False}, self.sig_pattern, self.cfg) == "rejected"
 
-    def test_concentrated_result_is_watch_even_with_a_strong_sortino(self):
-        rep = {"n": 100, "sortino": 5.0, "strict_win_rate": 0.9}
-        assert classify_status(rep, {"concentrated": True}, {"concentrated": False}, self.cfg) == "watch"
+    def test_nan_sortino_in_rep_is_rejected_regardless_of_pattern(self):
+        rep = {**self.ok_rep, "sortino": float("nan")}
+        assert classify_status(rep, {"concentrated": False}, {"concentrated": False}, self.sig_pattern, self.cfg) == "rejected"
 
-    def test_clears_every_check_is_validated(self):
-        rep = {"n": 100, "sortino": 2.0, "strict_win_rate": 0.5}
-        assert classify_status(rep, {"concentrated": False}, {"concentrated": False}, self.cfg) == "validated"
+    def test_pattern_not_ok_is_watch(self):
+        pattern = {"status": "insufficient_data"}
+        assert classify_status(self.ok_rep, {"concentrated": False}, {"concentrated": False}, pattern, self.cfg) == "watch"
+
+    def test_concentrated_result_is_watch_even_with_a_significant_pattern(self):
+        assert classify_status(self.ok_rep, {"concentrated": True}, {"concentrated": False}, self.sig_pattern, self.cfg) == "watch"
+
+    def test_not_significant_pattern_is_rejected(self):
+        pattern = {"status": "ok", "significant": False, "mfe_mae_ratio": 2.0}
+        assert classify_status(self.ok_rep, {"concentrated": False}, {"concentrated": False}, pattern, self.cfg) == "rejected"
+
+    def test_unfavorable_mfe_mae_ratio_is_watch_even_when_significant(self):
+        pattern = {"status": "ok", "significant": True, "mfe_mae_ratio": 0.8}
+        assert classify_status(self.ok_rep, {"concentrated": False}, {"concentrated": False}, pattern, self.cfg) == "watch"
+
+    def test_significant_and_favorable_risk_and_not_concentrated_is_accepted(self):
+        assert classify_status(self.ok_rep, {"concentrated": False}, {"concentrated": False}, self.sig_pattern, self.cfg) == "accepted"
 
 
 class TestShockRegime:

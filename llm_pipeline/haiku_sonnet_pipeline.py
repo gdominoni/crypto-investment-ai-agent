@@ -1,19 +1,20 @@
 """Haiku Scout -> Sonnet Strategist -> Telegram. Haiku classifies each
 headline against the live candidate battery; only genuinely unmatched,
-significant conditions escalate to Sonnet, which reads real technical
-state (not a placeholder) and proposes a concrete, checkable action --
-never a freehand trade or a freehand number.
+significant conditions escalate to Sonnet.
 
-The human gate sits on exactly one kind of decision: whether to spend
-compute validating a genuinely untested pattern (`propose_novel_test`,
-and the shock-detection path in `run_shock_scan`). A routine trade
-proposal (`propose_trade`) is never gated on human confirmation -- it can
-only reference a candidate the battery has already validated, so the
-anchors are never invented and there is nothing left for a human to
-approve beyond what walk-forward validation already did. Requiring a
-human to also bless each individual trade would defeat this project's own
-purpose: testing whether the LLM layer's judgment holds up on its own,
-not testing a human's judgment about the LLM's judgment.
+Sonnet's live role is narrow, by design: (1) decide whether a headline/
+shock suggests a genuinely new, untested pattern worth a human's "test
+it" (`propose_novel_test`), and (2) answer natural-language questions
+about system state. It does NOT decide to open a trade -- that's a
+mechanical, unattended scan (see scheduler/ and replay/engine.py) that
+fires identically for every occurrence of an `accepted` candidate's own
+trigger condition, with no per-event LLM judgment involved. Removing
+that decision from Sonnet's hands isn't a loss of capability: a routine
+trade never needed Sonnet's opinion in the first place -- the anchors
+and the trigger condition were already fixed by the backtest, so an LLM
+judgment call per occurrence would only add unattributable variance,
+not real decision-making, to something already fully determined by
+already-computed statistics.
 """
 from __future__ import annotations
 
@@ -24,11 +25,13 @@ import requests
 from anthropic import Anthropic
 from dotenv import load_dotenv
 
+from candidates.macro_vintage import recent_releases_summary
 from data_ingestion.market_data.binance_fetcher import update_all as update_market_data
 from data_ingestion.news_sentiment.cryptocompare_fetcher import fetch_cryptocompare_news
-from execution.signal_store import load_battery_state, push_manual_signal
 from llm_pipeline.context_builder import build_context_summary, build_technical_snapshot
-from llm_pipeline.novel_condition_tester import SUPPORTED_INDICATORS, ConditionSpec
+from llm_pipeline.novel_condition_tester import (
+    INDICATOR_PLAIN_NAMES, OPERATOR_PLAIN, SUPPORTED_INDICATORS, Clause, ConditionSpec, build_indicator_snapshot,
+)
 from llm_pipeline.pending_tests import push_pending_test
 from llm_pipeline.shock_detector import scan_for_shocks
 
@@ -49,59 +52,73 @@ headlines, return a JSON array where each item has exactly these fields:
 Return ONLY the JSON array, no prose, no markdown fences."""
 
 SONNET_SYSTEM_PROMPT = f"""You are a market strategist for a crypto trading system. You will be \
-given: (1) a flagged news headline, (2) real technical/portfolio state, (3) the live status of \
-this system's candidate battery, including which candidates currently carry 'validated' status \
-and their coin/direction. Treat a candidate's status as load-bearing: only 'validated' candidates \
-may justify a trade; everything else is context, not a signal.
+given: (1) a flagged news headline, (2) real current readings on every whitelisted indicator (this \
+coin's if the headline names one, every tracked coin's if it's broad/unclear) and real macro \
+releases from the last several days -- a pattern doesn't require a volatility shock to exist, so \
+this context is given for every headline, not only shock-triggered ones, (3) real technical/ \
+portfolio state, (4) the live status of this system's candidate battery, including which candidates \
+currently carry 'accepted' status and their coin/direction ('accepted' means it cleared the \
+historical/backtest bar -- it is not a claim of a live track record). Ground your reasoning ONLY in \
+real numbers/releases you were actually given -- never invent an indicator reading or a release you \
+weren't shown. Trades are never yours to open -- an unattended, purely mechanical scan already fires \
+a live test the moment an accepted candidate's own trigger condition is met, with no LLM judgment \
+involved. Your only two jobs are:
 
-"propose_trade" is a routine, unattended decision -- it fires immediately, with no human \
-confirmation, so it may ONLY reference a candidate CURRENTLY listed as 'validated' in the battery \
-context you were given. You are not inventing a new pattern here, only recognizing that current \
-conditions match one already proven -- if no validated candidate actually applies, use \
-"propose_novel_test" or "no_action" instead, never stretch a trade_proposal to fit.
-
-If this headline suggests a genuinely new, untested pattern -- not covered by any existing \
-candidate and not already logged as rejected -- propose a novel-condition test instead (this DOES \
-wait for human approval, since it spends real compute validating something unproven), using ONLY \
-one of these whitelisted indicators (nothing else is buildable): {list(SUPPORTED_INDICATORS)}.
+1. If this headline suggests a genuinely new, untested pattern -- not covered by any existing \
+candidate and not already logged as rejected -- propose a novel-condition test (this DOES wait \
+for human approval, since it spends real compute testing something unproven), using ONLY one of \
+these whitelisted indicators (nothing else is buildable): {list(SUPPORTED_INDICATORS)}. Ground any \
+compound hypothesis ONLY in evidence you were actually given -- never invent an indicator reading \
+or a release you weren't shown.
+2. Otherwise, if there's nothing new to propose, say so plainly.
 
 Return ONLY a JSON object with exactly these fields:
 - "assessment": 1-2 sentences
-- "recommended_action": one of "no_action", "watch", "propose_trade", "propose_novel_test", "exit_now"
-- "watch_condition": a concrete, checkable condition (or null)
-- "trade_proposal": null, or {{"candidate": "<must be a currently-validated candidate name>", \
-  "coin": "...", "direction": "long"/"short", "reasoning": "..."}} \
-  (TP/SL are never Sonnet's to set -- always drawn from that candidate's own validated anchors)
-- "novel_condition_spec": null, or {{"label": "...", "indicator": "...", "op": "<"/">"/"<="/">=", \
-  "threshold": <number>, "direction": "long"/"short"}}
+- "recommended_action": one of "no_action", "propose_novel_test"
+- "novel_condition_spec": null, or {{"label": "...", "clauses": [{{"indicator": "...", \
+  "op": "<"/">"/"<="/">=", "threshold": <number>}}, ...], "direction": "long"/"short"}} \
+  (one clause is fine for a simple condition; multiple clauses are ANDed together for a compound \
+  one, e.g. an oversold technical reading combined with a macro surprise -- use as many as the \
+  actual evidence supports, not for its own sake)
 
 No prose, no markdown fences, just the JSON object."""
 
 SHOCK_SYSTEM_PROMPT = f"""You are a market strategist evaluating a real-time SHOCK EVENT -- a coin's \
-short-term realized volatility has just spiked to a statistical extreme (this project's own \
-Phase 1 methodology excludes exactly this kind of event from the static candidate battery's \
-fitting, because a handful of crashes shouldn't distort barriers meant for ordinary conditions). \
+short-term realized volatility has just spiked into roughly the top ~2% most extreme episodes for \
+that coin (this project's own Phase 1 methodology excludes exactly this population from the static \
+candidate battery's fitting, because a handful of crashes shouldn't distort barriers meant for \
+ordinary conditions). \
 This is deliberately the harder case a fixed rule set can't pre-classify -- you're being asked \
 whether this specific instance is worth reacting to at all, not whether shocks in general are \
 tradeable.
 
 You will be given the shock's real, computed severity (a z-score) and direction (crash/surge), \
-plus real technical/portfolio state and the candidate battery's status. Recommend one of:
+this coin's CURRENT real readings on every whitelisted indicator (technical: RSI, ATR%, Donchian \
+channel position, Bollinger %B, volume z-score, trend efficiency; financial: funding-rate z-score, \
+whether today is a macro-release day), any real macro releases from the last few days, and recent \
+real news headlines, plus real technical/portfolio state and the candidate battery's status. Ground \
+your reasoning ONLY in these real numbers/headlines you were actually given -- never invent an \
+indicator reading, a headline, or a release you weren't shown. Recommend one of:
 - "no_action": noise, not worth a human's attention.
-- "propose_novel_test": worth finding out if THIS coin's shocks, historically, show a real \
-  reversal or continuation pattern -- if so, propose testing it with the "shock_zscore" indicator \
-  (the only whitelisted way to test this; nothing else measures the same thing), e.g. \
-  {{"label": "shock_reactive_<coin>", "indicator": "shock_zscore", "op": ">=", "threshold": 3.0, \
-  "direction": "long" or "short"}}. If the human approves and it validates, the resulting anchors \
-  are used for a LIVE trade on THIS occurrence, tagged separately from routine trades so how the \
-  system actually performed reacting to real shocks, in real time, can be measured on its own.
+- "propose_novel_test": worth finding out if a SPECIFIC combination of what you were just given, \
+  historically, shows a real reversal or continuation pattern -- e.g. you notice the shock \
+  coincided with RSI already deeply oversold AND a hotter-than-prior inflation print in the last \
+  few days, so you propose testing exactly that combination, not the shock in isolation. A single \
+  clause (just "shock_zscore") is fine when nothing else in the given context looks relevant -- \
+  don't force a compound story where the evidence doesn't support one. Use ONLY indicators you were \
+  actually shown a reading for. Example: {{"label": "shock_reactive_<coin>", "clauses": \
+  [{{"indicator": "shock_zscore", "op": ">=", "threshold": 3.0}}, {{"indicator": "rsi_14d", \
+  "op": "<", "threshold": 30}}], "direction": "long" or "short"}}. If the human approves and it's \
+  accepted, the resulting anchors are used for a LIVE trade on THIS occurrence, tagged separately \
+  from routine trades so how the system actually performed reacting to real shocks, in real time, \
+  can be measured on its own.
 
-TP/SL are never yours to set -- they only ever come from a validated anchor set, never invented \
+TP/SL are never yours to set -- they only ever come from an accepted anchor set, never invented \
 here. Return ONLY a JSON object: "assessment" (1-2 sentences), "recommended_action" \
 ("no_action"/"propose_novel_test"), "novel_condition_spec" (null or the spec above). No prose, no \
 markdown fences."""
 
-PRUNE_SYSTEM_PROMPT = """A candidate has been tracked for years without ever reaching 'validated' \
+PRUNE_SYSTEM_PROMPT = """A candidate has been tracked for years without ever reaching 'accepted' \
 status. The human is deciding whether to keep re-testing it weekly or drop it from the batch \
 entirely -- your job is only to suggest possible reasons for the underperformance, grounded ONLY in \
 the specific trigger definition and numbers you are given below. If (and only if) you are given a \
@@ -141,6 +158,24 @@ def escape_html(text: str) -> str:
     return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
+def format_spec_clauses(spec: dict) -> str:
+    """Renders a raw novel_condition_spec dict's (possibly multi-clause)
+    'clauses' list as one readable string, e.g. '14-day RSI (momentum,
+    0-100 scale) below 30 AND shock z-score (how extreme today's price
+    move is vs. this coin's own history) at least 3.0' -- shared by every
+    message (production and replay) that shows a proposed or tested
+    condition to a human, so a compound spec is never silently rendered
+    as if it only had one clause, the indicator name is never shown as a
+    raw variable name a non-technical reader couldn't parse (see
+    INDICATOR_PLAIN_NAMES), and the comparison is never a raw "<"/">"
+    symbol (see OPERATOR_PLAIN's own docstring for why -- a real,
+    observed Telegram rendering bug, not just a style choice)."""
+    return " AND ".join(
+        f"{escape_html(INDICATOR_PLAIN_NAMES.get(c['indicator'], c['indicator']))} {OPERATOR_PLAIN.get(c['op'], c['op'])} {c['threshold']}"
+        for c in spec["clauses"]
+    )
+
+
 def extract_text(response) -> str:
     """A response's content blocks aren't always [text] -- a model can
     emit a ThinkingBlock (or other non-text block) before its actual
@@ -164,33 +199,71 @@ def haiku_scout(articles: list[dict], client: Anthropic) -> list[dict]:
 
 
 def sonnet_strategist(flagged: dict, client: Anthropic) -> dict:
+    """A pattern doesn't require a shock to exist -- Sonnet's discovery
+    role (propose_novel_test) is never limited to shock-triggered
+    events, so a routine headline gets the same real indicator/macro
+    grounding a shock does: this coin's current readings if the headline
+    names one, every tracked coin's if it's broad/unclear ("MARKET"),
+    plus recent real macro releases -- never just the headline text
+    alone."""
     technical_snapshot = build_technical_snapshot(flagged.get("asset", "MARKET"), FREQTRADE_DB_PATH)
     context_summary = build_context_summary()
+    coin = _asset_to_coin(flagged.get("asset", ""))
+    if coin is not None:
+        indicator_snapshot = build_indicator_snapshot(coin)
+    else:
+        indicator_snapshot = "\n".join(build_indicator_snapshot(c) for c in SHOCK_SCAN_COINS)
+    macro_summary = recent_releases_summary()
     user_content = (
         f"HEADLINE: {flagged['headline']} (asset={flagged['asset']}, "
         f"sentiment={flagged['sentiment']}, magnitude={flagged['magnitude']}, "
         f"event_type={flagged['event_type']})\n\n"
+        f"INDICATOR SNAPSHOT:\n{indicator_snapshot}\n\n"
+        f"RECENT MACRO RELEASES (last 10 days):\n{macro_summary}\n\n"
         f"TECHNICAL SNAPSHOT:\n{technical_snapshot}\n\n"
         f"CANDIDATE BATTERY CONTEXT:\n{context_summary}"
     )
     response = client.messages.create(
-        model=SONNET_MODEL, max_tokens=700, system=SONNET_SYSTEM_PROMPT,
+        # 2000, not 700 -- see replay/judgment.py::judge_event's comment: observed
+        # live, the model emits a thinking block even though `thinking` is never
+        # requested, and 700 sometimes left no budget for the actual JSON answer.
+        model=SONNET_MODEL, max_tokens=2000, system=SONNET_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_content}],
     )
     return json.loads(_strip_fences(extract_text(response)))
 
 
+def _recent_headlines_summary(limit: int = 5) -> str:
+    """A few of the most recent real news headlines -- best-effort: a
+    fetch failure here must not block the shock judgment itself, since
+    Sonnet can still reason from indicators/macro alone."""
+    try:
+        articles = fetch_cryptocompare_news(limit=limit)
+    except Exception as e:
+        return f"Headlines unavailable ({e})."
+    if not articles:
+        return "No recent headlines available."
+    return "\n".join(f"- {a['headline']} ({a['published_at']})" for a in articles[:limit])
+
+
 def sonnet_shock_response(shock: dict, client: Anthropic) -> dict:
     technical_snapshot = build_technical_snapshot(shock["symbol"], FREQTRADE_DB_PATH)
     context_summary = build_context_summary()
+    indicator_snapshot = build_indicator_snapshot(shock["symbol"])
+    macro_summary = recent_releases_summary()
+    headlines_summary = _recent_headlines_summary()
     user_content = (
         f"SHOCK DETECTED: {shock['symbol']}, direction={shock['direction']}, "
         f"shock_z={shock['shock_z']:.2f}, latest_return={shock.get('latest_return')}\n\n"
+        f"INDICATOR SNAPSHOT:\n{indicator_snapshot}\n\n"
+        f"RECENT MACRO RELEASES (last 10 days):\n{macro_summary}\n\n"
+        f"RECENT NEWS HEADLINES:\n{headlines_summary}\n\n"
         f"TECHNICAL SNAPSHOT:\n{technical_snapshot}\n\n"
         f"CANDIDATE BATTERY CONTEXT:\n{context_summary}"
     )
     response = client.messages.create(
-        model=SONNET_MODEL, max_tokens=500, system=SHOCK_SYSTEM_PROMPT,
+        # 2000, not 700 -- see sonnet_strategist's comment above / replay/judgment.py.
+        model=SONNET_MODEL, max_tokens=2000, system=SHOCK_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_content}],
     )
     return json.loads(_strip_fences(extract_text(response)))
@@ -212,32 +285,51 @@ def sonnet_prune_advice(candidate: str, years_tracked: float, recent_summary: st
     user_content = (
         f"CANDIDATE: {candidate}\n"
         f"TRIGGER: {trigger_description}\n"
-        f"This system has been weekly-re-testing it for {years_tracked:.1f} years, never reached 'validated'.\n"
+        f"This system has been weekly-re-testing it for {years_tracked:.1f} years, never reached 'accepted'.\n"
         f"Most recent result: {recent_summary}"
     )
     response = client.messages.create(
-        model=SONNET_MODEL, max_tokens=600, system=PRUNE_SYSTEM_PROMPT,
+        # 1000, not 600 -- same headroom reasoning as sonnet_strategist above.
+        model=SONNET_MODEL, max_tokens=1000, system=PRUNE_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_content}],
     )
     return extract_text(response)
 
 
+# Attached to every proposal message (Sonnet strategist alert or shock
+# alert) that needs a human decision -- replaces the old free-text
+# "reply 'test it'" convention, which silently did nothing for any
+# phrasing that didn't match one of a few exact strings. A fixed,
+# small set of valid answers is always presented as buttons in this
+# project now, never left to free-text matching -- see
+# llm_pipeline/pending_tests.py's own module docstring.
+PROPOSAL_KEYBOARD_TEMPLATE = lambda pending_id: {
+    "inline_keyboard": [[
+        {"text": "Test It", "callback_data": f"propose:test:{pending_id}"},
+        {"text": "Don't Test It", "callback_data": f"propose:skip:{pending_id}"},
+    ]]
+}
+
+
 def format_shock_message(shock: dict, assessment: dict) -> str:
     base = (
         f"<b>{'━' * 4} SHOCK ALERT: {escape_html(shock['symbol'])} {'━' * 4}</b>\n\n"
-        f"<b>Direction:</b> {escape_html(shock['direction'])} (z={shock['shock_z']:.2f}, a statistical extreme this "
-        f"project's own methodology treats as excluded from routine conditions)\n\n"
-        f"<b>Assessment:</b> {escape_html(assessment['assessment'])}\n"
-        f"<b>Recommended action:</b> {escape_html(assessment['recommended_action'])}"
+        f"<b>Direction:</b> {escape_html(shock['direction'])} (z={shock['shock_z']:.2f}, roughly the top ~2% most "
+        f"extreme volatility episodes for this coin -- excluded from routine conditions)\n\n"
+        f"<b>Assessment:</b> {escape_html(assessment['assessment'])}"
     )
     if assessment["recommended_action"] == "propose_novel_test" and assessment.get("novel_condition_spec"):
         spec = assessment["novel_condition_spec"]
         base += (
-            f"\n\n<b>Proposed test:</b> {escape_html(spec['indicator'])} {escape_html(spec['op'])} {spec['threshold']} -> {escape_html(spec['direction'])}\n"
-            f"Reply 'test it' to run a real walk-forward backtest of this coin's own historical "
-            f"shocks. If it validates, the result trades THIS live occurrence too (tagged "
-            f"shock_reactive), so we can measure how the system actually did reacting in real time."
+            f"\n\n<b>This needs your input.</b>\n\n"
+            f"<b>Proposed test: \"{escape_html(spec['label'])}\"</b>\n\n"
+            f"({format_spec_clauses(spec)} → {escape_html(spec['direction'])})\n\n"
+            f"Test It runs a real walk-forward backtest of this coin's own historical shocks -- if it validates, "
+            f"the result also tracks THIS live occurrence (tagged shock_reactive), so we can measure how the "
+            f"system actually did reacting in real time. Don't Test It dismisses this proposal."
         )
+    else:
+        base += "\n\n<i>No action taken -- noise, not worth escalating further.</i>"
     return base
 
 
@@ -257,16 +349,28 @@ def run_shock_scan(coins: list[str] | None = None) -> None:
     client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     scan_coins = coins or SHOCK_SCAN_COINS
     for shock in scan_for_shocks(scan_coins):
-        assessment = sonnet_shock_response(shock, client)
-        if assessment["recommended_action"] == "propose_novel_test" and assessment.get("novel_condition_spec"):
-            s = assessment["novel_condition_spec"]
-            spec = ConditionSpec(label=s["label"], indicator=s["indicator"], op=s["op"],
-                                  threshold=s["threshold"], direction=s["direction"])
-            push_pending_test(spec, scan_coins, live_coin=shock["symbol"], signal_class="shock_reactive")
-        message = format_shock_message(shock, assessment)
-        sent = send_telegram(message)
-        status = "notified" if sent else "notify FAILED, see error above"
-        print(f"Shock escalated + {status}: {shock['symbol']} {shock['direction']} z={shock['shock_z']:.2f}")
+        try:
+            assessment = sonnet_shock_response(shock, client)
+            reply_markup = None
+            if assessment["recommended_action"] == "propose_novel_test" and assessment.get("novel_condition_spec"):
+                s = assessment["novel_condition_spec"]
+                spec = ConditionSpec(label=s["label"], clauses=tuple(Clause(**c) for c in s["clauses"]),
+                                      direction=s["direction"])
+                pending_id = push_pending_test(spec, scan_coins, live_coin=shock["symbol"], signal_class="shock_reactive")
+                reply_markup = PROPOSAL_KEYBOARD_TEMPLATE(pending_id)
+            message = format_shock_message(shock, assessment)
+            sent = send_telegram(message, reply_markup=reply_markup)
+            status = "notified" if sent else "notify FAILED, see error above"
+            print(f"Shock escalated + {status}: {shock['symbol']} {shock['direction']} z={shock['shock_z']:.2f}")
+        except Exception as e:
+            # One malformed Sonnet response for ONE shock must not cost every
+            # OTHER shock this scan found its own escalation -- same isolation
+            # discipline run_once() already applies per headline. Without this,
+            # a single truncated/malformed response silently killed the whole
+            # scan (observed live during a replay run, same root cause the
+            # max_tokens bump above addresses -- this is the second, independent
+            # layer of defense against it).
+            print(f"Failed to process shock '{shock.get('symbol', '?')}', skipping: {e}")
 
 
 def send_telegram(message: str, reply_markup: dict | None = None) -> bool:
@@ -284,64 +388,30 @@ def send_telegram(message: str, reply_markup: dict | None = None) -> bool:
     return True
 
 
-def execute_routine_trade(trade_proposal: dict) -> dict:
-    """Fires immediately, no human confirmation -- `trade_proposal` must
-    reference a candidate CURRENTLY 'validated' in the battery (enforced
-    here, not just requested in the prompt: Sonnet's output is untrusted
-    input like any other model output, so the anchor lookup is the real
-    gate, not the instruction asking it to behave). Returns a dict for
-    the Telegram notification (never a request for approval -- routine
-    trades are not a human decision in this project, see module
-    docstring), including the actual TP/SL ladder so the notification
-    can show real numbers, not just a status line."""
-    battery = load_battery_state()
-    spec = battery.get("candidates", {}).get(trade_proposal.get("candidate", ""))
-    if spec is None:
-        return {"opened": False,
-                "message": f"REJECTED: '{trade_proposal.get('candidate')}' is not currently a validated "
-                           f"candidate -- Sonnet proposed a trade without a real anchor set behind it, refused."}
-    push_manual_signal(
-        coin=trade_proposal["coin"], direction=trade_proposal["direction"],
-        tp_mult=spec["tp_mult"], sl_mult=spec["sl_mult"], anchors=spec["anchors"],
-        reasoning=trade_proposal["reasoning"], approved_by="sonnet_autonomous",
-        signal_class="sonnet_confirmed",
-    )
-    ladder = [(int(h), a["mfe"] * spec["tp_mult"], a["mae"] * spec["sl_mult"]) for h, a in sorted(spec["anchors"].items(), key=lambda kv: int(kv[0]))]
-    return {"opened": True, "coin": trade_proposal["coin"], "direction": trade_proposal["direction"],
-            "candidate": trade_proposal["candidate"], "ladder": ladder,
-            "message": f"Opened now: {trade_proposal['direction'].upper()} {trade_proposal['coin']} (candidate: {trade_proposal['candidate']})"}
-
-
-def format_sonnet_message(item: dict, assessment: dict, execution: dict | None = None) -> str:
+def format_sonnet_message(item: dict, assessment: dict) -> str:
+    """The label shown for each `recommended_action` value is deliberately
+    NOT a uniform "Recommended action: X" line -- "no_action" (nothing to
+    do) reads as a plain statement; only "propose_novel_test" is
+    genuinely a decision pending on the human, so it's the only case
+    phrased as one."""
     base = (
         f"<b>Sonnet Strategist Alert</b>\n\n"
         f"<b>Headline:</b> {escape_html(item['headline'])}\n"
         f"<b>Asset:</b> {escape_html(item['asset'])} | <b>Magnitude:</b> {item['magnitude']}/5\n\n"
-        f"<b>Assessment:</b> {escape_html(assessment['assessment'])}\n"
-        f"<b>Recommended action:</b> {escape_html(assessment['recommended_action'])}"
+        f"<b>Assessment:</b> {escape_html(assessment['assessment'])}"
     )
-    if assessment["recommended_action"] == "propose_trade" and assessment.get("trade_proposal"):
-        tp = assessment["trade_proposal"]
-        base += (
-            f"\n\n<b>Candidate:</b> {escape_html(tp.get('candidate'))}\n"
-            f"<b>Reasoning:</b> {escape_html(tp['reasoning'])}"
-        )
-        if execution and execution.get("opened"):
-            base += f"\n\n<b>{'━' * 4} Opened now: {tp['direction'].upper()} {escape_html(tp['coin'])} {'━' * 4}</b>\n"
-            for horizon, tp_pct, sl_pct in execution["ladder"]:
-                base += f"<b>{horizon}d</b>  TP +{tp_pct:.1%}  /  SL -{sl_pct:.1%}\n"
-        else:
-            base += f"\n\n{escape_html(execution['message']) if execution else 'Not executed.'}"
-    elif assessment["recommended_action"] == "propose_novel_test" and assessment.get("novel_condition_spec"):
+    action = assessment["recommended_action"]
+    if action == "propose_novel_test" and assessment.get("novel_condition_spec"):
         spec = assessment["novel_condition_spec"]
         base += (
-            f"\n\nThis looks like a condition we haven't tested before.\n"
-            f"<b>Proposed test:</b> {escape_html(spec['indicator'])} {escape_html(spec['op'])} {spec['threshold']} -> {escape_html(spec['direction'])}\n"
-            f"Reply 'test it' to run a real walk-forward backtest of this condition before it "
-            f"ever influences a trade."
+            f"\n\n<b>This needs your input.</b> This looks like a condition we haven't tested before.\n\n"
+            f"<b>Proposed test: \"{escape_html(spec['label'])}\"</b>\n\n"
+            f"({format_spec_clauses(spec)} → {escape_html(spec['direction'])})\n\n"
+            f"Test It runs a real walk-forward backtest of this condition before it's tracked as a live test "
+            f"(no real money is ever placed on it). Don't Test It dismisses this proposal."
         )
     else:
-        base += f"\n<b>Watch condition:</b> {escape_html(assessment.get('watch_condition') or 'n/a')}"
+        base += "\n\n<i>No action taken.</i>"
     return base
 
 
@@ -365,16 +435,15 @@ def run_once() -> None:
             continue
         try:
             assessment = sonnet_strategist(item, client)
-            execution = None
-            if assessment["recommended_action"] == "propose_trade" and assessment.get("trade_proposal"):
-                execution = execute_routine_trade(assessment["trade_proposal"])
-            elif assessment["recommended_action"] == "propose_novel_test" and assessment.get("novel_condition_spec"):
+            reply_markup = None
+            if assessment["recommended_action"] == "propose_novel_test" and assessment.get("novel_condition_spec"):
                 s = assessment["novel_condition_spec"]
-                spec = ConditionSpec(label=s["label"], indicator=s["indicator"], op=s["op"],
-                                      threshold=s["threshold"], direction=s["direction"])
-                push_pending_test(spec, SHOCK_SCAN_COINS, live_coin=_asset_to_coin(item.get("asset", "")), signal_class="manual")
-            message = format_sonnet_message(item, assessment, execution)
-            sent = send_telegram(message)
+                spec = ConditionSpec(label=s["label"], clauses=tuple(Clause(**c) for c in s["clauses"]),
+                                      direction=s["direction"])
+                pending_id = push_pending_test(spec, SHOCK_SCAN_COINS, live_coin=_asset_to_coin(item.get("asset", "")), signal_class="manual")
+                reply_markup = PROPOSAL_KEYBOARD_TEMPLATE(pending_id)
+            message = format_sonnet_message(item, assessment)
+            sent = send_telegram(message, reply_markup=reply_markup)
             status = "notified" if sent else "notify FAILED, see error above"
             print(f"Escalated + {status}: {item['headline'][:80]}")
         except Exception as e:

@@ -2,34 +2,42 @@
 project's README: free-text conversation (routed to Sonnet, but every
 number it cites still comes from a real computation, never invented) and
 structured commands / inline keyboards (routed straight to
-`kpi_queries.py`, no LLM involved at all). Also handles the automated
-post-mortem fired when a trade closes on a stop-loss.
+`kpi_queries.py`, no LLM involved at all).
 """
 from __future__ import annotations
 
+import json
 import os
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
+import pandas as pd
 import requests
 from anthropic import Anthropic
 from dotenv import load_dotenv
 
-from candidates.status_history import drop_candidate, mark_asked
-from execution.signal_store import consume_manual_signal, load_manual_signals, push_manual_signal
-from llm_pipeline.context_builder import build_context_summary, build_technical_snapshot
-from llm_pipeline.dynamic_candidates import record_test_result
+from candidates.definitions import TRIGGER_DESCRIPTIONS
+from candidates.methodology import format_trigger_summary
+from candidates.status_history import drop_candidate, mark_asked, record_status
+from llm_pipeline.context_builder import build_context_summary, build_live_test_summary, build_technical_snapshot
+from llm_pipeline.dynamic_candidates import record_test_result, registered_specs
 from llm_pipeline.haiku_sonnet_pipeline import escape_html, extract_text
-from llm_pipeline.novel_condition_tester import ConditionSpec, test_novel_condition
-from llm_pipeline.pending_tests import pop_pending_test
+from llm_pipeline.novel_condition_tester import ConditionSpec, condition_desc, format_pattern_significance, test_novel_condition
+from llm_pipeline.pending_tests import discard_pending_test_by_id, pop_pending_test_by_id
 from telegram.kpi_queries import format_kpi_table, kpi_table
 
 SONNET_MODEL = "claude-sonnet-5"
 FREQTRADE_DB_PATH = os.environ.get("FREQTRADE_DB_PATH", "execution/tradesv3.sqlite")
 
-MARKET_CHECK_SYSTEM_PROMPT = """You are a market-check assistant for a crypto trading system. \
-Given real technical/portfolio state and the live candidate battery context, answer the user's \
-question in 2-4 sentences. Cite only the numbers given to you in the state below -- never invent \
-a price, a percentage, or a trade detail. If nothing in the given state answers the question, say \
-so plainly rather than guessing."""
+MARKET_CHECK_SYSTEM_PROMPT = """You are a market-check assistant for a crypto pattern-discovery system \
+(NOT a trading system -- no funded position is ever opened; "accepted" only means a candidate's own \
+trigger opens an observational live test). Given real technical/portfolio state and the live candidate \
+battery context, answer the user's question in 2-4 sentences. Cite only the numbers given to you in the \
+state below -- never invent a price, a percentage, or a live-test detail. The reader may not know this \
+project's internal vocabulary (status codes like "insufficient_data", "watch"; terms like "validated" \
+vs. "accepted") -- briefly explain any such term you use in plain language rather than stating it bare, \
+the way you'd explain a piece of jargon to someone unfamiliar with the system. If nothing in the given \
+state answers the question, say so plainly rather than guessing."""
 
 KPI_KEYBOARD = {
     "inline_keyboard": [
@@ -40,7 +48,26 @@ KPI_KEYBOARD = {
 }
 
 
-def _send(text: str, reply_markup: dict | None = None) -> bool:
+SENT_LOG_PATH = Path(__file__).resolve().parent / "sent_messages.json"
+
+
+def _log_sent_message(message_id: int) -> None:
+    """Telegram's Bot API has no way to list or bulk-delete a chat's
+    history after the fact -- deleting a message later requires its
+    exact id, known only at send time. Logging it here is what makes
+    `delete_recent_messages` possible at all."""
+    log = json.loads(SENT_LOG_PATH.read_text()) if SENT_LOG_PATH.exists() else []
+    log.append({"message_id": message_id, "sent_at": datetime.now(timezone.utc).isoformat()})
+    SENT_LOG_PATH.write_text(json.dumps(log))
+
+
+def _send(text: str, reply_markup: dict | None = None, pin: bool = False) -> bool:
+    """`pin=True` best-effort pins the message after sending (Telegram's
+    own `pinChatMessage`, no special permission needed in a private 1:1
+    chat like this bot's -- only in groups/channels would the bot need
+    'can_pin_messages'). A pin failure never turns a successful send into
+    a failed one -- it's a convenience on top, not part of what "sent"
+    means, so this function's return value still reflects only the send."""
     load_dotenv()
     token, chat_id = os.environ["TELEGRAM_BOT_TOKEN"], os.environ["TELEGRAM_CHAT_ID"]
     url = f"https://api.telegram.org/bot{token}/sendMessage"
@@ -48,7 +75,50 @@ def _send(text: str, reply_markup: dict | None = None) -> bool:
     if reply_markup is not None:
         payload["reply_markup"] = reply_markup
     resp = requests.post(url, json=payload, timeout=15)
+    if resp.ok:
+        message_id = resp.json()["result"]["message_id"]
+        _log_sent_message(message_id)
+        if pin:
+            try:
+                pin_resp = requests.post(
+                    f"https://api.telegram.org/bot{token}/pinChatMessage",
+                    json={"chat_id": chat_id, "message_id": message_id, "disable_notification": True}, timeout=15,
+                )
+                if not pin_resp.ok:
+                    print(f"Pin failed ({pin_resp.status_code}): {pin_resp.text[:300]} -- message itself was still sent.")
+            except Exception as e:
+                print(f"Pin failed: {e} -- message itself was still sent.")
     return resp.ok
+
+
+def delete_recent_messages() -> dict:
+    """Deletes every logged bot message still within Telegram's 48h
+    deletion window. Anything older is left alone -- the platform
+    refuses those regardless -- and reported separately so the caller
+    knows to fall back to clearing the chat by hand on the client."""
+    load_dotenv()
+    token, chat_id = os.environ["TELEGRAM_BOT_TOKEN"], os.environ["TELEGRAM_CHAT_ID"]
+    if not SENT_LOG_PATH.exists():
+        return {"deleted": 0, "too_old": 0, "failed": 0}
+    log = json.loads(SENT_LOG_PATH.read_text())
+    now = datetime.now(timezone.utc)
+    deleted, too_old, failed = 0, 0, 0
+    remaining = []
+    for entry in log:
+        sent_at = datetime.fromisoformat(entry["sent_at"])
+        if (now - sent_at) >= timedelta(hours=48):
+            too_old += 1
+            remaining.append(entry)
+            continue
+        resp = requests.post(f"https://api.telegram.org/bot{token}/deleteMessage",
+                              json={"chat_id": chat_id, "message_id": entry["message_id"]}, timeout=15)
+        if resp.ok:
+            deleted += 1
+        else:
+            failed += 1
+            remaining.append(entry)
+    SENT_LOG_PATH.write_text(json.dumps(remaining))
+    return {"deleted": deleted, "too_old": too_old, "failed": failed}
 
 
 def handle_natural_language(text: str, client: Anthropic) -> str:
@@ -58,10 +128,16 @@ def handle_natural_language(text: str, client: Anthropic) -> str:
     bolded: this is free-form Sonnet prose with no template around it, so
     only HTML-safety is applied, not formatting Sonnet didn't ask for."""
     snapshot = build_technical_snapshot("MARKET", FREQTRADE_DB_PATH)
+    live_tests = build_live_test_summary()
     context = build_context_summary()
     response = client.messages.create(
-        model=SONNET_MODEL, max_tokens=400, system=MARKET_CHECK_SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": f"USER QUESTION: {text}\n\nSTATE:\n{snapshot}\n\n{context}"}],
+        # 2000, not 800 -- 800 was STILL observed live (2026-08-28, replay's own
+        # identical answer_market_question) to truncate mid-answer on a longer,
+        # itemized question. The model emits a thinking block even without
+        # `thinking` being requested, and it can consume over half the budget
+        # on its own (see docs/case_study/methodology-decisions.md).
+        model=SONNET_MODEL, max_tokens=2000, system=MARKET_CHECK_SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": f"USER QUESTION: {text}\n\nSTATE:\n{snapshot}\n\n{live_tests}\n\n{context}"}],
     )
     return escape_html(extract_text(response))
 
@@ -85,17 +161,65 @@ def handle_kpi_callback(callback_data: str) -> str:
 def handle_prune_callback(callback_data: str) -> str:
     """Answers the "Keep Testing" / "Drop from Batch" buttons sent by
     scheduler/weekly_revalidation.py for a candidate tracked 2+ years
-    with no validation. The decision is the human's -- Sonnet's earlier
-    message was advisory only -- so this just records it: "keep" resets
-    the re-ask timer (mark_asked, same as sending the prompt already
-    did) so it isn't re-proposed for another 6 months, "drop" removes
-    the candidate from every future battery run via status_history.py."""
+    without ever being accepted. The decision is the human's -- Sonnet's
+    earlier message was advisory only -- so this just records it: "keep"
+    resets the re-ask timer (mark_asked, same as sending the prompt
+    already did) so it isn't re-proposed for another 6 months, "drop"
+    removes the candidate from every future battery run via
+    status_history.py."""
     _, action, candidate = callback_data.split(":", 2)
     if action == "drop":
         drop_candidate(candidate)
         return f"Dropped '<b>{escape_html(candidate)}</b>' from the batch. It will no longer be tested."
     mark_asked(candidate)
-    return f"Keeping '<b>{escape_html(candidate)}</b>' in the batch. Will ask again in 6 months if it still hasn't validated."
+    return f"Keeping '<b>{escape_html(candidate)}</b>' in the batch. Will ask again in 6 months if it still hasn't been accepted."
+
+
+def handle_replay_prune_callback(callback_data: str) -> str:
+    """Same as handle_prune_callback, for the replay's own isolated
+    status_history.py -- keyed off the replay's current simulated date,
+    not real wall-clock time."""
+    from replay import state as replay_state
+    from replay import status_history as replay_sh
+    _, action, candidate = callback_data.split(":", 2)
+    as_of = replay_state.load_checkpoint().get("current_date")
+    if action == "drop":
+        replay_sh.drop_candidate(candidate)
+        return f"Dropped '<b>{escape_html(candidate)}</b>' from the batch. It will no longer be tested."
+    if as_of:
+        replay_sh.mark_asked(candidate, as_of)
+    return f"Keeping '<b>{escape_html(candidate)}</b>' in the batch. Will ask again in 6 months if it still hasn't been accepted."
+
+
+def handle_propose_callback(callback_data: str) -> str:
+    """Answers the "Test It" / "Don't Test It" buttons attached to every
+    Sonnet/shock-scan proposal -- replaces the old free-text 'test it'
+    matching, which silently did nothing for any phrasing that didn't
+    match one of a few exact strings (see
+    llm_pipeline/pending_tests.py's own module docstring). Each button
+    is bound to its own proposal's id, so multiple proposals pending at
+    once can never be confused with each other or resolved to the wrong
+    one."""
+    _, action, pending_id = callback_data.split(":", 2)
+    if action == "skip":
+        found = discard_pending_test_by_id(pending_id)
+        return ("Dismissed -- this condition won't be tested. Sonnet may propose it again later if it comes up."
+                if found else "This proposal already expired or was already answered.")
+    pending = pop_pending_test_by_id(pending_id)
+    if pending is None:
+        return "This proposal already expired or was already answered."
+    spec, coins, live_coin, signal_class = pending
+    return handle_test_it_confirmation(spec, coins, approved_by="telegram_user", live_coin=live_coin, signal_class=signal_class)
+
+
+def handle_replay_propose_callback(callback_data: str) -> str:
+    """Same idea as handle_propose_callback, for the replay's own
+    single-slot pending test (only one can ever be pending at a time --
+    the replay halts until it's answered -- so no id is needed here)."""
+    _, action = callback_data.split(":", 1)
+    from replay.engine import discard_pending_test, resolve_pending_test
+    result = discard_pending_test() if action == "skip" else resolve_pending_test()
+    return "" if result is not None else "No replay proposal is currently pending."
 
 
 def handle_test_it_confirmation(pending_spec: ConditionSpec, coins: list[str], approved_by: str,
@@ -104,57 +228,94 @@ def handle_test_it_confirmation(pending_spec: ConditionSpec, coins: list[str], a
     methodology engine directly (test_novel_condition -> the same
     build_events/walk_forward/classify_status pipeline run_battery.py
     uses for the static candidates), never routing back through Sonnet:
-    Sonnet's job ended when it proposed the spec, the actual validation
-    is deterministic and Sonnet has no further say in the outcome.
+    Sonnet's job ended when it proposed the spec, the actual acceptance
+    check is deterministic and Sonnet has no further say in the outcome.
 
-    If it validates AND `live_coin` is given (the specific coin whose
-    live occurrence prompted this test -- e.g. the coin a shock was just
-    detected on), the resulting anchors are pushed immediately as a
-    manual signal for THAT occurrence, tagged `signal_class`. Separately,
-    and regardless of outcome, the result is recorded in the dynamic-
+    This project never opens a funded position (see
+    docs/case_study/methodology-decisions.md) -- if `live_coin` is given
+    (the specific coin whose live occurrence prompted this test), a live
+    TEST opens for that occurrence regardless of the verdict below
+    (testing starts at identification, not only once accepted), backdated
+    via `execution.live_testing.find_backdated_entry` to the real hour
+    this condition first became true if that's discoverable within the
+    lookback window, not the discovery moment. Separately, and
+    regardless of outcome, the result is recorded in the dynamic-
     candidate registry (llm_pipeline/dynamic_candidates.py) so it's
     re-tested weekly alongside the static battery from now on, and so a
     rejected condition isn't silently re-proposed later."""
+    condition_str = f"{condition_desc(pending_spec)} → {pending_spec.direction}"
     result = test_novel_condition(pending_spec, coins)
     status = result["status"]
     if status == "insufficient_data":
-        return f"Tested '<b>{escape_html(pending_spec.label)}</b>': not enough historical occurrences to evaluate yet."
+        return (f"<b>Tested -- {escape_html(pending_spec.label)}</b>\n\n"
+                f"({escape_html(condition_str)})\n\n"
+                f"Not enough historical occurrences to evaluate yet.")
     record_test_result(pending_spec, status, source=signal_class)
+    # Recorded here, not deferred to the next weekly refresh -- without this, a
+    # just-discovered candidate is already registered (and can already open live
+    # tests via the mechanical scan) but stays completely invisible to
+    # all_latest_statuses()/Sonnet's own context for up to a week, since that
+    # function skips any candidate with no status_log entry at all (a real,
+    # observed case: Sonnet correctly said "not listed... so I can't state its
+    # status" for a candidate that WAS already live-testing).
+    record_status(pending_spec.label, status)
+    pattern = result.get("pattern_significance") or {}
     lines = [
-        f"Tested '<b>{escape_html(pending_spec.label)}</b>': status = <b>{escape_html(status)}</b>",
-        f"N={result['n']}  win_rate={result['win_rate']:.1%}  strict_win_rate={result['strict_win_rate']:.1%}",
+        f"<b>Historical backtest -- {escape_html(pending_spec.label)}</b>",
+        "",
+        f"({escape_html(condition_str)})",
+        "",
+        format_pattern_significance(pattern),
+        "",
+        f"<b>Verdict:</b> {escape_html(status.upper())}",
+        "",
+        f"For reference, trading this with a TP/SL structure over the same history: "
+        f"N={result['n']}  win_rate={result['win_rate']:.1%}  strict_win_rate={result['strict_win_rate']:.1%}  "
         f"Sortino={result['sortino']:.2f}  total_expectancy={result['total_expectancy']:+.1%}  "
-        f"timeout_fraction={result['timeout_fraction']:.1%}",
+        f"timeout_fraction={result['timeout_fraction']:.1%} (informational only, doesn't affect the verdict above).",
     ]
-    if status == "validated":
-        lines.append("Added to the weekly-refreshed battery going forward -- re-tested every Sunday alongside the static candidates, same as any of them.")
-        if live_coin:
-            push_manual_signal(
-                coin=live_coin, direction=pending_spec.direction,
-                tp_mult=result["live_tp_mult"], sl_mult=result["live_sl_mult"], anchors=result["live_anchors"],
-                reasoning=f"Novel-condition test '{pending_spec.label}' validated on approval; "
-                          f"trading the live occurrence that prompted it.",
-                approved_by=approved_by, signal_class=signal_class,
-            )
-            lines.append(f"<b>{'━' * 4} Pushed as a live signal for {escape_html(live_coin)} now -- tagged '{escape_html(signal_class)}' {'━' * 4}</b>")
-    else:
-        lines.append("This does not clear the bar for live trading -- logged as tested, won't be re-proposed by Sonnet without new evidence, but will still be re-checked weekly in case conditions genuinely change.")
+
+    if pattern.get("status") == "ok":
+        from candidates import status_history as _sh
+        from execution import live_test_state as _lts
+        horizons = _lts.load_horizons()
+        horizons[pending_spec.label] = pattern["horizon"]
+        _lts.save_horizons(horizons)
+        _sh.record_horizon(pending_spec.label, pattern["horizon"])
+
+    if status == "accepted":
+        lines.append("")
+        lines.append("This is a historical screening result, not a live track record -- the real test is ongoing: "
+                      "added to the battery now, re-tested every Sunday alongside the static candidates, same as any of them.")
+    if live_coin:
+        from execution.live_testing import _open_live_test, find_backdated_entry
+        decision_date = find_backdated_entry(pending_spec, live_coin) if status not in ("insufficient_data",) else None
+        execution = _open_live_test(pending_spec.label, live_coin, pending_spec.direction, decision_date)
+        if execution.get("opened"):
+            when = f"backdated to {execution['entry_date'].date()}" if decision_date is not None else "opened now"
+            lines.append("")
+            lines.append(f"<b>Live test {when} -- {pending_spec.direction.upper()} {escape_html(live_coin)}</b>\n\n"
+                         f"Held for <b>{execution['horizon']}d</b>, then resolved -- no TP/SL, tagged '{escape_html(signal_class)}'.")
+    if status != "accepted":
+        lines.append("")
+        lines.append("No significant pattern found (or the risk profile doesn't clear the bar). Logged as "
+                      "tested, won't be re-proposed by Sonnet without new evidence, but will still be re-checked "
+                      "weekly in case a better TP/SL fit emerges or conditions genuinely change.")
     return "\n".join(lines)
 
 
-def send_stoploss_postmortem(trade_pair: str, exit_reason: str, close_profit: float,
-                              enter_tag: str | None, client: Anthropic) -> None:
-    context = build_context_summary()
-    prompt = (
-        f"A trade just closed on {trade_pair}, reason='{exit_reason}', profit={close_profit:+.2%}, "
-        f"opened by candidate/signal '{enter_tag or 'manual/sonnet'}'. Write a 2-3 sentence post-mortem: "
-        f"was this an ordinary outcome for this signal's known behavior, or does it look like the "
-        f"signal's underlying assumption broke? Cite only the numbers given here.\n\n{context}"
-    )
-    response = client.messages.create(model=SONNET_MODEL, max_tokens=300, messages=[{"role": "user", "content": prompt}])
-    kind = "SL" if close_profit < 0 else "TP"
-    _send(f"<b>{kind} hit on {escape_html(trade_pair)} ({close_profit:+.2%})</b>\n\n"
-          f"{escape_html(extract_text(response))}\n\nDocumented in the history report.")
+def _trigger_description(candidate: str) -> str:
+    """Same lookup as replay/engine.py's and scheduler/weekly_revalidation.py's
+    own copies of this function -- duplicated rather than shared because
+    importing scheduler.weekly_revalidation here would be circular (it
+    already imports _send from this module)."""
+    base = candidate.rsplit("_", 1)[0]
+    if base in TRIGGER_DESCRIPTIONS:
+        return TRIGGER_DESCRIPTIONS[base]
+    for spec in registered_specs():
+        if spec.label == candidate:
+            return f"{condition_desc(spec)} → {spec.direction}"
+    return "trigger definition not found -- treat this as missing information, do not guess at it"
 
 
 def _answer_callback_query(callback_query_id: str) -> None:
@@ -177,11 +338,23 @@ def _dispatch_update(update: dict, client: Anthropic) -> None:
     if "callback_query" in update:
         cq = update["callback_query"]
         data = cq["data"]
-        if data.startswith("prune:"):
+        if data.startswith("replay_prune:"):
+            reply = handle_replay_prune_callback(data)
+        elif data.startswith("replay_propose:"):
+            reply = handle_replay_propose_callback(data)
+        elif data.startswith("prune:"):
             reply = handle_prune_callback(data)
+        elif data.startswith("propose:"):
+            reply = handle_propose_callback(data)
         else:
             reply = handle_kpi_callback(data)
-        _send(reply)
+        if reply:
+            # handle_replay_propose_callback's underlying functions
+            # (resolve_pending_test/discard_pending_test) already send
+            # their own message(s) on success and return "" here -- only
+            # a non-empty reply (an error/no-op case, or every other
+            # callback) still needs sending.
+            _send(reply)
         _answer_callback_query(cq["id"])
         return
 
@@ -190,20 +363,108 @@ def _dispatch_update(update: dict, client: Anthropic) -> None:
     if not text:
         return
 
-    if text.lower() in ("test it", "/test", "test"):
-        pending = pop_pending_test()
-        if pending is None:
-            _send("Nothing pending to test right now.")
+    if text.lower() in ("replay continue", "continue replay"):
+        from replay.engine import advance
+        result = advance()
+        if result.get("stopped") == "waiting_for_human":
+            _send(f"<b>[Historical Replay]</b> Paused at {result['current_date']} -- awaiting a Test It / Don't Test It decision (see the proposal above).")
+        # advance() already sends its own checkpoint digest on a normal stop
+        return
+
+    if text.lower() == "/replay_summary":
+        from replay.battery import run_replay_battery
+        from replay import state as replay_state
+        from replay import status_history as replay_sh
+        checkpoint = replay_state.load_checkpoint()
+        if checkpoint.get("current_date") is None:
+            _send("Replay hasn't started yet -- nothing to summarize.")
             return
-        spec, coins, live_coin, signal_class = pending
-        reply = handle_test_it_confirmation(spec, coins, approved_by="telegram_user", live_coin=live_coin, signal_class=signal_class)
-        _send(reply)
+        as_of = pd.Timestamp(checkpoint["current_date"])
+        status_summary = run_replay_battery(as_of)
+        under_test, discarded = format_trigger_summary(status_summary, replay_sh.all_latest_statuses())
+        _send(f"<b>{as_of.date()}</b> (as of the replay's current simulated date)\n\n{under_test}")
+        _send(discarded)
+        return
+
+    if text.lower() == "/replay_status":
+        from replay import state
+        checkpoint = state.load_checkpoint()
+        battery = state.load_battery_status()
+        log = state.load_trade_log()
+        lines = [
+            f"<b>Historical Replay status</b>",
+            f"Simulated date: {checkpoint['current_date'] or 'not started'}  (status: {checkpoint['status']})",
+            f"Accepted candidates as of that date: {', '.join(battery.get('candidates', {}).keys()) or 'none'}",
+            f"Live tests so far: {len(log)}" + (
+                f", mean forward return (resolved): {sum(t['forward_return'] for t in log if t['status'] == 'closed') / max(1, sum(1 for t in log if t['status'] == 'closed')):+.2%}"
+                if any(t["status"] == "closed" for t in log) else ""
+            ),
+        ]
+        _send("\n".join(lines))
+        return
+
+    if text.lower() == "/summary":
+        from candidates.run_battery import run_all
+        from candidates.status_history import all_latest_statuses
+        result, _live_state, _meta = run_all()
+        status_summary = result.set_index("candidate").to_dict(orient="index") if len(result) else {}
+        under_test, discarded = format_trigger_summary(status_summary, all_latest_statuses())
+        _send(under_test)
+        _send(discarded)
+        return
+
+    if text.lower() in ("/help", "/start"):
+        # Pinned so it stays at the top of the chat as a standing reference --
+        # this message never changes based on live state (unlike every other
+        # command's reply), so it's the one thing worth keeping in view rather
+        # than scrolled past.
+        lines = [
+            "<b>Standard commands</b>",
+            "",
+            "/summary -- current status of every tracked trigger (production): accepted, watch, rejected, insufficient data. Recomputed fresh, no LLM call.",
+            "/results -- KPI reporting from the real trade database (By Coin / By Signal / By Decision Type / Overall). Buttons, no LLM.",
+            "/replay_summary -- same as /summary, for the historical replay (a walk-forward simulation through real past data, used to validate the system and build an initial live-test track record before going live).",
+            "/replay_status -- quick snapshot of the replay's simulated date, accepted candidates, live-test count.",
+            "\"replay continue\" -- advances the historical replay.",
+            "",
+            "Anything else you type is answered in plain language (Sonnet), grounded only in the real numbers above -- ask about the market, a specific candidate, recent results, anything.",
+            "",
+            "<b>Buttons you'll see on their own</b>",
+            "\"Test It\" / \"Don't Test It\" -- on a new condition Sonnet proposes.",
+            "\"Keep Testing\" / \"Drop from Batch\" -- on a keep-or-drop or milestone checkpoint.",
+            "",
+            "<b>Freqtrade hyperopt cross-check -- run from your own terminal, never from here</b>",
+            "Deliberately local-only (keeps the live host cheap to run, see PROJECT_MAP.md's \"Cost Optimization\" Part 3). From the project root:",
+            "",
+            "<code>python3 -m execution.hyperopt_runner</code>",
+            "  -- runs every tracked candidate, 50 epochs, 2018-01-01 to now (the defaults).",
+            "<code>python3 -m execution.hyperopt_runner NAME1 NAME2</code>",
+            "  -- only those candidates.",
+            "<code>python3 -m execution.hyperopt_runner --epochs 30</code>",
+            "  -- fewer epochs, faster.",
+            "<code>python3 -m execution.hyperopt_runner --timerange 20220101-</code>",
+            "  -- restrict the date range.",
+            "<code>python3 -m execution.hyperopt_runner --help</code>",
+            "  -- full option reference.",
+            "",
+            "Writes execution/hyperopt_results.json -- copy or push that one file to wherever this bot runs when you're done; nothing else needs to move.",
+        ]
+        _send("\n".join(lines), pin=True)
         return
 
     if text.startswith("/"):
         command, *args = text.split()
         reply, keyboard = handle_command(command, args)
         _send(reply, keyboard)
+        return
+
+    from replay import state as replay_state
+    if replay_state.load_checkpoint().get("current_date") is not None:
+        # A replay is in progress -- a market question almost certainly
+        # means "as of where the replay currently stands," not
+        # production's own (likely empty) real state.
+        from replay.judgment import answer_market_question
+        _send(answer_market_question(text, client))
         return
 
     reply = handle_natural_language(text, client)

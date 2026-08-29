@@ -7,12 +7,17 @@ across the live coin universe, pooled for anchor fitting, graded per-coin
 and per-year for concentration, and writes the status table this
 project's weekly refresh cycle re-runs unchanged.
 
-Coin universe: BTC/ETH/BNB/XRP/DOGE/ADA/LTC. SOL/AVAX/LINK are available
-in `data/` but excluded here -- their intra-bar volatility relative to
-this pool is high enough that a pooled anchor fit needs a volatility-
-scaling step this project hasn't built yet; adding them without it risks
-diluting the whole pool's fitted barriers, not just misjudging those
-three coins on their own.
+Coin universe: BTC/ETH/BNB/XRP/DOGE/ADA/LTC, matching
+`data_ingestion/market_data/binance_fetcher.py::COINS` exactly (the data
+directory no longer carries any other symbol -- SOL/AVAX/LINK's data
+files were removed rather than left stale and unfetched, so `data/` and
+this project's actual coin universe can't silently drift apart again).
+SOL/AVAX/LINK were tried once and excluded deliberately, not just never
+gotten to: their intra-bar volatility relative to this pool is high
+enough that a pooled anchor fit needs a volatility-scaling step this
+project hasn't built yet -- adding them back without it risks diluting
+the whole pool's fitted barriers, not just misjudging those three coins
+on their own.
 """
 from __future__ import annotations
 
@@ -26,7 +31,7 @@ from .data_loading import load_daily
 from .definitions import CANDIDATE_DIRECTIONS, build_triggers
 from .methodology import (
     MethodologyConfig, build_events, classify_status, compute_anchors, concentration_check,
-    report, shock_zscore_series, walk_forward,
+    pattern_significance, report, shock_zscore_series, walk_forward,
 )
 from .status_history import candidates_due_for_prune_decision, is_dropped, is_shut_down, record_status, trigger_shutdown
 from llm_pipeline.dynamic_candidates import record_test_result, registered_specs
@@ -44,11 +49,13 @@ def run_all() -> tuple[pd.DataFrame, dict, dict]:
     execution engine actually reads at trade time -- per (candidate,
     coin) the most recent walk-forward fold's chosen (tp_mult, sl_mult)
     and the anchors fit from ALL available data, keyed only for
-    candidates whose pooled status is 'validated'. A 'watch' or
+    candidates whose pooled status is 'accepted' -- this is the
+    historical/backtest bar, not a claim of a live track record; see
+    candidates/methodology.py::classify_status's docstring. A 'watch' or
     'rejected' candidate is never allowed to place a trade unattended,
     so it has no entry in `live_state` regardless of what any single
     coin's own numbers look like. `meta` carries `prune_candidates`
-    (names tracked 2+ years with no validation, due for a keep-or-drop
+    (names tracked 2+ years without ever being accepted, due for a keep-or-drop
     decision), `shutdown_triggered` (True the run that finds zero active
     candidates left -- static and dynamic alike), and `failed_candidates`
     (names that raised an exception this run -- their own bug/bad data
@@ -92,7 +99,12 @@ def run_all() -> tuple[pd.DataFrame, dict, dict]:
             rep = report(oos)
             coin_conc = concentration_check(oos, "group")
             year_conc = concentration_check(oos, "period")
-            status = classify_status(rep, coin_conc, year_conc, cfg)
+            # pattern_significance is now the actual acceptance gate --
+            # see classify_status's own docstring. `rep` (Sortino/win_rate)
+            # is still computed and still reported below, but no longer
+            # decides accepted/watch/rejected.
+            pattern = pattern_significance(events, ohlc_by_coin, direction, cfg)
+            status = classify_status(rep, coin_conc, year_conc, pattern, cfg)
             record_status(variant, status)
 
             rows.append({
@@ -102,13 +114,19 @@ def run_all() -> tuple[pd.DataFrame, dict, dict]:
                 "dominant_coin": coin_conc.get("dominant_group"), "max_coin_share": coin_conc.get("max_group_share"),
                 "dominant_year": year_conc.get("dominant_group"), "max_year_share": year_conc.get("max_group_share"),
                 "n_shock_excluded": n_shock_events,
+                "pattern_significant": pattern.get("significant"), "pattern_p_value": pattern.get("p_value"),
+                "pattern_excess_return": pattern.get("excess_return"), "pattern_mfe_mae_ratio": pattern.get("mfe_mae_ratio"),
             })
 
-            if status == "validated":
+            if status == "accepted":
                 full_anchors = compute_anchors(events, HORIZONS_DAYS)
                 last_params = params_log.iloc[-1] if len(params_log) else None
                 live_state["candidates"][variant] = {
                     "direction": direction,
+                    # `horizon`: what a live occurrence is actually held for now (see
+                    # pattern_significance) -- no TP/SL barrier. tp_mult/sl_mult/anchors are
+                    # kept for reporting/reference only, not used to open a live test anymore.
+                    "horizon": pattern["horizon"],
                     "tp_mult": float(last_params["tp_mult"]) if last_params is not None else 1.0,
                     "sl_mult": float(last_params["sl_mult"]) if last_params is not None else 1.0,
                     "anchors": {str(h): {"mfe": full_anchors[h]["mfe"], "mae": full_anchors[h]["mae"]} for h in HORIZONS_DAYS},
@@ -125,7 +143,7 @@ def run_all() -> tuple[pd.DataFrame, dict, dict]:
 
     # Dynamic candidates -- conditions a human approved testing live via
     # "test it" -- are re-tested here with test_novel_condition() every
-    # week, exactly like the static ones above: a validated status is
+    # week, exactly like the static ones above: an accepted status is
     # never treated as permanent, and a rejected one is cheaply re-checked
     # in case conditions genuinely changed, not silently dropped.
     for spec in registered_specs():
@@ -148,9 +166,10 @@ def run_all() -> tuple[pd.DataFrame, dict, dict]:
                 "dominant_year": year_conc.get("dominant_group"), "max_year_share": year_conc.get("max_group_share"),
                 "n_shock_excluded": result.get("n_shock_excluded", 0),  # 0 by construction when the spec's own indicator IS shock_zscore -- see novel_condition_tester.py
             })
-            if status == "validated" and result.get("live_anchors"):
+            if status == "accepted" and result.get("live_anchors"):
                 live_state["candidates"][spec.label] = {
-                    "direction": spec.direction, "tp_mult": result["live_tp_mult"], "sl_mult": result["live_sl_mult"],
+                    "direction": spec.direction, "horizon": result["pattern_significance"]["horizon"],
+                    "tp_mult": result["live_tp_mult"], "sl_mult": result["live_sl_mult"],
                     "anchors": result["live_anchors"],
                 }
         except Exception as e:
@@ -189,9 +208,9 @@ if __name__ == "__main__":
         "max_year_share": "{:.1%}".format,
     }
     print(result.to_string(index=False, formatters={k: v for k, v in fmt.items() if k in result.columns}))
-    print(f"\n{len(live_state['candidates'])} candidate(s) validated for live trading -> {SIGNAL_STORE_PATH}")
+    print(f"\n{len(live_state['candidates'])} candidate(s) accepted for live trading -> {SIGNAL_STORE_PATH}")
     if meta["prune_candidates"]:
-        print(f"Due for a keep-or-drop decision (2+ years, never validated): {meta['prune_candidates']}")
+        print(f"Due for a keep-or-drop decision (2+ years, never accepted): {meta['prune_candidates']}")
     if meta["shutdown_triggered"]:
         print("SHUTDOWN TRIGGERED: no candidates left to test.")
     if meta["failed_candidates"]:

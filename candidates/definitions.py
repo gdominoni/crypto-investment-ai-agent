@@ -23,7 +23,6 @@ no trigger definition needs its own leak-avoidance logic.
 """
 from __future__ import annotations
 
-import numpy as np
 import pandas as pd
 
 from .data_loading import load_daily, load_funding, zscore
@@ -36,12 +35,22 @@ def trend_efficiency_ratio(close: pd.Series, window: int) -> pd.Series:
     return (net_change / path_length).clip(upper=1.0)
 
 
-def compute_triggers(daily: pd.DataFrame, funding: pd.Series | None = None) -> pd.DataFrame:
+def compute_triggers(daily: pd.DataFrame, funding: pd.Series | None = None, scale: int = 1) -> pd.DataFrame:
     """Pure function of a daily OHLCV frame (+ optional funding series) --
     called identically by the research battery (`run_battery.py`, on a
     fully historical frame) and the live Freqtrade strategy (on its own
     `populate_indicators` dataframe), so there is exactly one
     implementation of each trigger, never two that could drift apart.
+
+    `scale`: every window below is a bar count, in DAYS by default
+    (`scale=1`). Passed `scale=24` against an HOURLY frame instead, the
+    same day-defined windows (e.g. "20-day efficiency ratio") get
+    reinterpreted as their hour-equivalent (480 hours) -- a deliberate,
+    documented approximation used only for LIVE trigger detection (never
+    the backtest), see docs/case_study/methodology-decisions.md. C2
+    ('is_macro_day') stays calendar-day gated regardless of `scale` --
+    macro releases are only known to day granularity in this project's
+    calendar, there's no hourly refinement to reinterpret.
 
     `funding=None` (no funding-rate history available for this coin)
     degrades c1_long/c1_short to always-False rather than raising --
@@ -52,24 +61,25 @@ def compute_triggers(daily: pd.DataFrame, funding: pd.Series | None = None) -> p
     idx = daily.index
     out = pd.DataFrame(index=idx)
     close, volume = daily["close"], daily["volume"]
+    w20, w5, w30 = 20 * scale, 5 * scale, 30 * scale
 
     macro_days = macro_release_days()
-    daily_range = (daily["high"] - daily["low"]) / close
-    range_avg20 = daily_range.rolling(20, min_periods=10).mean()
-    is_macro_day = pd.Series(idx.isin(macro_days), index=idx)
-    breakout = daily_range > 1.5 * range_avg20
+    bar_range = (daily["high"] - daily["low"]) / close
+    range_avg = bar_range.rolling(w20, min_periods=max(w20 // 2, 1)).mean()
+    is_macro_day = pd.Series(idx.floor("D").isin(macro_days) if scale > 1 else idx.isin(macro_days), index=idx)
+    breakout = bar_range > 1.5 * range_avg
     out["c2_long"] = is_macro_day & breakout & (close < daily["open"])
     out["c2_short"] = is_macro_day & breakout & (close > daily["open"])
 
-    er20 = trend_efficiency_ratio(close, 20)
-    vol_surge = volume > 1.8 * volume.rolling(20, min_periods=10).mean()
-    prior_ret = close.pct_change(5)
-    trend_base = (er20 > 0.40) & vol_surge
+    er = trend_efficiency_ratio(close, w20)
+    vol_surge = volume > 1.8 * volume.rolling(w20, min_periods=max(w20 // 2, 1)).mean()
+    prior_ret = close.pct_change(w5)
+    trend_base = (er > 0.40) & vol_surge
     out["c6_long"] = trend_base & (prior_ret > 0)
     out["c6_short"] = trend_base & (prior_ret < 0)
 
     if funding is not None:
-        fz = zscore(funding.reindex(idx).ffill(), window=30)
+        fz = zscore(funding.reindex(idx).ffill(), window=w30)
         out["c1_long"] = fz < -2.0
         out["c1_short"] = fz > 2.0
     else:

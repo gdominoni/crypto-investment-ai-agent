@@ -1,6 +1,6 @@
 """Persistent registry of candidates discovered through the novel-
 condition / shock-detection pathway (novel_condition_tester.py), so a
-condition validated once via "test it" doesn't just fire one live trade
+condition accepted once via "test it" doesn't just fire one live trade
 and vanish -- it's re-tested every week alongside the static battery
 (candidates/definitions.py) by run_battery.py, exactly like a rejected
 static candidate is cheaply re-checked rather than assumed permanent.
@@ -18,7 +18,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from llm_pipeline.novel_condition_tester import ConditionSpec
+from llm_pipeline.novel_condition_tester import Clause, ConditionSpec
 
 REGISTRY_PATH = Path(__file__).resolve().parent.parent / "candidates" / "dynamic_candidates.json"
 
@@ -30,17 +30,18 @@ def load_registry() -> dict:
 
 
 def _spec_to_dict(spec: ConditionSpec) -> dict:
-    return {"label": spec.label, "indicator": spec.indicator, "op": spec.op,
-            "threshold": spec.threshold, "direction": spec.direction, "horizons": list(spec.horizons)}
+    return {"label": spec.label,
+            "clauses": [{"indicator": c.indicator, "op": c.op, "threshold": c.threshold} for c in spec.clauses],
+            "direction": spec.direction, "horizons": list(spec.horizons)}
 
 
 def _dict_to_spec(d: dict) -> ConditionSpec:
-    return ConditionSpec(label=d["label"], indicator=d["indicator"], op=d["op"],
-                          threshold=d["threshold"], direction=d["direction"], horizons=tuple(d["horizons"]))
+    return ConditionSpec(label=d["label"], clauses=tuple(Clause(**c) for c in d["clauses"]),
+                          direction=d["direction"], horizons=tuple(d["horizons"]))
 
 
 def record_test_result(spec: ConditionSpec, status: str, source: str) -> None:
-    """Called after EVERY ad-hoc test -- validated, watch, or rejected,
+    """Called after EVERY ad-hoc test -- accepted, watch, or rejected,
     never only the successes. The label is this condition's permanent
     identity in the registry; re-testing the same label overwrites its
     prior status rather than accumulating duplicate entries, since only
@@ -64,6 +65,6 @@ def registered_specs() -> list[ConditionSpec]:
 
 def rejected_labels() -> set[str]:
     """For Sonnet's context (context_builder.py): conditions already
-    tested and not currently validated, so they aren't silently
+    tested and not currently accepted, so they aren't silently
     re-proposed without new evidence."""
-    return {label for label, entry in load_registry().items() if entry["status"] != "validated"}
+    return {label for label, entry in load_registry().items() if entry["status"] != "accepted"}

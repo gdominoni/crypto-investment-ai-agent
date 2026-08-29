@@ -1,0 +1,174 @@
+# Methodology Decisions Log
+
+A running record of every non-obvious methodology choice in this project, why it was made, and whether it rests on a statistical justification or is a stated compromise (and why the compromise was accepted). Companion to [PLAN.md](PLAN.md) (what was built) and [PROJECT_MAP.md](../../PROJECT_MAP.md) (where it lives in code) — this file exists so a reader can find out *why* a specific number or design choice is what it is, in one place, instead of archaeology through commit history.
+
+Each entry is dated and never silently rewritten — if a decision is later reversed, a new entry says so and links back to the one it supersedes.
+
+---
+
+## `accepted` vs `validated` — two different claims, deliberately separate words
+
+**Decision.** `accepted` means a candidate cleared the historical/backtest statistics. `validated` is reserved exclusively for a candidate that has actually lived through its own tracking window (see "N=50 replaces the 2-year milestone" below) while still `accepted`. The two words are never used interchangeably anywhere in code, prompts, or Telegram messages.
+
+**Why.** The two originally used the same word, which let a candidate that had merely passed a historical backtest be described the same way as one with an actual live track record — a real source of confusion, not just a naming nitpick: it's the difference between "this pattern looks real in hindsight" and "this pattern kept looking real going forward, tested prospectively." Same discipline as the earlier finding that a component's 80.7% win rate was entry-price leakage — precise language about what's actually been demonstrated is not optional here.
+
+**Type.** Definitional / statistical rigor, not a compromise.
+
+---
+
+## `classify_status`'s gate: pattern significance, not P&L
+
+**Decision.** A candidate is `accepted` if `pattern_significance` finds a statistically significant, out-of-sample directional effect (vs. the coin's own unconditional baseline over the same period) with a favorable risk path (mean MFE > mean MAE at the horizon the effect was found at), and isn't carried by a single coin or period. Sortino, win_rate, and strict_win_rate — the TP/SL-conditioned backtest numbers — are still computed and still reported, but **no longer gate acceptance.**
+
+**Why.** This project's stated purpose is discovering whether a real, reproducible relationship exists between a market condition and subsequent price behavior — not optimizing a specific TP/SL barrier structure. The two questions are related but different: a real, small, reliable pattern can fail a P&L gate simply because the barriers are too wide to register it (a high-timeout-fraction candidate); conversely, a barrier structure can look profitable by fitting the same noise it was graded against. Concretely observed on real data during this rework: a shock-based condition with `win_rate=42.5%` (would have failed the old win-rate gate permanently) turned out to have a statistically significant pattern (`p=0.027`) with a favorable risk profile (`MFE/MAE=2.01`) — exactly the case the old gate was structurally blind to.
+
+**Type.** Statistical rigor. Direct consequence of the project's own stated goal, not an arbitrary preference.
+
+---
+
+## `pattern_significance`: how "does a pattern exist" is actually tested
+
+**Decision.** For each walk-forward fold (expanding window, yearly), the holding horizon is chosen on the **train** set only (whichever of `(1, 3, 7, 14, 21)` days shows the strongest `|mean forward return|`), then the effect is measured **only on the held-out test fold** at that horizon — same discipline already used for TP/SL multiplier selection, extended to horizon selection, specifically so the horizon can never be picked and graded on the same data. The test-fold sample's mean forward return is compared against the coin's own unconditional forward-return distribution over the *same calendar stretch* (not the whole multi-year history — that would let a triggered sample from an unusually volatile year get compared against a calmer baseline). Significance is assessed via bootstrap (2,000 resamples), not a textbook t-test, because financial returns violate the assumptions a t-test needs (fat tails, and overlapping-window autocorrelation when trigger events cluster in time).
+
+**Why.** Any single-horizon comparison chosen after seeing the full sample is picking-and-testing on the same data — the exact trap an earlier phase of this project's own methodology fell into (see PLAN.md's own account of the prior repository's leakage). The train/test split for horizon selection closes that gap the same way it's already closed for TP/SL.
+
+**Type.** Statistical rigor.
+
+---
+
+## N > 50 replaces N > 100 as the sample-size gate
+
+**Decision.** `MethodologyConfig.min_report_events = 50` (was 100, briefly, before that).
+
+**Why.** A compromise, stated plainly: N > 100 combined with the other new gates (Sortino > 1, win_rate > 50%, strict_win_rate ≥ 45%, MFE/MAE > 1, statistical significance, no concentration) risked accepting *nothing at all* given the amount of real history available — five gates stacked that tightly is a lot to clear simultaneously. Lowering the sample-size floor to 50 doesn't weaken any of the other, more important gates (particularly statistical significance, which is the one that actually answers "does a pattern exist") — it just stops sample size itself from being the bottleneck. If nothing clears the bar even at N=50, that is itself a real, reportable finding, not a problem to engineer away further.
+
+**Type.** Compromise (practical yield vs. rigor), explicitly not a loosening of the pattern-existence test itself.
+
+---
+
+## N=50 live tests replaces the 2-year calendar milestone
+
+**Decision.** The one-time "has this candidate been validated" report now fires the first time a candidate accumulates 50 resolved **live** tests (not backtest events — see "Live testing" below), not after 2 elapsed calendar years. The existing 2-year "tracked this long and never once accepted" keep-or-drop decision is unaffected and stays as the safety net for candidates whose trigger is too rare to ever reach N=50 in a reasonable span.
+
+**Why.** A fixed calendar span is arbitrary relative to how often a given trigger actually fires — a common condition could reach N=50 in weeks, a rare one might take years past any fixed calendar cutoff, or never get there at all. Gating the milestone on the same sample size the statistics themselves require (N=50, the acceptance floor above) ties the checkpoint to actual statistical readiness instead of an unrelated calendar convention.
+
+**Type.** Statistical rigor (replaces an arbitrary calendar convention with the same threshold the statistics already require).
+
+---
+
+## Live testing: no TP/SL execution, hold for the horizon, measure forward return + MFE/MAE
+
+**Decision.** Once a candidate is `accepted`, a live occurrence of its trigger opens a **live test**, not a funded position with a TP/SL exit. It's held for exactly the horizon `pattern_significance` found significant at (no barrier check in between), then resolved by measuring the realized forward return, MFE, and MAE — the identical measure `pattern_significance` itself uses. `barrier_prices`, `bucket_for_elapsed`, and the TP/SL grid search are no longer part of how a live/replay test opens or resolves.
+
+**Why.** If acceptance is decided by "does a fixed-horizon forward return differ from baseline," then executing with a *different* structure (a Sortino-optimized TP/SL ladder) live would test a derived strategy, not the actual pattern that was accepted — the live occurrence would no longer measure the same concept the backtest measured. TP/SL/Sortino remain useful, reported information (how well a barrier-based structure would have captured this pattern) but are no longer the thing being tested live.
+
+**Type.** Statistical rigor / conceptual consistency, not a compromise — though it does leave open how (or whether) this applies to production's actual Freqtrade capital-at-risk execution, which is intentionally out of scope for now (see PLAN.md's own build-phase tracking).
+
+---
+
+## Simulation start date: earliest available data (2017), not an arbitrary offset
+
+**Decision.** The historical replay's simulated clock starts at `min(coin.index.min() for coin in COINS)` — 2017-08-26 in the current data (BTC/ETH) — rather than a fixed "N years before today" offset.
+
+**Why.** `pattern_significance` needs as many yearly walk-forward folds as it can get, both for a robust horizon choice and to give each tracked trigger a real chance of reaching its own N=50 live-test milestone within the simulated run.
+
+**Compromise this creates.** The first several simulated years mostly return `insufficient_data` — there aren't yet enough yearly folds (`min_train_periods = 3`) for `pattern_significance`/`walk_forward` to run at all. This is expected, not a bug, but it does mean roughly the first 3-4 simulated years are statistically quiet. Starting from 2017 instead of a 3-year window also roughly **triples** the number of simulated days the replay has to walk through (~110 chunks of 30 days vs. ~36), which is a real increase in wall-clock time and API calls to complete a full run — accepted deliberately for the sake of a longer, more defensible walk-forward history.
+
+**Type.** Compromise, stated plainly, in service of the statistical goal above.
+
+---
+
+## Manually-seeded horizon for the earliest tracked candidates
+
+**Decision.** For a candidate tracked from the very start of the simulated history (the six static, "academic" C1-C6 triggers), there is no prior data at all to run `pattern_significance`'s train/test horizon selection against for the first several years. Until enough yearly folds accumulate for the empirical selection to run, live tests for these candidates are held for a single, **uniform, neutral placeholder horizon** (the middle of the search space, 7 days) — not a different "logical-sounding" horizon hand-picked per trigger.
+
+**Why the uniform default, specifically.** Picking a different horizon per trigger based on domain intuition ("C2 is a reversal pattern, effects concentrate in the first week") would be exactly the kind of unfalsifiable, story-shaped reasoning this project has spent this whole rework moving away from — it would look, to any careful reader, indistinguishable from choosing the answer and writing the justification afterward. A single neutral default, applied uniformly and labeled explicitly as a placeholder, makes the compromise legible instead of disguising it as domain expertise.
+
+**Transition.** The moment `pattern_significance` can actually run for a candidate (enough yearly folds exist) and returns its own empirically-derived horizon, that value takes over for all subsequent live tests — and the switch itself is reported on Telegram (from-placeholder to from-data, with the N and year it happened), not applied silently.
+
+**Type.** Compromise, explicitly labeled, with a defined, documented, and notified exit condition — not a permanent manual override.
+
+---
+
+## Trigger detection: hourly; backtest and live-test resolution: daily
+
+**Decision.** The historical/statistical backtest (`pattern_significance`, `walk_forward`, the weekly battery refresh) runs entirely on daily bars — unchanged. Separately, once past the simulated present, **detecting** whether a trigger condition has fired scans hourly bars within each simulated day (day-window indicators like `rsi_14d` are evaluated on a rolling window re-expressed in hours, e.g. 14 days → a 336-hour rolling window on the hourly series), so a condition that only crosses its threshold intraday and reverts by end of day isn't missed entirely by a once-a-day check. Once detected, opening and resolving the live test still uses the existing daily-bar machinery (entry snaps to the day's next daily bar; the horizon is still counted in days).
+
+**Why the split.** Running the full backtest (which re-runs repeatedly, across years, per candidate, with a 2,000-sample bootstrap each time) on hourly bars would multiply compute cost by roughly 24x on top of the ~3x already introduced by starting from 2017 — a genuinely large cost for a self-funded case study, not a funded production system. Detection precision matters for correctly recognizing whether a condition was ever true at all; a few hours of drift in exactly *when* a multi-day pattern's holding period starts does not meaningfully change what it measures.
+
+**Type.** Compromise (explicitly a cost tradeoff for a case study, stated here rather than left undocumented), scoped narrowly to detection only — the actual statistical claims (backtest, and the horizon/measurement used to resolve a live test) remain entirely daily and unaffected.
+
+---
+
+## Shock threshold: `z ≥ 3.0`, justified empirically, not by a "3-sigma" claim
+
+**Decision.** `shock_zscore_series`'s threshold stays at 3.0 (a z-score of 5-day realized volatility against its own trailing 252-day distribution). The value itself is unchanged; its justification is rewritten to be honest about what it actually measures.
+
+**Why the original justification was wrong.** "z ≥ 3.0" reads as "a 3-sigma event," which under a normal distribution should occur ~0.13% of the time. It does not: measured on the real pooled data across all 7 coins, `z ≥ 3.0` actually occurs **1.97%** of the time — about 15x more often than the normal-distribution framing implies, because realized-volatility z-scores are strongly right-skewed (empirical skew 1.8-3.3 per coin), not normal.
+
+**What was actually checked before keeping 3.0.** A bootstrap test (same method as `pattern_significance`) comparing the 7-day forward return of the "above threshold" population against "below threshold," at candidate thresholds from z=1.5 to z=4.5: the effect (a positive excess return following elevated volatility) is present and similarly sized across the whole range; there is no sharp natural "elbow." What does change is statistical reliability as the sample shrinks: significant at p<0.05 through z=4.0, no longer significant by z=4.5 (p=0.068, N=126). 3.0 sits comfortably inside the range that stays both statistically reliable and reasonably extreme (~2% of observations), not at either edge of it.
+
+**Type.** Statistical rigor for the justification; the specific value (3.0) is a defensible choice within a validated range, not a uniquely-derived optimum — there is no single "correct" answer the data hands over on its own, and this file says so rather than implying otherwise.
+
+---
+
+## Sonnet's role narrowed: no more `propose_trade` / `watch` / `exit_now`
+
+**Decision.** Sonnet's live judgment now does exactly two things: (1) decide whether to ask a human to test a genuinely new condition (`propose_novel_test`), and (2) answer natural-language questions about system state. It no longer decides to open a trade (`propose_trade` — superseded by the mechanical, unattended trigger-detection scan described above, which fires identically for every occurrence of an accepted candidate without needing a per-event LLM judgment), no longer has a `watch` action (verified to have had zero behavioral difference from `no_action` — same downstream consequence, different message wording only), and no longer has an unused, never-implemented `exit_now` action (removed rather than built, since a discretionary live exit would reintroduce exactly the kind of unattributable LLM judgment this project has spent this rework removing from entry and TP/SL sizing).
+
+**Why.** Each of these was either genuinely redundant with a more reliable mechanical process, or a piece of surface area that had no real behavior behind it. Removing dead/redundant paths is itself a form of rigor — fewer places where a claim about what the system does can silently drift from what it actually does.
+
+**Type.** Simplification / consistency, not a compromise.
+
+---
+
+## Shock: a fixed statistical rule, never an LLM judgment call
+
+**Decision.** Whether a given day/coin counts as a volatility "shock" stays a fixed, deterministic threshold (`shock_zscore ≥ 3.0`, see above) — never a qualitative judgment from Haiku/Sonnet. Sonnet's role is to interpret and react to an already-detected shock (or an already-published macro release, or a headline), including proposing that a *specific combination* of what it's shown (an indicator reading, a recent release, a headline) looks like a distinct, testable pattern — never to decide what magnitude of price move counts as extreme in the first place.
+
+**Why.** Two reasons, both load-bearing: (1) reproducibility — the backtest needs a regime label it can compute identically over nine years of history, cheaply and deterministically; an LLM call per bar, per coin, per year is both prohibitively expensive and not reproducible run to run; (2) consistency with every other boundary already enforced this way in this project — TP/SL sizing, the indicator whitelist, and now trade execution are all explicitly *never* left to unattended LLM discretion. A qualitatively-judged shock threshold would be the same category of exception in the one place it was never allowed anywhere else.
+
+**Type.** Design principle, applied consistently — not a compromise.
+
+---
+
+## This project never opens a funded position -- production gets the same live-test model as the replay
+
+**Decision.** `execution/live_testing.py` + `execution/live_test_state.py` port the replay's exact live-test model to real, unsandboxed data: no TP/SL, no Freqtrade order, a real-dated occurrence held for the horizon `pattern_significance` found significant, resolved by measuring the real forward return/MFE/MAE. `candidates/status_history.py` gained the same N=50 milestone tracking replay/status_history.py already had, so "validated" is reachable in production too, on the same real evidence bar.
+
+**Why.** This is a pattern-discovery investigation, not an investment strategy -- there is no funded position to protect or size, so there is nothing stopping the same observational discipline the replay uses from running on real, current data instead of simulated history.
+
+**A genuinely new capability this makes possible: backdating a newly-discovered condition's own triggering occurrence.** By the time Sonnet proposes a new compound condition and a human approves it, real wall-clock time has already passed since the underlying condition first became true -- unlike the replay (which can look up any historical bar on demand), production has nothing tracking an unregistered condition before it's discovered. But since no funded position is ever placed, there is nothing physically stopping an honest, real-data retroactive read: `execution.live_testing.find_backdated_entry` scans the already-recorded hourly price history (kept fresh by `data_ingestion/market_data/binance_fetcher.py`, same data every other real-time check in this project uses) for the earliest hour the condition was already true, and backdates entry to that point instead of the discovery moment -- this would NEVER be legitimate for a real funded order (no exchange lets you buy at a historical price), but is exactly the honest thing to do for an observational record.
+
+**A real bug this caught.** The first version of `find_backdated_entry` sliced the hourly series down to the lookback window *before* computing rolling-window indicators, starving multi-hundred-hour windows (e.g. a 720-hour funding z-score) of their lookback and silently returning nothing but NaN/False -- the exact same bug already caught once in `replay/engine.py`'s mechanical scan. Fixed the same way: compute on the full series, slice the result afterward. Caught by actually running the function against real data, not by reading the code.
+
+**Type.** Statistical rigor / conceptual consistency, direct consequence of the "no funded position" decision above.
+
+---
+
+## Freqtrade hyperopt cross-check -- a second, independent optimizer, purely informational
+
+**Decision.** `execution/hyperopt_runner.py` + `execution/freqtrade_bridge.py` + `execution/freqtrade_userdir/strategies/hyperopt_candidate_strategy.py` run Freqtrade's own Bayesian hyperopt engine, periodically and only ever locally, against real data already used everywhere else in this project, to independently re-derive the TP/SL multipliers for each tracked candidate's real anchor set. The result (best tp_mult/sl_mult + the resulting N/win-rate/Sortino/total-profit) is stored in `execution/hyperopt_results.json` and surfaced as one line in the 50-live-test milestone report -- never gates acceptance, never feeds live execution.
+
+**Why.** This project's own walk-forward grid search (`candidates/methodology.py::walk_forward`) already computes an equivalent "if traded with a barrier structure" figure -- the "For reference, trading this with a TP/SL structure..." line shown in every message. Freqtrade's hyperopt is a genuinely *independent* second opinion: different search machinery (Bayesian optimization over a continuous parameter space vs. this project's own 25-point grid), a different, third-party, industry-standard backtesting engine, reusing the exact same real price history -- not a redundant re-implementation, a cross-check using different tooling arriving at (or interestingly failing to arrive at) similar numbers. For a project meant to demonstrate methodological rigor, an independent validation of one's own numbers is worth more than another internally-consistent chart.
+
+**Real, non-obvious issues hit and fixed while building this (not guessed at, actually run against real data):**
+- Freqtrade hardcodes `tickers_have_price=False` for Binance specifically -- config validation fails without `use_order_book: true` on both `entry_pricing` and `exit_pricing`, even in backtest/hyperopt mode where no order book is actually consulted.
+- The `freqtrade[hyperopt]` extra (scikit-optimize/Optuna, filelock, etc.) is a separate install from the base `freqtrade` package.
+- Best-epoch results are read via `freqtrade.optimize.hyperopt_tools.HyperoptTools.load_filtered_results` against the `.fthypt` file named in `hyperopt_results/.last_result.json` -- not scraped from console output.
+
+**Cost.** A real, recurring local compute cost (Bayesian hyperopt runs hundreds of backtest evaluations per candidate) -- accepted explicitly because it's periodic, local-only, and never blocks the live/replay hot path (confirmed: `execution/freqtrade_bridge.py` imports `freqtrade` lazily, inside function bodies, specifically so importing `replay/engine.py` or `execution/live_testing.py` never requires the freqtrade package to be installed at all unless a hyperopt run is actually invoked).
+
+**Type.** Enhancement for methodological credibility, not required for the system's own statistical claims (which stand on `pattern_significance` and the walk-forward grid search regardless) -- explicitly scoped as informational-only from the start.
+
+---
+
+## Q&A context bloat -- caught by running the historical replay for real, not by reading the code
+
+**Decision.** `_trades_by_candidate_summary()` / `_trades_by_candidate_and_coin_summary()` (`replay/judgment.py`) and `build_live_test_summary()` (`llm_pipeline/context_builder.py`) now cap themselves at the top 15 rows ranked by `|mean_return|`, with a note pointing to the free, local `/summary`/`/replay_summary` command when truncated. `_all_candidates_status_summary()` (`replay/judgment.py`) collapses the (usually large) `insufficient_data` bucket into one count-plus-name-list line instead of one detailed line per candidate. See PROJECT_MAP.md's "Cost Optimization" section for the full breakdown of what each Sonnet call actually sends and why.
+
+**Why.** This was a real, measured incident, not a hypothetical worth guarding against in the abstract: running the historical replay for real (this case study's own demonstration mechanism) discovered that `answer_market_question()`'s context had grown to ~10,400 tokens by the time the replay had tracked 96 candidates and logged 1,728 live tests -- 74% of that from two functions that, by design, listed *every* candidate and *every* (candidate, coin) pair ever seen, in full detail, on every single call, regardless of whether that call's question had anything to do with most of them. This is exactly the kind of cost/latency regression that's invisible from reading the code in isolation (each function looks reasonable on its own) and only shows up once real, accumulating state is actually exercised over a long run -- which is the whole reason this project insists on running things for real rather than trusting a static review.
+
+**A distinction that matters here: not every Sonnet call has this problem.** The automated per-event judgment calls (`judge_event()`, `sonnet_strategist()`, `sonnet_shock_response()`) were never affected -- their context is built from the current indicator snapshot, the last 10 days of macro releases, and the currently-*accepted* candidate list, none of which are keyed to the total candidate or trade-log count. Only the human-Q&A path (built specifically to answer "give me everything" style questions) had this growth, because it deliberately listed exhaustive detail rather than a summary. The fix keeps that same category of information available (nothing is omitted, only the long tail past 15 rows is deferred to a free local command), it just stops the exhaustive part from being repeated, in full, on every single future call regardless of relevance.
+
+**Type.** Cost/scalability fix, caught live -- not a statistical or methodology change, no effect on any candidate's classification.

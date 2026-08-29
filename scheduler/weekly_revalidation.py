@@ -2,12 +2,12 @@
 scheduled task). Re-runs the full candidate battery against the latest
 data, diffs each candidate's status against the previous run, and
 notifies via Telegram only on an actual change -- a candidate that stays
-'rejected' week after week doesn't need a repeated notification, but a
-'validated' candidate degrading, or a 'watch' candidate clearing, always
+'rejected' week after week doesn't need a repeated notification, but an
+'accepted' candidate degrading, or a 'watch' candidate clearing, always
 does.
 
 Also where two longer-horizon decisions surface: a candidate tracked 2+
-years with no validation gets a keep-or-drop proposal (Sonnet's
+years without ever being accepted gets a keep-or-drop proposal (Sonnet's
 qualitative opinion, a human's actual decision -- see
 candidates/status_history.py for why 2 years, not a re-test count: a
 condition tied to a twice-yearly event needs calendar time to accumulate
@@ -26,13 +26,16 @@ from anthropic import Anthropic
 from dotenv import load_dotenv
 
 from candidates.definitions import TRIGGER_DESCRIPTIONS
+from candidates.methodology import explain_non_acceptance
 from candidates.run_battery import ASSETS_DIR, run_all
 from candidates.status_history import PRUNE_YEARS_THRESHOLD, mark_asked
 from candidates.status_history import years_tracked as candidate_years_tracked
 from data_ingestion.market_data.binance_fetcher import COINS as MARKET_DATA_COINS
 from data_ingestion.market_data.binance_fetcher import update_all as update_market_data
+from execution.live_testing import check_n50_milestones
 from llm_pipeline.dynamic_candidates import registered_specs
 from llm_pipeline.haiku_sonnet_pipeline import escape_html, sonnet_prune_advice
+from llm_pipeline.novel_condition_tester import condition_desc
 from telegram.bot import _send
 
 PREVIOUS_STATUS_PATH = Path(__file__).resolve().parent / "previous_status.json"
@@ -49,7 +52,7 @@ def _trigger_description(candidate: str) -> str:
         return TRIGGER_DESCRIPTIONS[base]
     for spec in registered_specs():
         if spec.label == candidate:
-            return f"dynamic condition discovered via 'test it': {spec.indicator} {spec.op} {spec.threshold} -> {spec.direction}"
+            return f"{condition_desc(spec)} → {spec.direction}"
     return "trigger definition not found -- treat this as missing information, do not guess at it"
 
 
@@ -139,12 +142,17 @@ def _run_weekly_revalidation() -> None:
         client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
         for candidate in meta["prune_candidates"]:
             row = result[result["candidate"] == candidate]
-            if len(row):
+            if len(row) and row.iloc[0]["status"] == "error":
+                reason = "this week's run failed to process this candidate (see the failed-candidates notice above) -- its long-term status is unavailable this run"
+                summary = "no current data (processing error this run)"
+            elif len(row):
                 r = row.iloc[0]
-                summary = (f"win_rate={r['win_rate']:.1%}, sortino={r['sortino']:.2f}, N={r['n']}, "
-                           f"{r['max_year_share']:.0%} of trades fell in {r['dominant_year']}, "
-                           f"{r['max_coin_share']:.0%} on {r['dominant_coin'] or 'no single dominant coin'}")
+                reason = explain_non_acceptance(r.to_dict())
+                summary = (f"win_rate={r['win_rate']:.1%}, sortino={r['sortino']:.2f}, N={r['n']} "
+                           f"(reference TP/SL-structure stats, informational only, don't gate acceptance)"
+                           if r["status"] != "insufficient_data" else "not enough historical occurrences yet to compute reference stats")
             else:
+                reason = "no current data"
                 summary = "no current data"
             trigger_desc = _trigger_description(candidate)
             advice = sonnet_prune_advice(
@@ -152,14 +160,21 @@ def _run_weekly_revalidation() -> None:
                 recent_summary=summary, trigger_description=trigger_desc, client=client,
             )
             sent = _send(
-                f"<b>Keep-or-drop decision: {candidate}</b>\n\n"
-                f"<b>Trigger:</b> {trigger_desc}\n\n"
-                f"Tracked 2+ years, never reached 'validated'. Current: {summary}\n\n"
-                f"Sonnet's opinion (advisory only, not a verified finding): {advice}",
+                f"<b>Keep-or-drop decision -- {escape_html(candidate)}</b>\n\n"
+                f"({escape_html(trigger_desc)})\n\n"
+                f"Tracked 2+ years, never reached 'accepted'.\n"
+                f"<b>Why:</b> {escape_html(reason)}.\n\n"
+                f"For reference: {escape_html(summary)}.\n\n"
+                f"Sonnet's opinion (advisory only, not a verified finding): {escape_html(advice)}",
                 reply_markup=PRUNE_KEYBOARD_TEMPLATE(candidate),
             )
             print(f"Prune decision requested for '{candidate}': {'sent' if sent else 'SEND FAILED'}")
             mark_asked(candidate)
+
+    load_dotenv()
+    client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+    status_summary = result.set_index("candidate").to_dict(orient="index")
+    check_n50_milestones(status_summary, client)
 
 
 if __name__ == "__main__":

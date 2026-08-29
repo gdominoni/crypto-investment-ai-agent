@@ -38,7 +38,7 @@ def test_drop_candidate_marks_it_dropped():
     assert sh.is_dropped("c1_long")
 
 
-def test_old_never_validated_candidate_is_due_for_a_prune_decision():
+def test_old_never_accepted_candidate_is_due_for_a_prune_decision():
     sh.record_status("c1_long", "rejected")
     _age_first_tracked("c1_long", 800)
     assert "c1_long" in sh.candidates_due_for_prune_decision()
@@ -49,9 +49,9 @@ def test_recently_tracked_candidate_is_not_yet_due():
     assert "c1_long" not in sh.candidates_due_for_prune_decision()
 
 
-def test_candidate_validated_at_least_once_is_never_due_even_if_it_later_degrades():
+def test_candidate_accepted_at_least_once_is_never_due_even_if_it_later_degrades():
     sh.record_status("c1_long", "watch")
-    sh.record_status("c1_long", "validated")
+    sh.record_status("c1_long", "accepted")
     _age_first_tracked("c1_long", 800)
     sh.record_status("c1_long", "rejected")
     assert "c1_long" not in sh.candidates_due_for_prune_decision()

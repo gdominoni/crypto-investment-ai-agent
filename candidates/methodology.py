@@ -32,7 +32,7 @@ class MethodologyConfig:
     sl_mult_grid: tuple[float, ...] = (0.6, 0.8, 1.0, 1.2, 1.5)
     round_trip_fee: float = 0.002
     min_train_events: int = 20
-    min_report_events: int = 30
+    min_report_events: int = 50  # classify_status requires n STRICTLY greater than this
 
 
 def shock_zscore_series(ohlc: pd.DataFrame, short_window: int = 5, baseline_window: int = 252) -> pd.Series:
@@ -41,7 +41,22 @@ def shock_zscore_series(ohlc: pd.DataFrame, short_window: int = 5, baseline_wind
     volatility -- a 'vol-of-vol' anomaly measure. Every value at position
     `loc` uses only bars up to and including `loc` (pandas rolling is
     backward-looking by construction), so classifying a bar as a shock
-    never uses information from after that bar."""
+    never uses information from after that bar.
+
+    NOTE on the z>=3.0 threshold used downstream (`classify_regime`,
+    `shock_detector.py`): this is NOT a "3-sigma event" in the textbook
+    normal-distribution sense -- measured on real data across this
+    project's coin universe, z>=3.0 actually occurs ~2% of the time
+    (about 15x more often than 3-sigma-under-normality would predict),
+    because this series is strongly right-skewed (empirical skew
+    1.8-3.3 per coin), not normal. 3.0 was kept after checking a
+    bootstrap comparison of forward returns above vs. below threshold
+    across z=1.5-4.5: the effect is present and similarly sized across
+    that whole range (no sharp natural cutoff), but loses statistical
+    reliability past z~4.0-4.5 as the sample thins. 3.0 sits comfortably
+    inside the range that stays both reliable and reasonably extreme
+    (~2% of observations), not at either edge -- see
+    docs/case_study/methodology-decisions.md for the full numbers."""
     returns = ohlc["close"].pct_change()
     short_vol = returns.rolling(short_window, min_periods=short_window).std()
     baseline_mean = short_vol.rolling(baseline_window, min_periods=max(baseline_window // 4, short_window)).mean()
@@ -205,6 +220,143 @@ def walk_forward(events: pd.DataFrame, ohlc_by_group: dict[str, pd.DataFrame], d
     return pd.DataFrame(oos_rows), pd.DataFrame(params_log)
 
 
+def _forward_return(entry_loc: int, ohlc: pd.DataFrame, direction: str, horizon: int) -> float:
+    idx = ohlc.index
+    exit_loc = min(entry_loc + horizon, len(idx) - 1)
+    entry_price, exit_price = ohlc["close"].iloc[entry_loc], ohlc["close"].iloc[exit_loc]
+    return (exit_price / entry_price - 1) if direction == "long" else (1 - exit_price / entry_price)
+
+
+def path_outcome(entry_price: float, entry_loc: int, ohlc: pd.DataFrame, direction: str, horizon: int) -> dict:
+    """The realized outcome of holding a single LIVE occurrence for
+    exactly `horizon` bars, no TP/SL barrier involved -- the forward
+    return at that bar's close, plus the MFE/MAE observed along the way,
+    using the EXACT SAME convention as build_events's own per-row
+    computation (bars entry_loc+1 through entry_loc+1+horizon, relative
+    to entry_price), so a live occurrence's resolution is directly
+    comparable to the backtest sample it's meant to extend -- this is
+    what actually gets recorded when a live test resolves (see
+    replay/engine.py's _check_live_tests). `entry_loc`/`entry_price`
+    should be exactly what was recorded when the live test was opened,
+    not re-derived here."""
+    idx = ohlc.index
+    exit_loc = min(entry_loc + horizon, len(idx) - 1)
+    seg_hi = ohlc["high"].iloc[entry_loc + 1: entry_loc + 1 + horizon]
+    seg_lo = ohlc["low"].iloc[entry_loc + 1: entry_loc + 1 + horizon]
+    exit_price = float(ohlc["close"].iloc[exit_loc])
+    if direction == "long":
+        forward_return = exit_price / entry_price - 1
+        mfe = float(seg_hi.max() / entry_price - 1) if len(seg_hi) else float("nan")
+        mae = float(seg_lo.min() / entry_price - 1) if len(seg_lo) else float("nan")
+    else:
+        forward_return = 1 - exit_price / entry_price
+        mfe = float(1 - seg_lo.min() / entry_price) if len(seg_lo) else float("nan")
+        mae = float(1 - seg_hi.max() / entry_price) if len(seg_hi) else float("nan")
+    return {"forward_return": forward_return, "mfe": mfe, "mae": abs(mae)}
+
+
+def _baseline_forward_returns(ohlc: pd.DataFrame, direction: str, horizon: int, start_loc: int, end_loc: int) -> np.ndarray:
+    """Every horizon-day forward return starting from each bar in
+    [start_loc, end_loc) -- the coin's own UNCONDITIONAL distribution
+    over that same calendar stretch, so the comparison is period-matched
+    (not, say, a triggered sample from a volatile year vs. a baseline
+    pulled from the whole multi-year history). These windows overlap
+    (day 2's 7-day window shares 6 days with day 1's), so this is not an
+    i.i.d. sample -- a known, accepted limitation of overlapping-window
+    event studies; the bootstrap below is more robust to it than a
+    textbook t-test would be, but does not eliminate it."""
+    last = min(end_loc, len(ohlc.index) - horizon)
+    if last <= start_loc:
+        return np.array([])
+    close = ohlc["close"].to_numpy()
+    entry = close[start_loc:last]
+    exit_ = close[start_loc + horizon:last + horizon]
+    return (exit_ / entry - 1) if direction == "long" else (1 - exit_ / entry)
+
+
+def pattern_significance(events: pd.DataFrame, ohlc_by_group: dict[str, pd.DataFrame], direction: str,
+                          cfg: MethodologyConfig, min_train_periods: int = 3, n_bootstrap: int = 2000,
+                          seed: int = 0) -> dict:
+    """Answers a genuinely different question than classify_status does:
+    not "is trading this condition with THIS TP/SL ladder profitable"
+    (Sortino, win_rate -- both conditioned on the barrier structure), but
+    "does the market actually behave differently after this condition,
+    at all" -- the market's own forward return vs. its own unconditional
+    forward-return distribution over the same stretch, no TP/SL/fee
+    structure involved. A condition can fail this and still be a real,
+    small, reliable effect that classify_status's barriers are simply
+    too wide to catch (a low-timeout-fraction candidate) -- and vice
+    versa, a condition can clear classify_status by getting lucky on a
+    barrier structure fit to the same noise. The two are meant to be
+    read together, not as a single verdict.
+
+    The horizon is chosen empirically per fold, ON THE TRAIN SET ONLY
+    (whichever horizon shows the strongest |mean forward return| there),
+    then evaluated out-of-sample on the held-out test fold -- the same
+    walk-forward discipline already used for tp_mult/sl_mult, extended
+    to horizon selection, specifically to avoid picking-and-testing on
+    the same data (the exact trap an earlier version of this project's
+    own methodology fell into)."""
+    periods = sorted(events["period"].unique())
+    if len(periods) <= min_train_periods:
+        return {"status": "insufficient_data"}
+    rng = np.random.default_rng(seed)
+    oos_returns, oos_mfe, oos_mae, baseline_chunks = [], [], [], []
+    chosen_horizon = None
+    for test_period in periods[min_train_periods:]:
+        train = events[events["period"] < test_period]
+        test = events[events["period"] == test_period]
+        if len(train) < cfg.min_train_events or len(test) == 0:
+            continue
+        best_h, best_score = cfg.horizons[0], -np.inf
+        for h in cfg.horizons:
+            rets = [_forward_return(r.entry_loc, ohlc_by_group[r.group], direction, h) for r in train.itertuples()]
+            score = abs(float(np.mean(rets))) if rets else -np.inf
+            if score > best_score:
+                best_h, best_score = h, score
+        chosen_horizon = best_h  # persists as the LAST fold's choice -- what a live occurrence discovered now should be held for
+        for r in test.itertuples():
+            oos_returns.append(_forward_return(r.entry_loc, ohlc_by_group[r.group], direction, best_h))
+            oos_mfe.append(getattr(r, f"mfe_{best_h}"))
+            oos_mae.append(abs(getattr(r, f"mae_{best_h}")))
+        for group in test["group"].unique():
+            locs = test.loc[test["group"] == group, "entry_loc"]
+            chunk = _baseline_forward_returns(ohlc_by_group[group], direction, best_h, int(locs.min()), int(locs.max()) + 1)
+            if len(chunk):
+                baseline_chunks.append(chunk)
+
+    if not oos_returns or not baseline_chunks:
+        return {"status": "insufficient_data"}
+    oos_returns = np.array(oos_returns)
+    baseline_pool = np.concatenate(baseline_chunks)
+    if len(baseline_pool) < 20:
+        return {"status": "insufficient_data"}
+
+    observed_mean = float(oos_returns.mean())
+    baseline_mean = float(baseline_pool.mean())
+    n = len(oos_returns)
+    boot_means = rng.choice(baseline_pool, size=(n_bootstrap, n), replace=True).mean(axis=1)
+    p_value = float(np.mean(boot_means >= observed_mean) if observed_mean >= baseline_mean else np.mean(boot_means <= observed_mean))
+    mean_mfe, mean_mae = float(np.mean(oos_mfe)), float(np.mean(oos_mae))
+    return {
+        "status": "ok", "n": n, "mean_return": observed_mean, "baseline_mean_return": baseline_mean,
+        "excess_return": observed_mean - baseline_mean, "p_value": p_value, "significant": bool(p_value < 0.05),
+        # Risk dimension, deliberately separate from the directional significance test above:
+        # `sortino` here is computed on the RAW forward returns (no fee -- these were never
+        # executed trades, no TP/SL/win/loss classification needed, unlike report()'s Sortino which
+        # is conditioned on the barrier structure). `mfe_mae_ratio` > 1 means the typical favorable
+        # excursion during the hold exceeds the typical adverse one -- a good path-risk sign
+        # independent of what the ending return at horizon H happens to be; < 1 is a red flag on
+        # the path even when the ending return looks fine.
+        "sortino": sortino_ratio(oos_returns), "mean_mfe": mean_mfe, "mean_mae": mean_mae,
+        "mfe_mae_ratio": float(mean_mfe / mean_mae) if mean_mae > 0 else float("nan"),
+        # The horizon a live occurrence of this pattern should be held for --
+        # the same one this test was actually evaluated at (the last fold's
+        # choice), so live testing measures the identical concept.
+        "horizon": int(chosen_horizon),
+    }
+
+
 def report(oos: pd.DataFrame) -> dict:
     """`total_expectancy` sums per-trade returns rather than compounding
     them geometrically -- this system runs several coins/candidates with
@@ -249,18 +401,236 @@ def concentration_check(oos: pd.DataFrame, group_col: str, max_share: float = 0.
             "dominant_group": share.index[0]}
 
 
-def classify_status(rep: dict, coin_concentration: dict, period_concentration: dict, cfg: MethodologyConfig) -> str:
-    """validated: clears a minimum sample size, a real Sortino edge, a
-    strict win rate that isn't propped up entirely by timeouts, and isn't
-    carried by one coin or one period.
-    watch: positive Sortino but fails a robustness check.
-    rejected: everything else."""
-    if rep["n"] < cfg.min_report_events or np.isnan(rep["sortino"]):
+# Plain-English gloss for each classify_status() verdict -- every message
+# (fixed template or Sonnet's own free-text context) that shows a raw
+# status code to a human should read it through this, not the bare word.
+# Added after a real observed case: Sonnet, given only "insufficient_data"
+# with no gloss, echoed it back to a human verbatim with no explanation
+# of what it meant or what threshold it's short of.
+STATUS_PLAIN: dict[str, str] = {
+    "accepted": "accepted -- cleared the statistical bar, its trigger opens live tests automatically",
+    "watch": "watch -- a real pattern signal, but fails a robustness check (concentration or an unfavorable risk profile), or too little data for the risk check yet",
+    "rejected": "rejected -- no statistically significant pattern found against this coin's own baseline",
+    "insufficient_data": "insufficient data -- fewer than the required historical occurrences of this trigger to run the test at all yet",
+    "error": "error -- this run failed to process it, will retry automatically next time",
+    "dropped": "dropped -- a human explicitly removed it from testing, it will never be re-tested automatically",
+}
+
+
+def classify_status(rep: dict, coin_concentration: dict, period_concentration: dict, pattern: dict,
+                     cfg: MethodologyConfig) -> str:
+    """accepted: the system recognizes a real PATTERN in backtesting --
+    `pattern` (from pattern_significance) shows a statistically
+    significant, out-of-sample directional effect vs. this coin's own
+    unconditional baseline, with a favorable risk path (mean MFE >
+    mean MAE at the horizon the effect was found at) -- and it isn't
+    carried by one coin or one period. This is now the actual
+    acceptance gate. Sortino/win_rate/strict_win_rate (`rep`, from the
+    TP/SL-conditioned backtest) are still computed and still reported --
+    they describe how well the CURRENT trading structure would have
+    captured this pattern historically -- but they no longer gate
+    acceptance: this project's purpose is finding real patterns, not
+    optimizing a barrier structure around noise (see win_rate's own
+    history here -- it was a P&L-conditioned proxy for exactly this
+    question before pattern_significance existed to answer it directly).
+    Once accepted, the candidate's own trigger opens a LIVE TEST the
+    moment it next fires -- no TP/SL, no funded position (this project
+    is a pattern-discovery investigation, never an investment strategy):
+    held for the horizon `pattern` found significant at, resolved by
+    measuring the real forward return/MFE/MAE, the same thing
+    pattern_significance itself measures. This is NOT the same claim as
+    "validated": that word is reserved everywhere else in this project
+    for a candidate that has actually lived through its first 50
+    resolved live tests (real, or in the replay, simulated) and still
+    held 'accepted' status at that point -- see
+    candidates/status_history.py's and replay/status_history.py's
+    milestone tracking.
+    watch: a real pattern signal that fails a robustness check
+    (concentration, or an unfavorable risk path), or too little data for
+    the pattern test to say either way.
+    rejected: no significant pattern, or no edge at the sample-size gate
+    below."""
+    if rep["n"] <= cfg.min_report_events or np.isnan(rep["sortino"]):
         return "rejected" if rep["n"] >= 10 else "insufficient_data"
-    if rep["sortino"] <= 0:
-        return "rejected"
+    if pattern.get("status") != "ok":
+        return "watch"
     if coin_concentration.get("concentrated") or period_concentration.get("concentrated"):
         return "watch"
-    if rep["strict_win_rate"] < 0.45:
+    if not pattern.get("significant"):
+        return "rejected"
+    mfe_mae_ratio = pattern.get("mfe_mae_ratio")
+    if mfe_mae_ratio is None or np.isnan(mfe_mae_ratio) or mfe_mae_ratio <= 1:
         return "watch"
-    return "validated"
+    return "accepted"
+
+
+def explain_non_acceptance(row: dict, min_report_events: int = 50) -> str:
+    """Turns a run_battery.py/run_replay_battery result row into a
+    SPECIFIC, honest reason the candidate hasn't reached 'accepted' --
+    mirrors classify_status's own branching exactly, in the same order,
+    so a keep-or-drop notice (or a trigger summary line) never falls back
+    on a generic (or actively wrong) explanation. "Not enough data" and
+    "not statistically significant" and "unfavorable risk profile" are
+    three different, non-interchangeable reasons a candidate can still
+    be un-accepted -- collapsing them into one vague line would mislead
+    the reader, or (a real observed case: a 'rejected' candidate with a
+    favorable p-value AND a favorable MFE/MAE ratio, rejected purely
+    because its raw N was below the threshold) let raw stats sit next to
+    a verdict they didn't actually determine, implying they did. `row`
+    needs at least: n, pattern_significant, pattern_p_value,
+    pattern_mfe_mae_ratio, max_coin_share, max_year_share, dominant_coin,
+    dominant_year (all present on every non-"insufficient_data"/"error"
+    row). `min_report_events` matches MethodologyConfig's own default --
+    every real caller runs with that default, so callers that don't
+    already have a MethodologyConfig in hand (e.g. a trigger summary
+    line) don't need to construct one just for this one field."""
+    n = row.get("n") or 0
+    if n <= min_report_events:
+        return f"only {n} qualifying historical occurrence(s) so far (needs more than {min_report_events} to even be evaluated)"
+    significant = row.get("pattern_significant")
+    if significant is None:
+        return "not enough data yet for the pattern-significance test itself, despite enough raw occurrences for the reference backtest above"
+    # Concentration is checked BEFORE significance here, matching classify_status's
+    # own order exactly -- getting this backwards is a real bug that was shipped
+    # and observed: a candidate concentrated in one coin/year is "watch" regardless
+    # of its p-value, but the wrong order made it look like "not significant" was
+    # the reason even when the true (and often unrelated) p-value said otherwise.
+    max_coin_share, max_year_share = row.get("max_coin_share") or 0, row.get("max_year_share") or 0
+    if max_coin_share > 0.6 or max_year_share > 0.6:
+        qualifier = "a statistically significant pattern" if significant else "a pattern"
+        rule = "no single coin or year may carry more than 60% of the positive return"
+        if max_coin_share >= max_year_share:
+            return f"{qualifier}, but {max_coin_share:.0%} of it comes from a single coin ({row.get('dominant_coin')}) -- too concentrated to trust as general ({rule})"
+        return f"{qualifier}, but {max_year_share:.0%} of it comes from a single year ({row.get('dominant_year')}) -- too concentrated to trust as general ({rule})"
+    if not significant:
+        p_value = row.get("pattern_p_value")
+        return (f"a real pattern was tested for but not found -- not statistically significant vs. this coin's own "
+                f"baseline (p={p_value:.3f})" if p_value is not None else
+                "a real pattern was tested for but not found -- not statistically significant vs. this coin's own baseline")
+    mfe_mae_ratio = row.get("pattern_mfe_mae_ratio")
+    if mfe_mae_ratio is None or (isinstance(mfe_mae_ratio, float) and np.isnan(mfe_mae_ratio)):
+        return "a statistically significant pattern, but its risk profile (MFE/MAE ratio) couldn't be computed"
+    if mfe_mae_ratio <= 1:
+        return (f"a statistically significant pattern, but an unfavorable risk profile (MFE/MAE ratio={mfe_mae_ratio:.2f} -- "
+                f"the risk taken during the hold exceeds the eventual reward)")
+    return "did not clear the acceptance bar (see the current status above)"
+
+
+def _escape_html(text: str) -> str:
+    """Local copy of the same one-liner escape_html() every other module
+    already has its own copy of -- kept here rather than imported so this
+    module (imported by novel_condition_tester.py, in turn imported by
+    llm_pipeline/haiku_sonnet_pipeline.py) never gains a dependency on
+    llm_pipeline, which would be circular."""
+    return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _trigger_summary_line(name: str, row: dict) -> str:
+    n = row.get("n")
+    bits = [f"N={n}"]
+    sig, p = row.get("pattern_significant"), row.get("pattern_p_value")
+    if sig is not None:
+        bits.append(f"p={p:.3f}" if p is not None else ("significant" if sig else "not significant"))
+    ratio = row.get("pattern_mfe_mae_ratio")
+    if ratio is not None and not (isinstance(ratio, float) and np.isnan(ratio)):
+        bits.append(f"MFE/MAE={ratio:.2f}")
+    line = f"  {_escape_html(name)} -- {', '.join(bits)}"
+    if row.get("status") in ("watch", "rejected"):
+        # Without this, a rejected/watch candidate can show a favorable p-value
+        # AND a favorable MFE/MAE ratio right next to its verdict -- looking like
+        # the numbers contradict the status -- when the real reason is a DIFFERENT
+        # field entirely (e.g. raw N below the sample-size gate, or concentration).
+        # explain_non_acceptance() names the actual reason, in classify_status's
+        # own branching order, so the line never implies a stat determined the
+        # verdict when it didn't (a real, observed case of exactly this confusion).
+        line += f"\n    Why: {_escape_html(explain_non_acceptance(row))}"
+    return line
+
+
+def _insufficient_data_block(items: list[tuple[str, dict]]) -> list[str]:
+    """A one-line-per-candidate list gets unreadable fast once the
+    dynamic registry grows -- most 'insufficient_data' candidates sit at
+    N=0 with literally nothing to say beyond that. Those are collapsed
+    into a single compact name list; only candidates with SOME real
+    progress (N>0, still short of the threshold) get their own line,
+    since that's the genuinely informative case ('how close is it')."""
+    zero = sorted(name for name, row in items if not row.get("n"))
+    partial = sorted((name, row) for name, row in items if row.get("n"))
+    lines = []
+    if partial:
+        lines.append("Some data so far, still below the threshold to test:")
+        for name, row in partial:
+            lines.append(_trigger_summary_line(name, row))
+    if zero:
+        if partial:
+            lines.append("")
+        lines.append(f"No historical occurrences yet ({len(zero)}): " + ", ".join(_escape_html(n) for n in zero))
+    return lines
+
+
+def format_trigger_summary(status_summary: dict, dropped_extra: dict | None = None) -> tuple[str, str]:
+    """Two-part human-readable report over every tracked trigger --
+    'still under test' (accepted/watch/insufficient_data/error) and
+    'already discarded' (rejected, or explicitly dropped) -- grouped by
+    status with an indented list rather than a fixed-width column table,
+    since dynamic candidate labels vary wildly in length (a Sonnet-chosen
+    snake_case label can run 40+ characters) and a rigid grid breaks
+    badly on a narrow mobile screen the moment one name is much longer
+    than the rest. Returned as two SEPARATE strings (not one combined
+    message) -- both because the split itself is the useful structure
+    (what's still being evaluated vs. what's already settled), and
+    because a single combined message risks exceeding Telegram's
+    4096-char limit once enough dynamic candidates accumulate.
+
+    `status_summary`: a fresh run_all()/run_replay_battery() result dict
+    (candidate -> row with at least 'status', usually also 'n',
+    'pattern_significant', 'pattern_p_value', 'pattern_mfe_mae_ratio').
+    `dropped_extra`: the caller's all_latest_statuses() output, used ONLY
+    to surface explicitly-dropped candidates -- those are excluded from
+    status_summary entirely (run_all/run_replay_battery skip dropped
+    candidates), so they'd otherwise vanish from the report completely
+    rather than showing up as 'discarded'."""
+    groups: dict[str, list[tuple[str, dict]]] = {}
+    for name, row in status_summary.items():
+        groups.setdefault(row.get("status", "unknown"), []).append((name, row))
+    for name, info in (dropped_extra or {}).items():
+        if info.get("dropped") and name not in status_summary:
+            groups.setdefault("dropped", []).append((name, {"status": "dropped"}))
+
+    def _section(header: str, keys_and_labels: list[tuple[str, str]]) -> str:
+        lines = [f"<b>{header}</b>"]
+        found_any = False
+        for key, label in keys_and_labels:
+            items = groups.get(key, [])
+            if not items:
+                continue
+            found_any = True
+            lines.append(f"\n<b>{label} ({len(items)})</b>")
+            # No group-level gloss for watch/rejected -- STATUS_PLAIN names ONE
+            # generic reason (e.g. "not statistically significant"), but
+            # classify_status can reach either status through several different,
+            # non-interchangeable paths (too little N, concentration, unfavorable
+            # risk profile...). Each line already gets its own SPECIFIC "Why:" via
+            # explain_non_acceptance() below -- showing a generic gloss above that
+            # doesn't just repeat it, it can flatly contradict it (a real observed
+            # case: the group gloss said "not significant" while every actual line
+            # was rejected for low N instead, with a perfectly good p-value).
+            if key not in ("watch", "rejected"):
+                gloss = STATUS_PLAIN.get(key)
+                if gloss:
+                    lines.append(f"<i>{gloss.split(' -- ', 1)[-1]}</i>")
+            if key == "insufficient_data":
+                lines.extend(_insufficient_data_block(items))
+            else:
+                for name, row in sorted(items):
+                    lines.append(_trigger_summary_line(name, row))
+        if not found_any:
+            lines.append("\nNothing here right now.")
+        return "\n".join(lines)
+
+    under_test = _section("Still under test", [
+        ("accepted", "Accepted"), ("watch", "Watch"),
+        ("insufficient_data", "Insufficient data"), ("error", "Processing error (will retry automatically)"),
+    ])
+    discarded = _section("Already discarded", [("rejected", "Rejected"), ("dropped", "Dropped")])
+    return under_test, discarded
