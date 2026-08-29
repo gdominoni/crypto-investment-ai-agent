@@ -378,7 +378,7 @@ def _block_bootstrap_means(chunks: list[np.ndarray], n: int, n_bootstrap: int, b
 
 def pattern_significance(events: pd.DataFrame, ohlc_by_group: dict[str, pd.DataFrame], direction: str,
                           cfg: MethodologyConfig, min_train_periods: int = 3, n_bootstrap: int = 2000,
-                          seed: int = 0) -> dict:
+                          seed: int = 0, baseline_events: pd.DataFrame | None = None) -> dict:
     """Answers a genuinely different question than classify_status does:
     not "is trading this condition with THIS TP/SL ladder profitable"
     (Sortino, win_rate -- both conditioned on the barrier structure), but
@@ -423,7 +423,31 @@ def pattern_significance(events: pd.DataFrame, ohlc_by_group: dict[str, pd.DataF
 
     `p_value_two_sided` is still reported alongside, as the honest answer
     to the different question "does the market behave differently after
-    this condition AT ALL, either way" -- a diagnostic, never the gate."""
+    this condition AT ALL, either way" -- a diagnostic, never the gate.
+
+    `baseline_events` selects WHICH QUESTION is being asked, and it is the
+    difference between a meaningful result and a meaningless one:
+
+      None (default) -- baseline is the coin's UNCONDITIONAL forward-return
+        distribution over the same calendar stretch. Answers: "does
+        anything at all happen after this condition?"
+
+      a DataFrame of REDUCED-condition events -- baseline is the forward
+        returns of the same condition with its event clause(s) REMOVED,
+        restricted to the same period and excluding the treated events
+        themselves. Answers: "does adding the event term change the
+        outcome, GIVEN the market conditions?"
+
+    The second is the only one that can answer "does news + market state
+    create a pattern". Testing `shock AND negative_news` against an
+    ordinary day yields a significant result almost by construction --
+    because the SHOCK ALONE already differs from an ordinary day. The
+    news clause could be pure decoration and the unconditional test would
+    still pass it. Only the nested comparison isolates the increment.
+
+    The treated events are removed from the control set, so this is a
+    genuine treatment-vs-control contrast rather than a comparison
+    against a pool that contains the treatment."""
     periods = sorted(events["period"].unique())
     if len(periods) <= min_train_periods:
         return {"status": "insufficient_data"}
@@ -461,11 +485,24 @@ def pattern_significance(events: pd.DataFrame, ohlc_by_group: dict[str, pd.DataF
         # single "risk path" number blending incomparable magnitudes.
         if fold_mfe and float(np.mean(fold_mae)) > 0:
             fold_ratios.append(float(np.mean(fold_mfe)) / float(np.mean(fold_mae)))
-        for group in test["group"].unique():
-            locs = test.loc[test["group"] == group, "entry_loc"]
-            chunk = _baseline_forward_returns(ohlc_by_group[group], direction, best_h, int(locs.min()), int(locs.max()) + 1)
-            if len(chunk):
-                baseline_chunks.append(chunk)
+        if baseline_events is None:
+            # Unconditional: the coin's own forward returns over the same stretch.
+            for group in test["group"].unique():
+                locs = test.loc[test["group"] == group, "entry_loc"]
+                chunk = _baseline_forward_returns(ohlc_by_group[group], direction, best_h, int(locs.min()), int(locs.max()) + 1)
+                if len(chunk):
+                    baseline_chunks.append(chunk)
+        else:
+            # Nested: the SAME condition minus its event clause(s), same period,
+            # with the treated events themselves removed so this is a real
+            # treatment-vs-control contrast rather than treatment-vs-(treatment+control).
+            control = baseline_events[baseline_events["period"] == test_period]
+            treated = set(zip(test["group"], test["entry_loc"]))
+            rets = [_forward_return(r.entry_loc, ohlc_by_group[r.group], direction, best_h)
+                    for r in control.itertuples() if (r.group, r.entry_loc) not in treated]
+            rets = np.array([x for x in rets if x == x])
+            if len(rets):
+                baseline_chunks.append(rets)
 
     if not oos_rows or not baseline_chunks:
         return {"status": "insufficient_data"}
@@ -493,6 +530,12 @@ def pattern_significance(events: pd.DataFrame, ohlc_by_group: dict[str, pd.DataF
         "excess_return": observed_mean - baseline_mean, "p_value": p_value,
         "significant": bool(p_value < 0.05 and observed_mean > baseline_mean),
         "p_value_two_sided": p_two_sided,
+        # WHICH question was asked -- "unconditional" (does anything happen after
+        # this condition at all) vs "incremental" (does the event term add anything
+        # GIVEN the market state). Reported so a reader is never left guessing
+        # which of two very different claims a p-value is backing.
+        "baseline_kind": "unconditional" if baseline_events is None else "incremental",
+        "baseline_n": int(len(baseline_pool)),
         # Risk dimension, deliberately separate from the directional significance test above:
         # `sortino` here is computed on the RAW forward returns (no fee -- these were never
         # executed trades, no TP/SL/win/loss classification needed, unlike report()'s Sortino which

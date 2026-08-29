@@ -125,3 +125,59 @@ class TestDailyNativeIndicators:
         hourly_days = set(clause_signal_hourly(clause, hourly, daily, None).pipe(lambda s: s[s]).index.normalize())
         assert daily_days, "fixture should produce some triggers"
         assert not (daily_days - hourly_days), "the live scan must never miss a day the backtest accepted on"
+
+
+class TestIncrementalBaseline:
+    """Testing `event AND market_state` against an ORDINARY day is close
+    to meaningless -- the market state alone already differs from an
+    ordinary day, so the event clause could be pure decoration and the
+    test would still pass it. The control must be the same condition
+    with the event clause removed."""
+
+    def test_reduced_spec_drops_only_the_event_clauses(self):
+        from llm_pipeline.novel_condition_tester import reduced_spec
+        spec = ConditionSpec(
+            label="x",
+            clauses=(Clause("shock_zscore", ">=", 3.0), Clause("rsi_14d", "<", 30.0),
+                     Clause("volume_zscore_30d", ">", 1.0)),
+            direction="long")
+        red = reduced_spec(spec)
+        assert {c.indicator for c in red.clauses} == {"rsi_14d", "volume_zscore_30d"}
+
+    def test_no_contrast_exists_when_there_is_no_event_clause(self):
+        from llm_pipeline.novel_condition_tester import reduced_spec
+        spec = ConditionSpec(label="x", clauses=(Clause("rsi_14d", "<", 30.0),), direction="long")
+        assert reduced_spec(spec) is None
+
+    def test_no_contrast_exists_when_the_spec_is_only_event_clauses(self):
+        """Removing them would leave no condition at all -- and for an
+        event-only spec, 'vs. an ordinary day' is the right test anyway."""
+        from llm_pipeline.novel_condition_tester import reduced_spec
+        spec = ConditionSpec(label="x", clauses=(Clause("shock_zscore", ">=", 3.0),), direction="long")
+        assert reduced_spec(spec) is None
+
+    def test_the_two_baselines_answer_different_questions_and_say_which(self):
+        import numpy as np, pandas as pd
+        from candidates.methodology import MethodologyConfig, pattern_significance
+        rng = np.random.default_rng(3)
+        n = 2200   # >3 yearly folds, else pattern_significance returns insufficient_data
+        idx = pd.date_range("2016-01-01", periods=n, freq="D")
+        close = 100 * np.cumprod(1 + rng.normal(0, 0.02, n))
+        ohlc = {"A": pd.DataFrame({"open": close, "high": close * 1.02, "low": close * 0.98,
+                                   "close": close, "volume": 1000.0}, index=idx)}
+        cfg = MethodologyConfig(horizons=(1, 3, 7))
+        locs = np.arange(60, n - 40, 7)
+        ev = pd.DataFrame({"entry_loc": locs, "group": "A",
+                           "period": idx[locs].year, "trigger_time": idx[locs]})
+        for h in cfg.horizons:
+            ev[f"mfe_{h}"], ev[f"mae_{h}"] = 0.05, -0.03
+        ctrl_locs = np.arange(63, n - 40, 7)
+        ctrl = pd.DataFrame({"entry_loc": ctrl_locs, "group": "A", "period": idx[ctrl_locs].year})
+        uncond = pattern_significance(ev, ohlc, "long", cfg)
+        incr = pattern_significance(ev, ohlc, "long", cfg, baseline_events=ctrl)
+        assert uncond["baseline_kind"] == "unconditional"
+        assert incr["baseline_kind"] == "incremental"
+        assert incr["baseline_n"] > 0
+        # the two are answering different questions, so they must not be
+        # silently identical numbers reported under the same label
+        assert uncond["baseline_mean_return"] != incr["baseline_mean_return"]

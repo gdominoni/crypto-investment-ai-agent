@@ -228,6 +228,30 @@ DAILY_NATIVE_INDICATORS = frozenset({
     "shock_zscore", "rsi_14d", "atr_pct_14d", "daily_range_pct", "efficiency_ratio_20d",
 })
 
+# Which clauses describe an EVENT (something happened in the world / the
+# market) as opposed to a market STATE (what the chart looked like). This
+# split is what makes the incremental test possible: drop the event
+# clauses and you have the "same market conditions, no event" control
+# group. Testing `shock AND X` against an ordinary day is close to
+# meaningless -- the shock alone already differs from an ordinary day --
+# so the honest question is whether the event adds anything GIVEN X.
+# Future news/sentiment indicators belong here too.
+EVENT_INDICATORS = frozenset({"is_macro_day", "shock_zscore"})
+
+
+def reduced_spec(spec: "ConditionSpec") -> "ConditionSpec | None":
+    """`spec` with its EVENT clauses removed -- the control condition for
+    the incremental test. Returns None when no such contrast exists:
+    either the spec has no event clause (nothing to remove) or nothing
+    BUT event clauses (removing them leaves no condition at all). In both
+    cases the caller correctly falls back to the unconditional baseline,
+    which for an event-only spec is exactly the right test anyway."""
+    kept = tuple(c for c in spec.clauses if c.indicator not in EVENT_INDICATORS)
+    if not kept or len(kept) == len(spec.clauses):
+        return None
+    return ConditionSpec(label=f"{spec.label}__reduced", clauses=kept,
+                         direction=spec.direction, horizons=spec.horizons)
+
 
 def clause_signal_hourly(clause: Clause, hourly: pd.DataFrame, daily: pd.DataFrame,
                           funding: pd.Series | None) -> pd.Series:
@@ -311,8 +335,16 @@ def format_pattern_significance(pattern: dict) -> str:
     # up as a near-miss on significance (see pattern_significance's own docstring).
     direction_note = ("" if pattern["excess_return"] > 0 else
                       "\nNote: this effect runs OPPOSITE to the direction this condition trades.")
-    return (f"Pattern signal (independent of TP/SL): excess return {pattern['excess_return']:+.2%} vs. this "
-            f"coin's own baseline over the same period, p={pattern['p_value']:.3f} ({verdict} at the 5% level, "
+    # Say WHICH question the p-value answers. "+3% vs. an ordinary day" and
+    # "+3% beyond what the same market state predicts without the event" are
+    # very different claims and must never be reported in identical words.
+    if pattern.get("baseline_kind") == "incremental":
+        against = ("vs. the SAME market conditions WITHOUT the event (i.e. what the event term adds "
+                   f"on top, n={pattern.get('baseline_n')} control occurrences)")
+    else:
+        against = "vs. this coin's own ordinary forward returns over the same period"
+    return (f"Pattern signal (independent of TP/SL): excess return {pattern['excess_return']:+.2%} {against}, "
+            f"p={pattern['p_value']:.3f} ({verdict} at the 5% level, "
             f"one-sided in the traded direction, N={pattern['n']}).{direction_note}\n{risk}")
 
 
@@ -364,7 +396,13 @@ def test_novel_condition(spec: ConditionSpec, coins: list[str], as_of: pd.Timest
     # single-indicator case, just checked across all clauses now.
     is_shock_indicator = any(c.indicator == "shock_zscore" for c in spec.clauses)
 
-    all_events = []
+    # The control condition for the incremental test: this same spec with its
+    # EVENT clauses removed. None when no such contrast exists (see
+    # reduced_spec), in which case the unconditional baseline is used and
+    # `baseline_kind` reports that honestly.
+    control_spec = reduced_spec(spec)
+
+    all_events, control_events = [], []
     ohlc_by_coin = {}
     n_shock_excluded = 0
     for coin in coins:
@@ -375,20 +413,33 @@ def test_novel_condition(spec: ConditionSpec, coins: list[str], as_of: pd.Timest
         funding = load_funding(coin)
         if funding is not None and as_of is not None:
             funding = funding.loc[:as_of]
-        trigger = pd.Series(True, index=daily.index)
-        for clause in spec.clauses:
-            trigger &= clause_signal(clause, daily, funding)
-        shock_z = None if is_shock_indicator else shock_zscore_series(daily)
-        ev = build_events(daily, trigger, spec.direction, spec.horizons,
-                           shock_z=shock_z, shock_threshold=SHOCK_ZSCORE_THRESHOLD)
+
+        def _events_for(clauses) -> pd.DataFrame:
+            trig = pd.Series(True, index=daily.index)
+            for clause in clauses:
+                trig &= clause_signal(clause, daily, funding)
+            shock_z = None if is_shock_indicator else shock_zscore_series(daily)
+            e = build_events(daily, trig, spec.direction, spec.horizons,
+                              shock_z=shock_z, shock_threshold=SHOCK_ZSCORE_THRESHOLD)
+            if len(e):
+                e["group"] = coin
+                e["period"] = e["trigger_time"].dt.year
+            return e
+
+        ev = _events_for(spec.clauses)
         if len(ev):
-            ev["group"] = coin
-            ev["period"] = ev["trigger_time"].dt.year
             if is_shock_indicator:
                 all_events.append(ev)
             else:
                 n_shock_excluded += int((ev["regime"] == "shock").sum())
                 all_events.append(ev[ev["regime"] == "normal"])
+        if control_spec is not None:
+            cev = _events_for(control_spec.clauses)
+            if len(cev):
+                # Same shock-regime treatment as the treated set, so control and
+                # treatment are drawn from the same population in every respect
+                # except the event clause being tested.
+                control_events.append(cev if is_shock_indicator else cev[cev["regime"] == "normal"])
 
     if not all_events or not any(len(e) for e in all_events):
         return {"spec": spec, "status": "insufficient_data", "n_raw_triggers": 0, "n_shock_excluded": n_shock_excluded}
@@ -400,7 +451,9 @@ def test_novel_condition(spec: ConditionSpec, coins: list[str], as_of: pd.Timest
     # classify_status's own docstring. `rep` (Sortino/win_rate, from the
     # TP/SL-conditioned backtest) is still computed and still reported,
     # but no longer decides accepted/watch/rejected.
-    pattern = pattern_significance(events, ohlc_by_coin, spec.direction, cfg)
+    baseline_events = pd.concat(control_events, ignore_index=True) if control_events else None
+    pattern = pattern_significance(events, ohlc_by_coin, spec.direction, cfg,
+                                    baseline_events=baseline_events)
     # Concentration on the same forward returns the gate reads -- mirrors
     # candidates/run_battery.py::_concentration_for (see concentration_check's
     # own `value_col` note for why the TP/SL basis genuinely disagrees).
