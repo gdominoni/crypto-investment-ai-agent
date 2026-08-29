@@ -18,8 +18,8 @@ import pandas as pd
 
 from candidates.definitions import CANDIDATE_DIRECTIONS, compute_triggers
 from candidates.methodology import (
-    MethodologyConfig, build_events, classify_status, compute_anchors, concentration_check, pattern_significance,
-    report, shock_zscore_series, walk_forward,
+    MethodologyConfig, apply_fdr_demotion, build_events, classify_status, compute_anchors, concentration_check,
+    pattern_significance, report, shock_zscore_series, walk_forward,
 )
 from candidates.run_battery import COINS, HORIZONS_DAYS, SHOCK_ZSCORE_THRESHOLD
 from llm_pipeline.novel_condition_tester import ConditionSpec, clause_from_dict, test_novel_condition
@@ -141,6 +141,16 @@ def run_replay_battery(as_of: pd.Timestamp) -> dict:
         except Exception as e:
             print(f"Replay battery: dynamic candidate '{label}' failed as of {as_of.date()}, skipping: {e}")
             status_summary[label] = {"status": "error"}
+
+    # Same family-level multiplicity control as candidates/run_battery.py.
+    # status_summary is keyed by candidate, so adapt to the row shape the
+    # shared helper expects, then write the (possibly demoted) verdicts back.
+    _rows = [{"candidate": k, **v} for k, v in status_summary.items()]
+    apply_fdr_demotion(_rows, battery)
+    for r in _rows:
+        status_summary[r["candidate"]] = {k: v for k, v in r.items() if k != "candidate"}
+        if r.get("fdr_demoted"):
+            sh.record_status(r["candidate"], r["status"], as_of_str)
 
     state.save_battery_status(battery)
     return status_summary

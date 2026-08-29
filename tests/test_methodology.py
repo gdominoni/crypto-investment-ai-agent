@@ -267,3 +267,71 @@ class TestReport:
         oos = pd.DataFrame({"outcome": ["win", "win"], "net_return": [0.10, 0.10]})
         rep = report(oos)
         assert rep["total_expectancy"] == pytest.approx(0.20)  # sum, not (1.1*1.1 - 1) = 0.21
+
+
+class TestBenjaminiHochberg:
+    """Testing ~98 candidates at p<0.05 is EXPECTED to yield ~5
+    'significant' results with no real effect behind any of them. That
+    is the failure this project's whole methodology exists to prevent."""
+
+    def test_a_family_of_pure_nulls_yields_no_discoveries(self):
+        from candidates.methodology import benjamini_hochberg
+        rng = np.random.default_rng(0)
+        # uniform p-values are exactly what a family of true nulls produces
+        nulls = list(rng.uniform(0, 1, 98))
+        raw_hits = sum(p < 0.05 for p in nulls)
+        bh_hits = sum(benjamini_hochberg(nulls))
+        assert raw_hits >= 1, "fixture should show the raw threshold firing on noise"
+        assert bh_hits == 0, "BH must not report discoveries in a family of pure nulls"
+
+    def test_a_genuinely_strong_result_still_survives(self):
+        from candidates.methodology import benjamini_hochberg
+        rng = np.random.default_rng(1)
+        pvals = [1e-6] + list(rng.uniform(0.2, 1.0, 40))
+        assert benjamini_hochberg(pvals)[0] is True
+
+    def test_it_is_never_more_permissive_than_the_raw_threshold(self):
+        """The demotion-only property the callers rely on: BH may remove
+        an `accepted` candidate but must never create one."""
+        from candidates.methodology import benjamini_hochberg
+        rng = np.random.default_rng(2)
+        pvals = list(rng.uniform(0, 0.2, 60))
+        for p, survived in zip(pvals, benjamini_hochberg(pvals)):
+            if survived:
+                assert p < 0.05
+
+    def test_missing_p_values_never_survive(self):
+        from candidates.methodology import benjamini_hochberg
+        assert benjamini_hochberg([None, float("nan"), 1e-9]) == [False, False, True]
+
+    def test_matches_the_canonical_1995_worked_example(self):
+        """Benjamini & Hochberg 1995, Table 1: 15 hypotheses at alpha=0.05
+        yield exactly 4 discoveries. Pins the implementation to the
+        published answer rather than to my own reading of the algorithm."""
+        from candidates.methodology import benjamini_hochberg
+        p = [0.0001, 0.0004, 0.0019, 0.0095, 0.0201, 0.0278, 0.0298, 0.0344,
+             0.0459, 0.3240, 0.4262, 0.5719, 0.6528, 0.7590, 1.000]
+        assert sum(benjamini_hochberg(p, 0.05)) == 4
+
+    def test_demotion_pass_downgrades_a_lone_marginal_result(self):
+        """The realistic case: ONE marginal p=0.04 among 39 nulls. Alone
+        it clears p<0.05; against the family it is exactly the false
+        positive a raw threshold is expected to manufacture."""
+        from candidates.methodology import apply_fdr_demotion
+        rng = np.random.default_rng(7)
+        rows = [{"candidate": "marginal", "status": "accepted", "pattern_p_value": 0.04}]
+        rows += [{"candidate": f"n{i}", "status": "rejected", "pattern_p_value": float(p)}
+                 for i, p in enumerate(rng.uniform(0.2, 1.0, 39))]
+        live = {"candidates": {"marginal": {}}}
+        apply_fdr_demotion(rows, live)
+        assert rows[0]["status"] == "rejected" and rows[0]["fdr_demoted"] is True
+        assert live["candidates"] == {}, "a demoted candidate must not stay able to open live tests"
+
+    def test_a_pile_of_identical_marginal_p_values_is_NOT_demoted(self):
+        """The complement, and it is correct: 40 p-values all at 0.04 is
+        collectively very unlikely under a global null, so BH keeps them.
+        Recorded so nobody later 'fixes' this into over-correction."""
+        from candidates.methodology import apply_fdr_demotion
+        rows = [{"candidate": f"c{i}", "status": "accepted", "pattern_p_value": 0.04} for i in range(40)]
+        apply_fdr_demotion(rows, None)
+        assert all(r["status"] == "accepted" for r in rows)

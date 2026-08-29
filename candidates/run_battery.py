@@ -30,8 +30,8 @@ import pandas as pd
 from .data_loading import load_daily
 from .definitions import CANDIDATE_DIRECTIONS, build_triggers
 from .methodology import (
-    MethodologyConfig, build_events, classify_status, compute_anchors, concentration_check,
-    pattern_significance, report, shock_zscore_series, walk_forward,
+    MethodologyConfig, apply_fdr_demotion, build_events, classify_status, compute_anchors,
+    concentration_check, pattern_significance, report, shock_zscore_series, walk_forward,
 )
 from .status_history import (
     candidates_due_for_prune_decision, is_dropped, is_shut_down, record_horizon, record_status, trigger_shutdown,
@@ -233,6 +233,15 @@ def run_all() -> tuple[pd.DataFrame, dict, dict]:
             print(f"Dynamic candidate '{spec.label}' failed to process, skipping (will retry next run): {e}")
             rows.append({"candidate": spec.label, "status": "error", "n": 0, "n_shock_excluded": 0})
             failed_candidates.append(spec.label)
+
+    # Family-level multiplicity control, AFTER every candidate in this run has a
+    # p-value: with a registry this size, a raw p<0.05 threshold is expected to
+    # manufacture several "significant" candidates with no real effect behind
+    # them. Demotion-only -- BH can never promote (see methodology.py).
+    rows = apply_fdr_demotion(rows, live_state)
+    for r in rows:
+        if r.get("fdr_demoted"):
+            record_status(r["candidate"], r["status"])
 
     active_static = [v for v in CANDIDATE_DIRECTIONS if not is_dropped(v)]
     active_dynamic = [s.label for s in registered_specs() if not is_dropped(s.label)]

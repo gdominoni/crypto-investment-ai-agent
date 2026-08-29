@@ -637,6 +637,79 @@ STATUS_PLAIN: dict[str, str] = {
 }
 
 
+FDR_ALPHA = 0.05
+
+
+def benjamini_hochberg(p_values: list[float], alpha: float = FDR_ALPHA) -> list[bool]:
+    """Benjamini-Hochberg step-up: which of a FAMILY of p-values survive
+    at false-discovery-rate `alpha`. Returns one bool per input, in input
+    order; NaN/None p-values never survive.
+
+    Why this is not optional here. This project tests a growing registry
+    of candidates -- 98 at the last count, the large majority proposed by
+    an LLM rather than hand-picked -- each against a p<0.05 threshold. At
+    that threshold, testing 98 independent nulls is EXPECTED to produce
+    about five "significant" results with no real effect behind any of
+    them. Reporting those as discoveries would be exactly the failure
+    this project's own methodology exists to prevent, and the problem
+    gets strictly worse as the search space grows (more indicators, more
+    sequenced orderings, more news terms).
+
+    BH rather than Bonferroni deliberately: Bonferroni controls the
+    probability of even ONE false positive, which at n=98 means an
+    effective per-test threshold of 0.0005 and essentially no power to
+    detect the modest, real effects this project is looking for. BH
+    controls the expected PROPORTION of false discoveries among the
+    accepted set, which is the honest quantity when the output is "here
+    are the candidates worth tracking prospectively" rather than "here is
+    one confirmed law of nature".
+
+    Applied as a DEMOTION-ONLY pass by the callers: BH is uniformly at
+    least as strict as raw p<alpha, so it can only ever remove a
+    candidate from `accepted`, never add one."""
+    indexed = [(i, p) for i, p in enumerate(p_values)
+               if p is not None and isinstance(p, (int, float)) and p == p]
+    survives = [False] * len(p_values)
+    if not indexed:
+        return survives
+    indexed.sort(key=lambda t: t[1])
+    m = len(indexed)
+    cutoff_rank = 0
+    for rank, (_, p) in enumerate(indexed, start=1):
+        if p <= alpha * rank / m:
+            cutoff_rank = rank
+    for rank, (i, _) in enumerate(indexed, start=1):
+        if rank <= cutoff_rank:
+            survives[i] = True
+    return survives
+
+
+def apply_fdr_demotion(rows: list[dict], live_state: dict | None = None, alpha: float = FDR_ALPHA) -> list[dict]:
+    """Second pass over a completed battery run: re-checks every
+    candidate's p-value against the whole FAMILY tested in this run, and
+    DEMOTES any `accepted` candidate that doesn't survive BH to
+    `rejected`. Every row gains `fdr_significant` and `fdr_alpha` so the
+    reason is visible rather than implicit.
+
+    Run as a separate pass because BH is inherently a family-level
+    decision -- a single candidate's verdict genuinely depends on how
+    many others were tested alongside it, which isn't knowable inside the
+    per-candidate loop. `live_state` (if given) has demoted candidates
+    removed, so nothing that failed FDR can open live tests."""
+    p_values = [r.get("pattern_p_value") for r in rows]
+    survives = benjamini_hochberg(p_values, alpha)
+    for row, ok in zip(rows, survives):
+        if row.get("pattern_p_value") is None:
+            continue
+        row["fdr_significant"], row["fdr_alpha"] = bool(ok), alpha
+        if not ok and row.get("status") == "accepted":
+            row["status"] = "rejected"
+            row["fdr_demoted"] = True
+            if live_state is not None:
+                live_state.get("candidates", {}).pop(row["candidate"], None)
+    return rows
+
+
 def _sortino_unusable(sortino: float) -> bool:
     """NaN Sortino means "couldn't be computed" -- but +inf means the
     opposite: a candidate with no losing trade at all. The old check was
