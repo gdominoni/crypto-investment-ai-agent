@@ -617,7 +617,7 @@ def _escape_html(text: str) -> str:
     return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
-def _trigger_summary_line(name: str, row: dict) -> str:
+def _trigger_summary_line(name: str, row: dict, milestone: dict | None = None) -> str:
     n = row.get("n")
     bits = [f"N={n}"]
     sig, p = row.get("pattern_significant"), row.get("pattern_p_value")
@@ -626,6 +626,14 @@ def _trigger_summary_line(name: str, row: dict) -> str:
     ratio = row.get("pattern_mfe_mae_ratio")
     if ratio is not None and not (isinstance(ratio, float) and np.isnan(ratio)):
         bits.append(f"MFE/MAE={ratio:.2f}")
+    # `status` (accepted/watch/rejected) and `validated` are different claims
+    # (see docs/case_study/methodology-decisions.md's "accepted vs validated"
+    # entry) -- without this tag, a candidate could be accepted AND already
+    # VALIDATED with nothing in /summary distinguishing it from one that's
+    # merely accepted, a real gap caught the same way format_candidate_details's
+    # own missing validated line was (a human noticing the mismatch live).
+    if milestone and milestone.get("milestone_reported"):
+        bits.append("VALIDATED" if milestone.get("milestone_cleared") else "not validated")
     line = f"  {_escape_html(name)} -- {', '.join(bits)}"
     if row.get("status") in ("watch", "rejected"):
         # Without this, a rejected/watch candidate can show a favorable p-value
@@ -677,11 +685,12 @@ def format_trigger_summary(status_summary: dict, dropped_extra: dict | None = No
     `status_summary`: a fresh run_all()/run_replay_battery() result dict
     (candidate -> row with at least 'status', usually also 'n',
     'pattern_significant', 'pattern_p_value', 'pattern_mfe_mae_ratio').
-    `dropped_extra`: the caller's all_latest_statuses() output, used ONLY
-    to surface explicitly-dropped candidates -- those are excluded from
-    status_summary entirely (run_all/run_replay_battery skip dropped
-    candidates), so they'd otherwise vanish from the report completely
-    rather than showing up as 'discarded'."""
+    `dropped_extra`: the caller's all_latest_statuses() output, used both
+    to surface explicitly-dropped candidates (excluded from status_summary
+    entirely -- run_all/run_replay_battery skip dropped candidates, so
+    they'd otherwise vanish from the report rather than showing up as
+    'discarded') and to tag a VALIDATED candidate's line (milestone info
+    lives in status_history.py, not in status_summary's own rows)."""
     groups: dict[str, list[tuple[str, dict]]] = {}
     for name, row in status_summary.items():
         groups.setdefault(row.get("status", "unknown"), []).append((name, row))
@@ -715,7 +724,7 @@ def format_trigger_summary(status_summary: dict, dropped_extra: dict | None = No
                 lines.extend(_insufficient_data_block(items))
             else:
                 for name, row in sorted(items):
-                    lines.append(_trigger_summary_line(name, row))
+                    lines.append(_trigger_summary_line(name, row, milestone=(dropped_extra or {}).get(name)))
         if not found_any:
             lines.append("\nNothing here right now.")
         return "\n".join(lines)

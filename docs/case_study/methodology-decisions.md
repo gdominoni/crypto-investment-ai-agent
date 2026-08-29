@@ -230,3 +230,13 @@ Each entry is dated and never silently rewritten — if a decision is later reve
 **Why.** A real, live-caught bug, not a hypothetical: `high_efficiency_breakout_with_volume_confirmation` became genuinely `VALIDATED` (a real checkpoint fired, `milestone_cleared=True` in `replay/state/status_history.json`) during a real replay run -- but `/replay_details` on that exact candidate right afterward showed only `Status: accepted`, with no mention of `validated` anywhere, because `format_candidate_details()` only ever read `row["status"]` (from `run_battery.py`/`run_replay_battery()`'s own return value) and had no access to the SEPARATE milestone-tracking state (`status_history.py`) at all. This is exactly the confusion the "accepted vs validated" entry earlier in this log warns about in the abstract -- here it actually happened, in this project's own most detail-oriented command, the one built specifically to answer "what does this status actually mean, precisely."
 
 **Type.** Real bug fix, caught by a human actually using the feature and noticing the mismatch against what they'd been told moments earlier -- not caught by reading the code (`format_candidate_details()` looked complete and correct in isolation; the missing piece was an input it was never given, not a flaw in its own logic).
+
+---
+
+## `run_bot()`'s unprotected `_get_updates()` -- a documented gap that actually crashed the process
+
+**Decision.** `run_bot()`'s long-poll loop now wraps its own `_get_updates()` call in try/except (10s backoff, then retries) -- previously only the per-update dispatch was protected, mirroring the same fix `scheduler/live_daemon.py` already had for its own polling.
+
+**Why.** This exact gap was already documented in PROJECT_MAP.md's "Partial Failures & Crashes" as "known, not yet handled" -- reasoned to be acceptable because `run_bot()` was meant for isolated testing, with `live_daemon.py` as the real, intended way to go live. It stopped being theoretical the moment `run_bot()` was actually run standalone as a real, ongoing process (deliberately, to answer commands without the daemon's proactive hourly/weekly jobs): a second, unrelated `getUpdates` call made from outside the running loop (Telegram allows only one active long-poll per bot token) caused the *next* poll inside `run_bot()` to receive an HTTP 409 Conflict, unhandled, which killed the entire process silently -- no crash alert, no auto-restart, just a bot that stopped answering until someone noticed and manually restarted it.
+
+**Type.** Real bug fix, caught live -- promotes a previously-accepted, explicitly-scoped gap to fully handled once the assumption behind accepting it ("only ever run via live_daemon.py") stopped holding.

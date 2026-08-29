@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -540,14 +541,28 @@ def run_bot() -> None:
     process behind every conversation in the README's Phase 4 mockups.
     Runs until interrupted; each update is processed and acknowledged
     (via the returned offset) before the next poll, so a crash mid-batch
-    re-delivers rather than silently drops a message."""
+    re-delivers rather than silently drops a message. `_get_updates()`
+    itself is wrapped too -- a real, observed case: a stray extra
+    `getUpdates` call from outside this loop (Telegram allows only one
+    active long-poll per bot token) returned an HTTP 409 Conflict on the
+    very next poll and crashed this whole process, previously undetected
+    since this exact call was never protected (see
+    docs/case_study/methodology-decisions.md). Mirrors
+    scheduler/live_daemon.py's own polling resilience, which already had
+    this -- `run_bot()` didn't, and this is the gap that actually
+    surfaced it."""
     load_dotenv()
     token = os.environ["TELEGRAM_BOT_TOKEN"]
     client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     offset = None
     print("Telegram bot polling started.")
     while True:
-        updates = _get_updates(token, offset)
+        try:
+            updates = _get_updates(token, offset)
+        except Exception as e:
+            print(f"Telegram poll failed, will retry: {e}")
+            time.sleep(10)
+            continue
         for update in updates:
             offset = update["update_id"] + 1
             try:
