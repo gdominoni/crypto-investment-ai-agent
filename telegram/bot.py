@@ -16,8 +16,8 @@ import requests
 from anthropic import Anthropic
 from dotenv import load_dotenv
 
-from candidates.definitions import TRIGGER_DESCRIPTIONS
-from candidates.methodology import format_trigger_summary
+from candidates.definitions import TRIGGER_DESCRIPTIONS, TRIGGER_NUMERIC_DEFINITIONS
+from candidates.methodology import format_candidate_details, format_trigger_summary
 from candidates.status_history import drop_candidate, mark_asked, record_status
 from llm_pipeline.context_builder import build_context_summary, build_live_test_summary, build_technical_snapshot
 from llm_pipeline.dynamic_candidates import record_test_result, registered_specs
@@ -318,6 +318,24 @@ def _trigger_description(candidate: str) -> str:
     return "trigger definition not found -- treat this as missing information, do not guess at it"
 
 
+def _trigger_numeric_description(candidate: str) -> str:
+    """Same lookup as _trigger_description(), but the trigger's exact
+    numeric definition instead of prose -- what /details and
+    /replay_details need to answer "how elevated, exactly?" for a static
+    candidate's own description, which is deliberately kept short and
+    number-free everywhere else (proposal messages, /summary) to stay
+    readable. Dynamic (Sonnet-proposed) conditions already carry their
+    own numeric threshold in condition_desc(), so this is identical to
+    _trigger_description() for those."""
+    base = candidate.rsplit("_", 1)[0]
+    if base in TRIGGER_NUMERIC_DEFINITIONS:
+        return TRIGGER_NUMERIC_DEFINITIONS[base]
+    for spec in registered_specs():
+        if spec.label == candidate:
+            return f"{condition_desc(spec)} → {spec.direction}"
+    return "trigger definition not found -- treat this as missing information, do not guess at it"
+
+
 def _answer_callback_query(callback_query_id: str) -> None:
     load_dotenv()
     token = os.environ["TELEGRAM_BOT_TOKEN"]
@@ -386,6 +404,27 @@ def _dispatch_update(update: dict, client: Anthropic) -> None:
         _send(discarded)
         return
 
+    if text.lower().startswith("/replay_details"):
+        from replay.battery import run_replay_battery
+        from replay import state as replay_state
+        parts = text.split(maxsplit=1)
+        if len(parts) < 2:
+            _send("Usage: /replay_details &lt;trigger_name&gt;  (e.g. /replay_details c2_long -- see /replay_summary for the exact names currently tracked)")
+            return
+        candidate = parts[1].strip()
+        checkpoint = replay_state.load_checkpoint()
+        if checkpoint.get("current_date") is None:
+            _send("Replay hasn't started yet -- nothing to show details for.")
+            return
+        as_of = pd.Timestamp(checkpoint["current_date"])
+        status_summary = run_replay_battery(as_of)
+        row = status_summary.get(candidate)
+        if row is None:
+            _send(f"No candidate named '{escape_html(candidate)}' found in the replay's current battery. Check /replay_summary for exact names.")
+            return
+        _send(format_candidate_details(candidate, row, definition=_trigger_numeric_description(candidate)))
+        return
+
     if text.lower() == "/replay_status":
         from replay import state
         checkpoint = state.load_checkpoint()
@@ -401,6 +440,22 @@ def _dispatch_update(update: dict, client: Anthropic) -> None:
             ),
         ]
         _send("\n".join(lines))
+        return
+
+    if text.lower().startswith("/details"):
+        from candidates.run_battery import run_all
+        parts = text.split(maxsplit=1)
+        if len(parts) < 2:
+            _send("Usage: /details &lt;trigger_name&gt;  (e.g. /details c2_long -- see /summary for the exact names currently tracked)")
+            return
+        candidate = parts[1].strip()
+        result, _live_state, _meta = run_all()
+        status_summary = result.set_index("candidate").to_dict(orient="index") if len(result) else {}
+        row = status_summary.get(candidate)
+        if row is None:
+            _send(f"No candidate named '{escape_html(candidate)}' found in the current battery. Check /summary for exact names.")
+            return
+        _send(format_candidate_details(candidate, row, definition=_trigger_numeric_description(candidate)))
         return
 
     if text.lower() == "/summary":
@@ -422,8 +477,10 @@ def _dispatch_update(update: dict, client: Anthropic) -> None:
             "<b>Standard commands</b>",
             "",
             "/summary -- current status of every tracked trigger (production): accepted, watch, rejected, insufficient data. Recomputed fresh, no LLM call.",
+            "/details &lt;trigger_name&gt; -- full numeric breakdown for one trigger from /summary: the exact threshold that defines it (e.g. \"funding z-score below -2.0\", not just \"elevated funding\"), N, p-value, concentration percentages, risk-path ratio, and why it isn't accepted if it isn't. Example: /details c2_long. No LLM call.",
             "/results -- KPI reporting from the real trade database (By Coin / By Signal / By Decision Type / Overall). Buttons, no LLM.",
             "/replay_summary -- same as /summary, for the historical replay (a walk-forward simulation through real past data, used to validate the system and build an initial live-test track record before going live).",
+            "/replay_details &lt;trigger_name&gt; -- same as /details, for the historical replay.",
             "/replay_status -- quick snapshot of the replay's simulated date, accepted candidates, live-test count.",
             "\"replay continue\" -- advances the historical replay.",
             "",

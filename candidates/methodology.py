@@ -464,6 +464,18 @@ def classify_status(rep: dict, coin_concentration: dict, period_concentration: d
     return "accepted"
 
 
+def _format_dominant_year(value) -> str:
+    """`dominant_year` comes out of a pandas groupby keyed on a 'period'
+    column that's an int at the point it's assigned (`.dt.year`) but can
+    get upcast to float64 by an unrelated NaN elsewhere in the same
+    frame -- rendering it straight would leak a trailing '.0' into text
+    a human reads (e.g. "a single year (2023.0)"). Real, observed case:
+    caught by testing this against real battery data."""
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value)
+
+
 def explain_non_acceptance(row: dict, min_report_events: int = 50) -> str:
     """Turns a run_battery.py/run_replay_battery result row into a
     SPECIFIC, honest reason the candidate hasn't reached 'accepted' --
@@ -501,7 +513,7 @@ def explain_non_acceptance(row: dict, min_report_events: int = 50) -> str:
         rule = "no single coin or year may carry more than 60% of the positive return"
         if max_coin_share >= max_year_share:
             return f"{qualifier}, but {max_coin_share:.0%} of it comes from a single coin ({row.get('dominant_coin')}) -- too concentrated to trust as general ({rule})"
-        return f"{qualifier}, but {max_year_share:.0%} of it comes from a single year ({row.get('dominant_year')}) -- too concentrated to trust as general ({rule})"
+        return f"{qualifier}, but {max_year_share:.0%} of it comes from a single year ({_format_dominant_year(row.get('dominant_year'))}) -- too concentrated to trust as general ({rule})"
     if not significant:
         p_value = row.get("pattern_p_value")
         return (f"a real pattern was tested for but not found -- not statistically significant vs. this coin's own "
@@ -514,6 +526,63 @@ def explain_non_acceptance(row: dict, min_report_events: int = 50) -> str:
         return (f"a statistically significant pattern, but an unfavorable risk profile (MFE/MAE ratio={mfe_mae_ratio:.2f} -- "
                 f"the risk taken during the hold exceeds the eventual reward)")
     return "did not clear the acceptance bar (see the current status above)"
+
+
+def format_candidate_details(candidate: str, row: dict, definition: str | None = None, min_report_events: int = 50) -> str:
+    """Full numeric breakdown for one candidate, in bullet points --
+    powers Telegram's `/details <name>`/`/replay_details <name>`.
+    Deliberately the detail `_trigger_summary_line()`/`format_trigger_summary()`
+    leave out to keep /summary short: a human reading "elevated futures
+    concentration" or "not statistically significant" in a proposal or
+    summary line has no way to ask "how elevated, exactly?" without
+    this. `definition` is the trigger's own numeric definition (e.g.
+    "funding z-score below -2.0"), passed in by the caller rather than
+    looked up here -- this module has no dependency on
+    candidates/definitions.py or the dynamic-condition registry, and
+    isn't the place to add one just for this."""
+    status = row.get("status", "unknown")
+    lines = [f"<b>{_escape_html(candidate)}</b>"]
+    if definition:
+        lines.append(f"What triggers it: {_escape_html(definition)}")
+    direction = row.get("direction")
+    lines.append(f"Status: {_escape_html(STATUS_PLAIN.get(status, status))}" + (f"  (direction: {direction})" if direction else ""))
+    lines.append("")
+
+    n = row.get("n")
+    lines.append(f"• Historical occurrences (N): {n if n is not None else 'n/a'}")
+
+    sig, p, excess = row.get("pattern_significant"), row.get("pattern_p_value"), row.get("pattern_excess_return")
+    if sig is not None:
+        verdict = "significant" if sig else "not significant"
+        p_bit = f" (p={p:.3f})" if p is not None else ""
+        excess_bit = f", excess return vs. this coin's own baseline: {excess:+.2%}" if excess is not None else ""
+        lines.append(f"• Statistical significance: {verdict}{p_bit}{excess_bit}")
+
+    ratio = row.get("pattern_mfe_mae_ratio")
+    if ratio is not None and not (isinstance(ratio, float) and np.isnan(ratio)):
+        lines.append(f"• Risk path (mean favorable / mean adverse excursion): {ratio:.2f}  (favorable if > 1.0)")
+
+    max_coin_share, dominant_coin = row.get("max_coin_share"), row.get("dominant_coin")
+    if max_coin_share is not None and not (isinstance(max_coin_share, float) and np.isnan(max_coin_share)):
+        coin_bit = f" ({_escape_html(dominant_coin)})" if dominant_coin else ""
+        lines.append(f"• Coin concentration: {max_coin_share:.0%} of total positive return comes from a single coin{coin_bit}  -- flagged above 60%")
+
+    max_year_share, dominant_year = row.get("max_year_share"), row.get("dominant_year")
+    if max_year_share is not None and not (isinstance(max_year_share, float) and np.isnan(max_year_share)):
+        year_bit = f" ({_escape_html(_format_dominant_year(dominant_year))})" if dominant_year else ""
+        lines.append(f"• Year concentration: {max_year_share:.0%} of total positive return comes from a single year{year_bit}  -- flagged above 60%")
+
+    win_rate, sortino = row.get("win_rate"), row.get("sortino")
+    if win_rate is not None and not (isinstance(win_rate, float) and np.isnan(win_rate)):
+        expectancy = row.get("total_expectancy")
+        expectancy_bit = f", total expectancy={expectancy:+.1%}" if expectancy is not None else ""
+        lines.append(f"• Reference TP/SL backtest: win rate={win_rate:.1%}, Sortino={sortino:.2f}{expectancy_bit}"
+                      f"  (informational only, doesn't gate status -- see README's Phase 2)")
+
+    if status in ("watch", "rejected"):
+        lines.append("")
+        lines.append(f"Why not accepted: {_escape_html(explain_non_acceptance(row, min_report_events))}")
+    return "\n".join(lines)
 
 
 def _escape_html(text: str) -> str:

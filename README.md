@@ -259,7 +259,7 @@ You:     How is the market going today?
 
 ### 4.4 Structured commands — no LLM involved
 
-`/summary` and `/help` never touch the language model — a command recomputes the real battery fresh (or, for `/help`, prints a static reference) and renders it directly.
+`/summary`, `/details`, and `/help` never touch the language model — a command recomputes the real battery fresh (or, for `/help`, prints a static reference) and renders it directly.
 
 ```
 You:     /help
@@ -282,7 +282,32 @@ You:     /summary
           [second message] Already discarded
 
           Nothing here right now.
+
+You:     /details c1_long
+
+🤖 Agent: c1_long
+          What triggers it: 30-day funding-rate z-score below -2.0 --
+          extreme relative to that coin's own trailing 30-day funding
+          history, not a fixed absolute rate.
+          Status: watch -- a real pattern signal, but fails a
+          robustness check (direction: long)
+
+          • Historical occurrences (N): 325
+          • Statistical significance: significant (p=0.010), excess
+            return vs. this coin's own baseline: -1.67%
+          • Risk path (mean favorable / mean adverse excursion): 0.74
+            (favorable if > 1.0)
+          • Coin concentration: 64% of total positive return comes
+            from a single coin (LTCUSDT) -- flagged above 60%
+          • Year concentration: 100% of total positive return comes
+            from a single year (2026) -- flagged above 60%
+
+          Why not accepted: a statistically significant pattern, but
+          100% of it comes from a single year -- too concentrated to
+          trust as general.
 ```
+
+`/summary` is deliberately terse — a status line like "Watch, N=325, p=0.010" answers "what's the verdict" but not "what does 'elevated concentration' actually mean in numbers." `/details <name>` (and `/replay_details <name>` for the historical replay) exists for exactly that: the trigger's own exact numeric definition, plus every number behind its current classification, one candidate at a time — kept as a separate command rather than folded into every `/summary` line or every Sonnet proposal, which would make either too long to scan at a glance.
 
 ---
 
