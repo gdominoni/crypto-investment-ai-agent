@@ -18,7 +18,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from llm_pipeline.novel_condition_tester import Clause, ConditionSpec
+from llm_pipeline.novel_condition_tester import ConditionSpec, clause_from_dict, clause_to_dict
 
 REGISTRY_PATH = Path(__file__).resolve().parent.parent / "candidates" / "dynamic_candidates.json"
 
@@ -31,12 +31,12 @@ def load_registry() -> dict:
 
 def _spec_to_dict(spec: ConditionSpec) -> dict:
     return {"label": spec.label,
-            "clauses": [{"indicator": c.indicator, "op": c.op, "threshold": c.threshold} for c in spec.clauses],
+            "clauses": [clause_to_dict(c) for c in spec.clauses],
             "direction": spec.direction, "horizons": list(spec.horizons)}
 
 
 def _dict_to_spec(d: dict) -> ConditionSpec:
-    return ConditionSpec(label=d["label"], clauses=tuple(Clause(**c) for c in d["clauses"]),
+    return ConditionSpec(label=d["label"], clauses=tuple(clause_from_dict(c) for c in d["clauses"]),
                           direction=d["direction"], horizons=tuple(d["horizons"]))
 
 

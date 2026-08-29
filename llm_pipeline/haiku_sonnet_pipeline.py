@@ -30,7 +30,8 @@ from data_ingestion.market_data.binance_fetcher import update_all as update_mark
 from data_ingestion.news_sentiment.cryptocompare_fetcher import fetch_cryptocompare_news
 from llm_pipeline.context_builder import build_context_summary, build_technical_snapshot
 from llm_pipeline.novel_condition_tester import (
-    INDICATOR_PLAIN_NAMES, OPERATOR_PLAIN, SUPPORTED_INDICATORS, Clause, ConditionSpec, build_indicator_snapshot,
+    INDICATOR_PLAIN_NAMES, OPERATOR_PLAIN, SUPPORTED_INDICATORS, ConditionSpec, build_indicator_leadup,
+    build_indicator_snapshot, clause_from_dict,
 )
 from llm_pipeline.pending_tests import push_pending_test
 from llm_pipeline.shock_detector import scan_for_shocks
@@ -76,10 +77,28 @@ Return ONLY a JSON object with exactly these fields:
 - "assessment": 1-2 sentences
 - "recommended_action": one of "no_action", "propose_novel_test"
 - "novel_condition_spec": null, or {{"label": "...", "clauses": [{{"indicator": "...", \
-  "op": "<"/">"/"<="/">=", "threshold": <number>}}, ...], "direction": "long"/"short"}} \
+  "op": "<"/">"/"<="/">=", "threshold": <number>, "within_days": <integer 0-14, optional>}}, ...], \
+  "direction": "long"/"short"}} \
   (one clause is fine for a simple condition; multiple clauses are ANDed together for a compound \
   one, e.g. an oversold technical reading combined with a macro surprise -- use as many as the \
   actual evidence supports, not for its own sake)
+
+IMPORTANT -- conditions may be SEQUENCED, not just simultaneous. Each clause takes an optional \
+"within_days" (integer, 0-14, default 0). 0 means "true on the day the condition fires"; K means \
+"was true at any point in the last K days". This is what lets you express an ORDERING rather than a \
+coincidence, and the two are genuinely different hypotheses:
+  - crash FIRST, then the news:  shock_zscore >= 3 with within_days=3, AND today's condition
+  - news FIRST, then the move:   is_macro_day >= 1 with within_days=2, AND today's condition
+  - both on the same day:        leave within_days at 0 on both
+You are shown a day-by-day LEAD-UP table (the last several days of key indicators, oldest first) \
+precisely so you can tell these apart. Read it before choosing: if the violent move is two rows \
+above the last one, the honest hypothesis is a sequenced one, not a same-day conjunction.
+
+Prefer a hypothesis where the EVENT (a macro release, a shock) is combined with MARKET STATE \
+(RSI, Bollinger position, volume, funding). A proposal built only from market-state indicators is \
+a chart pattern, not the market-conditions-plus-event question this system exists to answer -- and \
+one built only from an event term is tested against ordinary days rather than against the same \
+market state without the event, which is a much weaker claim.
 
 No prose, no markdown fences, just the JSON object."""
 
@@ -107,8 +126,12 @@ indicator reading, a headline, or a release you weren't shown. Recommend one of:
   clause (just "shock_zscore") is fine when nothing else in the given context looks relevant -- \
   don't force a compound story where the evidence doesn't support one. Use ONLY indicators you were \
   actually shown a reading for. Example: {{"label": "shock_reactive_<coin>", "clauses": \
-  [{{"indicator": "shock_zscore", "op": ">=", "threshold": 3.0}}, {{"indicator": "rsi_14d", \
-  "op": "<", "threshold": 30}}], "direction": "long" or "short"}}. If the human approves and it's \
+  [{{"indicator": "shock_zscore", "op": ">=", "threshold": 3.0, "within_days": 2}}, \
+  {{"indicator": "rsi_14d", "op": "<", "threshold": 30}}], "direction": "long" or "short"}} -- note \
+  "within_days" (integer 0-14, default 0): 0 = true on the day the condition fires, K = true at any \
+  point in the last K days. Use it to express that the SHOCK CAME FIRST and something else followed, \
+  which is a different hypothesis from both happening on the same day. The day-by-day LEAD-UP table \
+  you are shown exists so you can tell which of the two you are actually looking at. If the human approves and it's \
   accepted, the resulting anchors are used for a LIVE trade on THIS occurrence, tagged separately \
   from routine trades so how the system actually performed reacting to real shocks, in real time, \
   can be measured on its own.
@@ -212,7 +235,9 @@ def sonnet_strategist(flagged: dict, client: Anthropic) -> dict:
     context_summary = build_context_summary()
     coin = _asset_to_coin(flagged.get("asset", ""))
     if coin is not None:
-        indicator_snapshot = build_indicator_snapshot(coin)
+        # Snapshot AND the run-up: an ordered hypothesis (crash three days ago,
+        # news today) is unreasonable to ask for from a single instant's numbers.
+        indicator_snapshot = build_indicator_snapshot(coin) + "\n\n" + build_indicator_leadup(coin)
     else:
         indicator_snapshot = "\n".join(build_indicator_snapshot(c) for c in SHOCK_SCAN_COINS)
     macro_summary = recent_releases_summary()
@@ -251,7 +276,8 @@ def _recent_headlines_summary(limit: int = 5) -> str:
 def sonnet_shock_response(shock: dict, client: Anthropic) -> dict:
     technical_snapshot = build_technical_snapshot(shock["symbol"], FREQTRADE_DB_PATH)
     context_summary = build_context_summary()
-    indicator_snapshot = build_indicator_snapshot(shock["symbol"])
+    indicator_snapshot = (build_indicator_snapshot(shock["symbol"]) + "\n\n"
+                          + build_indicator_leadup(shock["symbol"]))
     macro_summary = recent_releases_summary()
     headlines_summary = _recent_headlines_summary()
     user_content = (
@@ -356,7 +382,7 @@ def run_shock_scan(coins: list[str] | None = None) -> None:
             reply_markup = None
             if assessment["recommended_action"] == "propose_novel_test" and assessment.get("novel_condition_spec"):
                 s = assessment["novel_condition_spec"]
-                spec = ConditionSpec(label=s["label"], clauses=tuple(Clause(**c) for c in s["clauses"]),
+                spec = ConditionSpec(label=s["label"], clauses=tuple(clause_from_dict(c) for c in s["clauses"]),
                                       direction=s["direction"])
                 pending_id = push_pending_test(spec, scan_coins, live_coin=shock["symbol"], signal_class="shock_reactive")
                 reply_markup = PROPOSAL_KEYBOARD_TEMPLATE(pending_id)
@@ -440,7 +466,7 @@ def run_once() -> None:
             reply_markup = None
             if assessment["recommended_action"] == "propose_novel_test" and assessment.get("novel_condition_spec"):
                 s = assessment["novel_condition_spec"]
-                spec = ConditionSpec(label=s["label"], clauses=tuple(Clause(**c) for c in s["clauses"]),
+                spec = ConditionSpec(label=s["label"], clauses=tuple(clause_from_dict(c) for c in s["clauses"]),
                                       direction=s["direction"])
                 pending_id = push_pending_test(spec, SHOCK_SCAN_COINS, live_coin=_asset_to_coin(item.get("asset", "")), signal_class="manual")
                 reply_markup = PROPOSAL_KEYBOARD_TEMPLATE(pending_id)

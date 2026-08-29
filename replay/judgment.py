@@ -17,7 +17,7 @@ from candidates.macro_vintage import recent_releases_summary
 from candidates.methodology import STATUS_PLAIN
 from candidates.run_battery import COINS
 from llm_pipeline.haiku_sonnet_pipeline import SONNET_MODEL, _strip_fences, escape_html, extract_text, format_spec_clauses
-from llm_pipeline.novel_condition_tester import SUPPORTED_INDICATORS, build_indicator_snapshot
+from llm_pipeline.novel_condition_tester import SUPPORTED_INDICATORS, build_indicator_leadup, build_indicator_snapshot
 from replay import state
 from replay import status_history as sh
 from replay.time_sandbox import daily_as_of
@@ -140,7 +140,8 @@ def judge_event(event_description: str, client: Anthropic, as_of: pd.Timestamp |
     parts = [event_description]
     if as_of is not None:
         if coin is not None:
-            parts.append(f"INDICATOR SNAPSHOT:\n{build_indicator_snapshot(coin, as_of)}")
+            parts.append(f"INDICATOR SNAPSHOT:\n{build_indicator_snapshot(coin, as_of)}\n\n"
+                          f"{build_indicator_leadup(coin, as_of=as_of)}")
         else:
             snapshots = "\n".join(build_indicator_snapshot(c, as_of) for c in COINS)
             parts.append(f"INDICATOR SNAPSHOT (every tracked coin):\n{snapshots}")

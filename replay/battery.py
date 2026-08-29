@@ -22,7 +22,7 @@ from candidates.methodology import (
     report, shock_zscore_series, walk_forward,
 )
 from candidates.run_battery import COINS, HORIZONS_DAYS, SHOCK_ZSCORE_THRESHOLD
-from llm_pipeline.novel_condition_tester import Clause, ConditionSpec, test_novel_condition
+from llm_pipeline.novel_condition_tester import ConditionSpec, clause_from_dict, test_novel_condition
 from replay import state
 from replay import status_history as sh
 from replay.time_sandbox import daily_as_of, funding_as_of
@@ -114,7 +114,7 @@ def run_replay_battery(as_of: pd.Timestamp) -> dict:
         if sh.is_dropped(label):
             continue
         try:
-            spec = ConditionSpec(label=spec_dict["label"], clauses=tuple(Clause(**c) for c in spec_dict["clauses"]),
+            spec = ConditionSpec(label=spec_dict["label"], clauses=tuple(clause_from_dict(c) for c in spec_dict["clauses"]),
                                   direction=spec_dict["direction"], horizons=tuple(spec_dict["horizons"]))
             result = test_novel_condition(spec, COINS, as_of=as_of)
             coin_conc, year_conc = result.get("coin_concentration") or {}, result.get("year_concentration") or {}

@@ -181,3 +181,32 @@ class TestIncrementalBaseline:
         # the two are answering different questions, so they must not be
         # silently identical numbers reported under the same label
         assert uncond["baseline_mean_return"] != incr["baseline_mean_return"]
+
+
+class TestClauseSerialization:
+    """All three serializers previously wrote only indicator/op/threshold.
+    A sequenced condition would round-trip back as a same-day one --
+    silently testing, then live-tracking, a different hypothesis than the
+    one a human actually approved."""
+
+    def test_within_days_survives_a_round_trip(self):
+        from llm_pipeline.novel_condition_tester import clause_to_dict, clause_from_dict
+        original = Clause("shock_zscore", ">=", 3.0, within_days=3)
+        assert clause_from_dict(clause_to_dict(original)) == original
+
+    def test_sloppy_llm_json_is_sanitised_rather_than_crashing(self):
+        from llm_pipeline.novel_condition_tester import clause_from_dict
+        for raw, expected in [
+            ({"indicator": "rsi_14d", "op": "<", "threshold": 30, "within_days": None}, 0),
+            ({"indicator": "rsi_14d", "op": "<", "threshold": "30", "within_days": 2.0}, 2),
+            ({"indicator": "rsi_14d", "op": "<", "threshold": 30, "within_days": "3"}, 3),
+            ({"indicator": "rsi_14d", "op": "<", "threshold": 30, "stray": "ignored"}, 0),
+        ]:
+            assert clause_from_dict(raw).within_days == expected
+
+    def test_an_out_of_range_lookback_still_raises(self):
+        """Sanitising must not become silent clamping -- a model asking
+        for a 500-day 'sequence' is a real error worth surfacing."""
+        from llm_pipeline.novel_condition_tester import clause_from_dict
+        with pytest.raises(ValueError):
+            clause_from_dict({"indicator": "rsi_14d", "op": "<", "threshold": 30, "within_days": 500})

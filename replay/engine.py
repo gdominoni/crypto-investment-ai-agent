@@ -38,7 +38,7 @@ from candidates.run_battery import COINS
 from execution import hyperopt_runner
 from llm_pipeline.haiku_sonnet_pipeline import escape_html, format_spec_clauses, sonnet_prune_advice
 from llm_pipeline.novel_condition_tester import (
-    Clause, ConditionSpec, clause_signal_hourly, condition_desc, format_pattern_significance,
+    ConditionSpec, clause_from_dict, clause_signal_hourly, clause_to_dict, condition_desc, format_pattern_significance,
     test_novel_condition,
 )
 from replay import judgment, state
@@ -471,7 +471,7 @@ def _scan_mechanical_triggers(d: pd.Timestamp, hourly_full: dict, ohlc_full: dic
         for label, spec_dict in dynamic_registry.items():
             if sh.is_dropped(label) or (label, coin) in open_pairs:
                 continue
-            spec = ConditionSpec(label=spec_dict["label"], clauses=tuple(Clause(**c) for c in spec_dict["clauses"]),
+            spec = ConditionSpec(label=spec_dict["label"], clauses=tuple(clause_from_dict(c) for c in spec_dict["clauses"]),
                                   direction=spec_dict["direction"], horizons=tuple(spec_dict["horizons"]))
             trig = _dynamic_trigger_hourly(spec, hourly_to_date, ohlc_full[coin], funding).loc[day_start:day_end]
             if not trig.any():
@@ -653,14 +653,14 @@ def resolve_pending_test() -> str | None:
     _send("Received — this will be tested against the market.")
 
     s = pending["spec"]
-    spec = ConditionSpec(label=s["label"], clauses=tuple(Clause(**c) for c in s["clauses"]), direction=s["direction"])
+    spec = ConditionSpec(label=s["label"], clauses=tuple(clause_from_dict(c) for c in s["clauses"]), direction=s["direction"])
     as_of = pd.Timestamp(pending["as_of"])
     result = test_novel_condition(spec, pending["coins"], as_of=as_of)
     status = result["status"]
 
     registry = state.load_dynamic_candidates()
     registry[spec.label] = {"label": spec.label,
-                             "clauses": [{"indicator": c.indicator, "op": c.op, "threshold": c.threshold} for c in spec.clauses],
+                             "clauses": [clause_to_dict(c) for c in spec.clauses],
                              "direction": spec.direction, "horizons": list(spec.horizons)}
     state.save_dynamic_candidates(registry)
     # Recorded here, not deferred to the next weekly battery refresh -- without

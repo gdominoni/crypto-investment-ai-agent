@@ -31,7 +31,7 @@ from candidates.methodology import (
 )
 from candidates.run_battery import COINS, HORIZONS_DAYS, SHOCK_ZSCORE_THRESHOLD
 from llm_pipeline.dynamic_candidates import registered_specs
-from llm_pipeline.novel_condition_tester import SUPPORTED_INDICATORS, Clause, ConditionSpec, _OPERATORS
+from llm_pipeline.novel_condition_tester import SUPPORTED_INDICATORS, ConditionSpec, _OPERATORS, clause_from_dict
 
 CANDIDATE = os.environ["FT_HYPEROPT_CANDIDATE"]
 _dynamic_spec = next((s for s in registered_specs() if s.label == CANDIDATE), None)
@@ -48,7 +48,7 @@ if _dynamic_spec is None:
     if _replay_spec_dict is not None:
         _dynamic_spec = ConditionSpec(
             label=_replay_spec_dict["label"], direction=_replay_spec_dict["direction"],
-            clauses=tuple(Clause(**c) for c in _replay_spec_dict["clauses"]),
+            clauses=tuple(clause_from_dict(c) for c in _replay_spec_dict["clauses"]),
             horizons=tuple(_replay_spec_dict["horizons"]),
         )
 DIRECTION = CANDIDATE_DIRECTIONS[CANDIDATE] if _dynamic_spec is None else _dynamic_spec.direction

@@ -35,7 +35,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from llm_pipeline.novel_condition_tester import Clause, ConditionSpec
+from llm_pipeline.novel_condition_tester import ConditionSpec, clause_from_dict, clause_to_dict
 
 PENDING_TESTS_PATH = Path(__file__).resolve().parent / "pending_test.json"
 
@@ -67,7 +67,7 @@ def push_pending_test(spec: ConditionSpec, coins: list[str], live_coin: str | No
     queue.append({
         "id": pending_id,
         "spec": {"label": spec.label,
-                 "clauses": [{"indicator": c.indicator, "op": c.op, "threshold": c.threshold} for c in spec.clauses],
+                 "clauses": [clause_to_dict(c) for c in spec.clauses],
                  "direction": spec.direction, "horizons": list(spec.horizons)},
         "coins": coins, "live_coin": live_coin, "signal_class": signal_class,
         "expires_at": (datetime.now(timezone.utc) + timedelta(hours=expires_hours)).isoformat(),
@@ -78,7 +78,7 @@ def push_pending_test(spec: ConditionSpec, coins: list[str], live_coin: str | No
 
 def _spec_from_entry(data: dict) -> ConditionSpec:
     s = data["spec"]
-    return ConditionSpec(label=s["label"], clauses=tuple(Clause(**c) for c in s["clauses"]),
+    return ConditionSpec(label=s["label"], clauses=tuple(clause_from_dict(c) for c in s["clauses"]),
                           direction=s["direction"], horizons=tuple(s["horizons"]))
 
 

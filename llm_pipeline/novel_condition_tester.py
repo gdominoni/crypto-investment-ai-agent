@@ -165,6 +165,53 @@ def build_indicator_snapshot(coin: str, as_of: pd.Timestamp | None = None) -> st
 MAX_WITHIN_DAYS = 14  # a "sequence" longer than this stops being one event and becomes a regime
 
 
+# The indicators shown in the day-by-day lead-up below. Deliberately a
+# SUBSET, not all twelve: the lead-up is 7 rows deep, so showing every
+# indicator would multiply this block's token cost for detail nobody
+# reasons from -- and this project has already been bitten once by
+# unbounded LLM context (see PROJECT_MAP.md's Cost Optimization).
+# These six are the ones an ordering hypothesis is actually built from:
+# what moved, how violently, how stretched, how crowded.
+LEADUP_INDICATORS = ("close_return_1d", "shock_zscore", "rsi_14d",
+                     "volume_zscore_30d", "funding_zscore_30d", "bollinger_pctb_20d")
+
+
+def build_indicator_leadup(coin: str, days: int = 7, as_of: pd.Timestamp | None = None) -> str:
+    """The last `days` days of the key indicators, one row per day --
+    what was happening BEFORE and INTO the event, not just at it.
+
+    `build_indicator_snapshot` gives a single instant, which is enough to
+    answer "is this extreme right now" but structurally cannot support an
+    ORDERED hypothesis: with only today's numbers, Sonnet cannot tell
+    "the crash was three days ago and the news just landed" from "both
+    happened today", and therefore cannot sensibly choose a clause's
+    `within_days`. Giving it the run-up is what makes that parameter
+    usable rather than decorative."""
+    daily = load_daily(coin)
+    if as_of is not None:
+        daily = daily.loc[:as_of]
+    funding = load_funding(coin)
+    if funding is not None and as_of is not None:
+        funding = funding.loc[:as_of]
+    if len(daily) == 0:
+        return f"{coin}: no data available."
+    cols = {}
+    for name in LEADUP_INDICATORS:
+        try:
+            cols[name] = SUPPORTED_INDICATORS[name](daily, funding).tail(days)
+        except Exception:
+            continue
+    if not cols:
+        return f"{coin}: no indicator history available."
+    frame = pd.DataFrame(cols)
+    lines = [f"{coin} day-by-day lead-up (oldest first; today is the last row):",
+             "  date        " + "  ".join(f"{n[:14]:>14}" for n in frame.columns)]
+    for ts, row in frame.iterrows():
+        vals = "  ".join(f"{row[c]:>14.3f}" if pd.notna(row[c]) else f"{'n/a':>14}" for c in frame.columns)
+        lines.append(f"  {ts.date()}  {vals}")
+    return "\n".join(lines)
+
+
 @dataclass(frozen=True)
 class Clause:
     """`within_days=0` (the default, and the only behaviour that existed
@@ -237,6 +284,34 @@ DAILY_NATIVE_INDICATORS = frozenset({
 # so the honest question is whether the event adds anything GIVEN X.
 # Future news/sentiment indicators belong here too.
 EVENT_INDICATORS = frozenset({"is_macro_day", "shock_zscore"})
+
+
+def clause_to_dict(clause: "Clause") -> dict:
+    """THE serializer. Every persisted spec goes through this, so a field
+    added to Clause can never be silently dropped on the way to disk --
+    which is exactly what would have happened to `within_days`: a
+    sequenced condition would round-trip back as a same-day one, quietly
+    testing and then tracking a different hypothesis than the one that
+    was approved."""
+    d = {"indicator": clause.indicator, "op": clause.op, "threshold": clause.threshold}
+    if clause.within_days:
+        d["within_days"] = clause.within_days
+    return d
+
+
+def clause_from_dict(d: dict) -> "Clause":
+    """THE deserializer, and the sanitiser for LLM-produced JSON. Ignores
+    unknown keys and coerces `within_days` (a model may emit it as null,
+    a float, or a numeric string) rather than raising -- same discipline
+    as `_normalize_coin`: never trust model output where code can check
+    it instead. A genuinely out-of-range value still raises, via Clause's
+    own validation, rather than being silently clamped."""
+    within = d.get("within_days") or 0
+    if isinstance(within, str):
+        within = int(float(within))
+    elif isinstance(within, float):
+        within = int(within)
+    return Clause(indicator=d["indicator"], op=d["op"], threshold=float(d["threshold"]), within_days=int(within))
 
 
 def reduced_spec(spec: "ConditionSpec") -> "ConditionSpec | None":
