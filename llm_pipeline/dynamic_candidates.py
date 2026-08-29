@@ -59,8 +59,38 @@ def registered_specs() -> list[ConditionSpec]:
     """Every dynamically-discovered condition, regardless of its last
     known status -- run_battery.py re-tests all of them weekly, the same
     "cheap re-check, don't assume permanent" treatment already applied to
-    rejected static candidates."""
-    return [_dict_to_spec(entry["spec"]) for entry in load_registry().values()]
+    rejected static candidates.
+
+    Entries that no longer satisfy `ConditionSpec`'s own validation are
+    SKIPPED -- not crashed on, and not silently coerced into passing. In
+    practice these are conditions recorded before a news/macro event
+    clause became a NECESSARY condition: measured on the replay's own
+    registry, 80 of 92 were pure chart patterns or shock-only and never
+    tested this project's actual question. They stay on disk as a record
+    of what was tried (deleting history would be its own dishonesty) but
+    are no longer re-tested, re-reported, or able to open live tests.
+    `off_thesis_labels()` names them, so the drop in tracked count is
+    visible rather than looking like they quietly vanished."""
+    specs = []
+    for entry in load_registry().values():
+        try:
+            specs.append(_dict_to_spec(entry["spec"]))
+        except ValueError:
+            continue
+    return specs
+
+
+def off_thesis_labels() -> dict[str, str]:
+    """Registry entries excluded by `ConditionSpec` validation, mapped to
+    the reason -- so a human can see WHY the tracked count dropped rather
+    than discovering it later as an unexplained gap."""
+    out = {}
+    for label, entry in load_registry().items():
+        try:
+            _dict_to_spec(entry["spec"])
+        except ValueError as e:
+            out[label] = str(e)
+    return out
 
 
 def rejected_labels() -> set[str]:

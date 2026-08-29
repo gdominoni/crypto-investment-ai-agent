@@ -39,15 +39,15 @@ def test_empty_clauses_is_rejected():
 def test_multi_clause_spec_is_anded_in_its_description():
     spec = ConditionSpec(
         label="x",
-        clauses=(Clause(indicator="rsi_14d", op="<", threshold=30.0), Clause(indicator="shock_zscore", op=">=", threshold=3.0)),
+        clauses=(Clause(indicator="rsi_14d", op="<", threshold=30.0), Clause(indicator="is_macro_day", op=">=", threshold=1.0)),
         direction="long",
     )
     desc = condition_desc(spec)
     assert " AND " in desc
     assert desc.count(" AND ") == 1  # two clauses, joined once -- not silently collapsed to one
-    assert "below 30.0" in desc and "at least 3.0" in desc
+    assert "below 30.0" in desc and "at least 1.0" in desc
     # indicator names are translated to plain language, not shown as raw variable names
-    assert "rsi_14d" not in desc and "shock_zscore" not in desc
+    assert "rsi_14d" not in desc and "is_macro_day" not in desc
     # comparisons are translated to plain English too -- a raw "<"/">" HTML-escaped
     # to "&lt;"/"&gt;" was observed live to sometimes render as literal text in
     # Telegram instead of decoding back to the symbol; never generating the raw
@@ -89,7 +89,7 @@ class TestLaggedClauses:
         read identically while testing different hypotheses."""
         spec = ConditionSpec(
             label="x",
-            clauses=(Clause("shock_zscore", ">=", 3.0, within_days=3), Clause("rsi_14d", "<", 30.0)),
+            clauses=(Clause("is_macro_day", ">=", 1.0, within_days=3), Clause("rsi_14d", "<", 30.0)),
             direction="long",
         )
         desc = condition_desc(spec)
@@ -134,27 +134,33 @@ class TestIncrementalBaseline:
     test would still pass it. The control must be the same condition
     with the event clause removed."""
 
-    def test_reduced_spec_drops_only_the_event_clauses(self):
-        from llm_pipeline.novel_condition_tester import reduced_spec
+    def test_reduced_clauses_drops_only_the_event_clauses(self):
+        from llm_pipeline.novel_condition_tester import reduced_clauses
         spec = ConditionSpec(
             label="x",
-            clauses=(Clause("shock_zscore", ">=", 3.0), Clause("rsi_14d", "<", 30.0),
-                     Clause("volume_zscore_30d", ">", 1.0)),
+            clauses=(Clause("cpi_surprise", ">=", 1.0), Clause("shock_zscore", ">=", 3.0),
+                     Clause("rsi_14d", "<", 30.0), Clause("volume_zscore_30d", ">", 1.0)),
             direction="long")
-        red = reduced_spec(spec)
-        assert {c.indicator for c in red.clauses} == {"rsi_14d", "volume_zscore_30d"}
+        assert {c.indicator for c in reduced_clauses(spec)} == {"rsi_14d", "volume_zscore_30d"}
 
-    def test_no_contrast_exists_when_there_is_no_event_clause(self):
-        from llm_pipeline.novel_condition_tester import reduced_spec
-        spec = ConditionSpec(label="x", clauses=(Clause("rsi_14d", "<", 30.0),), direction="long")
-        assert reduced_spec(spec) is None
+    def test_the_control_group_is_not_forced_through_the_necessary_condition_rule(self):
+        """The control is BY CONSTRUCTION the version without an event
+        clause, so it could never satisfy ConditionSpec's own rule.
+        Returning bare clauses rather than a spec is what keeps that from
+        being a category error -- it briefly broke every incremental test
+        when reduced_clauses still returned a ConditionSpec."""
+        from llm_pipeline.novel_condition_tester import reduced_clauses
+        spec = ConditionSpec(label="x", direction="long",
+                             clauses=(Clause("cpi_surprise", ">=", 1.0), Clause("rsi_14d", "<", 30.0)))
+        red = reduced_clauses(spec)
+        assert red is not None and not isinstance(red, ConditionSpec)
 
     def test_no_contrast_exists_when_the_spec_is_only_event_clauses(self):
         """Removing them would leave no condition at all -- and for an
         event-only spec, 'vs. an ordinary day' is the right test anyway."""
-        from llm_pipeline.novel_condition_tester import reduced_spec
-        spec = ConditionSpec(label="x", clauses=(Clause("shock_zscore", ">=", 3.0),), direction="long")
-        assert reduced_spec(spec) is None
+        from llm_pipeline.novel_condition_tester import reduced_clauses
+        spec = ConditionSpec(label="x", clauses=(Clause("is_macro_day", ">=", 1.0),), direction="long")
+        assert reduced_clauses(spec) is None
 
     def test_the_two_baselines_answer_different_questions_and_say_which(self):
         import numpy as np, pandas as pd
@@ -259,3 +265,61 @@ class TestMacroSurpriseIndicators:
         overlap = full.iloc[:1500].dropna().index.intersection(trunc.dropna().index)
         assert len(overlap), "fixture should overlap"
         assert float((full.loc[overlap] - trunc.loc[overlap]).abs().max()) == 0.0
+
+
+class TestNewsEventIsANecessaryCondition:
+    """This project asks whether market conditions COMBINED WITH a
+    real-world event produce a repeatable pattern. A condition built only
+    from price/volume/funding indicators does not test that question --
+    it is a chart pattern. Enforced in code, not requested in a prompt,
+    because a prompt is a request and code is a guarantee.
+
+    Measured before the rule existed: 80 of 92 conditions Sonnet proposed
+    in the replay were off-thesis, and every one was tested, graded and
+    reported as if it answered the project's question."""
+
+    def test_a_pure_chart_pattern_is_rejected(self):
+        with pytest.raises(ValueError, match="no news/macro event clause"):
+            ConditionSpec(label="breakout", direction="long",
+                          clauses=(Clause("bollinger_pctb_20d", ">", 0.95),
+                                   Clause("volume_zscore_30d", ">", 1.0)))
+
+    def test_a_market_shock_alone_does_not_satisfy_it(self):
+        """A violent price move is a market event, not news -- and "the
+        price moved a lot, then the price did something" is exactly the
+        tautology this rule excludes. 49 of 92 proposals were this shape."""
+        with pytest.raises(ValueError, match="no news/macro event clause"):
+            ConditionSpec(label="shock_bounce", direction="long",
+                          clauses=(Clause("shock_zscore", ">=", 3.0), Clause("rsi_14d", "<", 30.0)))
+
+    def test_shock_is_still_valid_as_an_additional_market_condition(self):
+        spec = ConditionSpec(label="cpi_shock_oversold", direction="long",
+                             clauses=(Clause("cpi_surprise", ">=", 1.0),
+                                      Clause("shock_zscore", ">=", 3.0),
+                                      Clause("rsi_14d", "<", 30.0)))
+        assert len(spec.clauses) == 3
+
+    def test_every_news_event_indicator_satisfies_it_on_its_own(self):
+        from llm_pipeline.novel_condition_tester import NEWS_EVENT_INDICATORS
+        for ind in NEWS_EVENT_INDICATORS:
+            ConditionSpec(label=f"{ind}_test", direction="long",
+                          clauses=(Clause(ind, ">=", 1.0), Clause("rsi_14d", "<", 30.0)))
+
+    def test_a_label_may_not_claim_a_macro_event_its_clauses_lack(self):
+        """Real case: "post-CPI extreme volume+breakout momentum" tested
+        only volume_zscore AND bollinger_pctb -- no CPI clause anywhere.
+        14 of 92 labels asserted a macro event their spec never contained,
+        and a human reading /summary reasonably believes the name."""
+        with pytest.raises(ValueError):
+            ConditionSpec(label="post-CPI volume breakout", direction="long",
+                          clauses=(Clause("volume_zscore_30d", ">", 3.0),))
+
+    def test_an_off_thesis_registry_entry_is_skipped_not_crashed_on(self):
+        """80 legacy entries must not take the whole battery down, and
+        must not be silently coerced into passing either."""
+        from llm_pipeline.novel_condition_tester import clause_from_dict
+        bad = {"label": "legacy", "clauses": [{"indicator": "rsi_14d", "op": "<", "threshold": 30}],
+               "direction": "long", "horizons": [1, 3, 7]}
+        with pytest.raises(ValueError):
+            ConditionSpec(label=bad["label"], clauses=tuple(clause_from_dict(c) for c in bad["clauses"]),
+                          direction=bad["direction"], horizons=tuple(bad["horizons"]))

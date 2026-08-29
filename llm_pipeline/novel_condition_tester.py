@@ -12,6 +12,7 @@ version of the whitelist.
 from __future__ import annotations
 
 import operator
+import re
 from dataclasses import dataclass
 from typing import Callable
 
@@ -306,6 +307,39 @@ EVENT_INDICATORS = frozenset({
     "cpi_surprise", "rate_surprise", "jobless_claims_surprise",
 })
 
+# THE NECESSARY CONDITION. This project asks whether specific market
+# conditions COMBINED WITH a piece of news or a real-world event produce a
+# repeatable pattern. A condition built only from price/volume/funding
+# indicators does not test that question at all -- it is a chart pattern,
+# indistinguishable from something written directly in Freqtrade with no
+# LLM involved. Enforced structurally in ConditionSpec rather than
+# requested in a prompt, for the same reason `_normalize_coin` corrects a
+# coin symbol instead of trusting the instruction: a prompt is a request,
+# code is a guarantee.
+#
+# `shock_zscore` is deliberately NOT in this set. A violent price move is
+# a MARKET event, not news -- and "the price moved a lot, then the price
+# did something" is exactly the tautology this requirement exists to
+# exclude. A shock is a perfectly good ADDITIONAL clause (it is a market
+# condition), it just cannot be the thing that makes a hypothesis
+# on-thesis on its own.
+#
+# Measured before this rule existed: of 92 conditions Sonnet proposed in
+# the replay, 31 contained no event term whatsoever and a further 49
+# carried only a shock -- 80 of 92 were off-thesis, and every one of them
+# was tested, graded and reported as if it answered the project's
+# question. News/sentiment indicators join this set once a historical
+# archive exists to backtest them against (see docs/case_study/TODO.md).
+NEWS_EVENT_INDICATORS = frozenset({
+    "is_macro_day", "cpi_surprise", "rate_surprise", "jobless_claims_surprise",
+})
+
+# Words in a LABEL that assert a macro/news event is part of the hypothesis.
+# Checked against the actual clauses, because a name that describes a test
+# it doesn't perform is the same class of defect as every other one found
+# in this codebase: a label sitting next to numbers it doesn't describe.
+_MACRO_CLAIM_RE = re.compile(r"cpi|fomc|macro|fed[\W_]|jobless|claims|rate[\W_]?(decision|hike|cut)|news|headline", re.I)
+
 
 def clause_to_dict(clause: "Clause") -> dict:
     """THE serializer. Every persisted spec goes through this, so a field
@@ -335,18 +369,23 @@ def clause_from_dict(d: dict) -> "Clause":
     return Clause(indicator=d["indicator"], op=d["op"], threshold=float(d["threshold"]), within_days=int(within))
 
 
-def reduced_spec(spec: "ConditionSpec") -> "ConditionSpec | None":
-    """`spec` with its EVENT clauses removed -- the control condition for
-    the incremental test. Returns None when no such contrast exists:
-    either the spec has no event clause (nothing to remove) or nothing
-    BUT event clauses (removing them leaves no condition at all). In both
-    cases the caller correctly falls back to the unconditional baseline,
-    which for an event-only spec is exactly the right test anyway."""
+def reduced_clauses(spec: "ConditionSpec") -> "tuple[Clause, ...] | None":
+    """`spec`'s clauses with the EVENT ones removed -- the CONTROL group
+    for the incremental test ("same market state, no event").
+
+    Returns a bare clause tuple, deliberately NOT a ConditionSpec: the
+    control is by construction the version WITHOUT an event clause, so it
+    could never satisfy ConditionSpec's own necessary-condition rule. That
+    rule governs what may be PROPOSED and tested as a hypothesis; the
+    control group is an internal construct, not a hypothesis, and forcing
+    it through the same validation would be a category error (and did
+    briefly break every incremental test when it was one).
+
+    None when no contrast exists: either nothing but event clauses (the
+    control would be empty) or -- unreachable now that an event clause is
+    mandatory -- no event clause to remove."""
     kept = tuple(c for c in spec.clauses if c.indicator not in EVENT_INDICATORS)
-    if not kept or len(kept) == len(spec.clauses):
-        return None
-    return ConditionSpec(label=f"{spec.label}__reduced", clauses=kept,
-                         direction=spec.direction, horizons=spec.horizons)
+    return kept or None
 
 
 def clause_signal_hourly(clause: Clause, hourly: pd.DataFrame, daily: pd.DataFrame,
@@ -408,6 +447,22 @@ class ConditionSpec:
             raise ValueError("ConditionSpec needs at least one clause")
         if self.direction not in ("long", "short"):
             raise ValueError("direction must be 'long' or 'short'")
+        # The necessary condition -- see NEWS_EVENT_INDICATORS.
+        if not any(c.indicator in NEWS_EVENT_INDICATORS for c in self.clauses):
+            raise ValueError(
+                f"ConditionSpec '{self.label}' has no news/macro event clause. This project tests market "
+                f"conditions COMBINED WITH a real-world event; an event term is a NECESSARY condition, not an "
+                f"option. Add at least one of {sorted(NEWS_EVENT_INDICATORS)}. "
+                f"(shock_zscore is a market event, not news -- it does not satisfy this on its own.) "
+                f"Got: {[c.indicator for c in self.clauses]}")
+        # The label must not claim an event the clauses don't implement. Real,
+        # measured case: "post-CPI extreme volume+breakout momentum" tested only
+        # volume_zscore AND bollinger_pctb -- no CPI clause at all -- and 14 of 92
+        # proposals had a label asserting a macro event their spec never contained.
+        # A human reading /summary reasonably believes the name describes the test.
+        if _MACRO_CLAIM_RE.search(self.label) and not any(
+                c.indicator in NEWS_EVENT_INDICATORS for c in self.clauses):
+            raise ValueError(f"ConditionSpec '{self.label}' names a macro event its clauses do not contain")
 
 
 def format_pattern_significance(pattern: dict) -> str:
@@ -494,9 +549,9 @@ def test_novel_condition(spec: ConditionSpec, coins: list[str], as_of: pd.Timest
 
     # The control condition for the incremental test: this same spec with its
     # EVENT clauses removed. None when no such contrast exists (see
-    # reduced_spec), in which case the unconditional baseline is used and
+    # reduced_clauses), in which case the unconditional baseline is used and
     # `baseline_kind` reports that honestly.
-    control_spec = reduced_spec(spec)
+    control_clauses = reduced_clauses(spec)
 
     all_events, control_events = [], []
     ohlc_by_coin = {}
@@ -529,8 +584,8 @@ def test_novel_condition(spec: ConditionSpec, coins: list[str], as_of: pd.Timest
             else:
                 n_shock_excluded += int((ev["regime"] == "shock").sum())
                 all_events.append(ev[ev["regime"] == "normal"])
-        if control_spec is not None:
-            cev = _events_for(control_spec.clauses)
+        if control_clauses is not None:
+            cev = _events_for(control_clauses)
             if len(cev):
                 # Same shock-regime treatment as the treated set, so control and
                 # treatment are drawn from the same population in every respect

@@ -114,8 +114,14 @@ def run_replay_battery(as_of: pd.Timestamp) -> dict:
         if sh.is_dropped(label):
             continue
         try:
-            spec = ConditionSpec(label=spec_dict["label"], clauses=tuple(clause_from_dict(c) for c in spec_dict["clauses"]),
-                                  direction=spec_dict["direction"], horizons=tuple(spec_dict["horizons"]))
+            try:
+                spec = ConditionSpec(label=spec_dict["label"], clauses=tuple(clause_from_dict(c) for c in spec_dict["clauses"]),
+                                      direction=spec_dict["direction"], horizons=tuple(spec_dict["horizons"]))
+            except ValueError:
+                # Recorded before a news/macro event clause became a NECESSARY
+                # condition -- skip rather than crash, see
+                # llm_pipeline/dynamic_candidates.py::registered_specs.
+                continue
             result = test_novel_condition(spec, COINS, as_of=as_of)
             coin_conc, year_conc = result.get("coin_concentration") or {}, result.get("year_concentration") or {}
             pattern = result.get("pattern_significance") or {}

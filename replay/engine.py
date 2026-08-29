@@ -471,8 +471,14 @@ def _scan_mechanical_triggers(d: pd.Timestamp, hourly_full: dict, ohlc_full: dic
         for label, spec_dict in dynamic_registry.items():
             if sh.is_dropped(label) or (label, coin) in open_pairs:
                 continue
-            spec = ConditionSpec(label=spec_dict["label"], clauses=tuple(clause_from_dict(c) for c in spec_dict["clauses"]),
-                                  direction=spec_dict["direction"], horizons=tuple(spec_dict["horizons"]))
+            try:
+                spec = ConditionSpec(label=spec_dict["label"], clauses=tuple(clause_from_dict(c) for c in spec_dict["clauses"]),
+                                      direction=spec_dict["direction"], horizons=tuple(spec_dict["horizons"]))
+            except ValueError:
+                # Recorded before a news/macro event clause became a NECESSARY
+                # condition -- skip rather than crash, see
+                # llm_pipeline/dynamic_candidates.py::registered_specs.
+                continue
             trig = _dynamic_trigger_hourly(spec, hourly_to_date, ohlc_full[coin], funding).loc[day_start:day_end]
             if not trig.any():
                 continue

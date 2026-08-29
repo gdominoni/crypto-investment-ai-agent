@@ -73,6 +73,18 @@ compound hypothesis ONLY in evidence you were actually given -- never invent an 
 or a release you weren't shown.
 2. Otherwise, if there's nothing new to propose, say so plainly.
 
+HARD REQUIREMENT -- every proposal MUST contain at least one of these event indicators: \
+is_macro_day, cpi_surprise, rate_surprise, jobless_claims_surprise. This is not a preference, it is \
+what this system exists to test: whether specific MARKET CONDITIONS combined with a REAL-WORLD EVENT \
+produce a repeatable pattern. A condition built only from price/volume/funding indicators is a chart \
+pattern -- it does not answer that question, and a spec without an event clause is REJECTED by code \
+before it is ever tested. shock_zscore does NOT satisfy this on its own: a violent price move is a \
+market event, not news, and "the price moved a lot, then the price did something" is the tautology \
+this rule exists to exclude. Use shock_zscore freely as an ADDITIONAL market-condition clause.
+
+Your label must also describe what the clauses actually test. Do not name a condition "post-CPI ..." \
+unless a CPI/macro clause is genuinely in it -- that is checked in code too.
+
 Return ONLY a JSON object with exactly these fields:
 - "assessment": 1-2 sentences
 - "recommended_action": one of "no_action", "propose_novel_test"
@@ -135,6 +147,19 @@ indicator reading, a headline, or a release you weren't shown. Recommend one of:
   accepted, the resulting anchors are used for a LIVE trade on THIS occurrence, tagged separately \
   from routine trades so how the system actually performed reacting to real shocks, in real time, \
   can be measured on its own.
+
+
+HARD REQUIREMENT -- every proposal MUST contain at least one of these event indicators: \
+is_macro_day, cpi_surprise, rate_surprise, jobless_claims_surprise. This is not a preference, it is \
+what this system exists to test: whether specific MARKET CONDITIONS combined with a REAL-WORLD EVENT \
+produce a repeatable pattern. A condition built only from price/volume/funding indicators is a chart \
+pattern -- it does not answer that question, and a spec without an event clause is REJECTED by code \
+before it is ever tested. shock_zscore does NOT satisfy this on its own: a violent price move is a \
+market event, not news, and "the price moved a lot, then the price did something" is the tautology \
+this rule exists to exclude. Use shock_zscore freely as an ADDITIONAL market-condition clause.
+
+Your label must also describe what the clauses actually test. Do not name a condition "post-CPI ..." \
+unless a CPI/macro clause is genuinely in it -- that is checked in code too.
 
 TP/SL are never yours to set -- they only ever come from an accepted anchor set, never invented \
 here. Return ONLY a JSON object: "assessment" (1-2 sentences), "recommended_action" \
