@@ -1,6 +1,6 @@
 # Methodology Decisions Log
 
-A running record of every non-obvious methodology choice in this project, why it was made, and whether it rests on a statistical justification or is a stated compromise (and why the compromise was accepted). Companion to [PLAN.md](PLAN.md) (what was built) and [PROJECT_MAP.md](../../PROJECT_MAP.md) (where it lives in code) — this file exists so a reader can find out *why* a specific number or design choice is what it is, in one place, instead of archaeology through commit history.
+A running record of every non-obvious methodology choice in this project, why it was made, and whether it rests on a statistical justification or is a stated compromise (and why the compromise was accepted). Companion to [PROJECT_MAP.md](../../PROJECT_MAP.md) (where it lives in code) and [README.md](../../README.md) (what the system does) — this file exists so a reader can find out *why* a specific number or design choice is what it is, in one place, instead of archaeology through commit history.
 
 Each entry is dated and never silently rewritten — if a decision is later reversed, a new entry says so and links back to the one it supersedes.
 
@@ -30,7 +30,7 @@ Each entry is dated and never silently rewritten — if a decision is later reve
 
 **Decision.** For each walk-forward fold (expanding window, yearly), the holding horizon is chosen on the **train** set only (whichever of `(1, 3, 7, 14, 21)` days shows the strongest `|mean forward return|`), then the effect is measured **only on the held-out test fold** at that horizon — same discipline already used for TP/SL multiplier selection, extended to horizon selection, specifically so the horizon can never be picked and graded on the same data. The test-fold sample's mean forward return is compared against the coin's own unconditional forward-return distribution over the *same calendar stretch* (not the whole multi-year history — that would let a triggered sample from an unusually volatile year get compared against a calmer baseline). Significance is assessed via bootstrap (2,000 resamples), not a textbook t-test, because financial returns violate the assumptions a t-test needs (fat tails, and overlapping-window autocorrelation when trigger events cluster in time).
 
-**Why.** Any single-horizon comparison chosen after seeing the full sample is picking-and-testing on the same data — the exact trap an earlier phase of this project's own methodology fell into (see PLAN.md's own account of the prior repository's leakage). The train/test split for horizon selection closes that gap the same way it's already closed for TP/SL.
+**Why.** Any single-horizon comparison chosen after seeing the full sample is picking-and-testing on the same data — the exact trap a prior, predecessor research effort's own methodology fell into with data leakage, before this project's own causality-safe rebuild. The train/test split for horizon selection closes that gap the same way it's already closed for TP/SL.
 
 **Type.** Statistical rigor.
 
@@ -62,7 +62,7 @@ Each entry is dated and never silently rewritten — if a decision is later reve
 
 **Why.** If acceptance is decided by "does a fixed-horizon forward return differ from baseline," then executing with a *different* structure (a Sortino-optimized TP/SL ladder) live would test a derived strategy, not the actual pattern that was accepted — the live occurrence would no longer measure the same concept the backtest measured. TP/SL/Sortino remain useful, reported information (how well a barrier-based structure would have captured this pattern) but are no longer the thing being tested live.
 
-**Type.** Statistical rigor / conceptual consistency, not a compromise — though it does leave open how (or whether) this applies to production's actual Freqtrade capital-at-risk execution, which is intentionally out of scope for now (see PLAN.md's own build-phase tracking).
+**Type.** Statistical rigor / conceptual consistency, not a compromise. (This originally left open how, or whether, this applies to production's own execution — resolved by the later "This project never opens a funded position" decision below: the same live-test model, no exception.)
 
 ---
 

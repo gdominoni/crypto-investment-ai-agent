@@ -24,7 +24,7 @@ The human gate sits on exactly one kind of decision: whether a genuinely new, LL
   <img src="docs/case_study/assets/hero_telegram_trade_open.png" alt="Sonnet Strategist proposing a novel condition on Telegram, with Test It / Don't Test It buttons" width="360">
 </p>
 
-Full build plan: [`docs/case_study/PLAN.md`](docs/case_study/PLAN.md). Every non-obvious methodology or design decision — why 50, why 60%, why a fixed horizon instead of a TP/SL ladder, why no funded position is ever opened — is logged with its own stated reasoning in [`docs/case_study/methodology-decisions.md`](docs/case_study/methodology-decisions.md). File-by-file guide to the whole codebase: [`PROJECT_MAP.md`](PROJECT_MAP.md).
+Every non-obvious methodology or design decision — why 50, why 60%, why a fixed horizon instead of a TP/SL ladder, why no funded position is ever opened — is logged with its own stated reasoning in [`docs/case_study/methodology-decisions.md`](docs/case_study/methodology-decisions.md). File-by-file guide to the whole codebase: [`PROJECT_MAP.md`](PROJECT_MAP.md).
 
 ---
 
@@ -99,24 +99,24 @@ Applying this methodology across the full candidate battery, static deterministi
 
 <h3 align="center">The Dynamic Agent Thesis.</h3>
 
-Given that a fixed rule set doesn't hold up on its own, this project's central bet is architectural rather than statistical: a system that (1) treats every historical finding as perishable, re-validating the full candidate battery weekly against live data rather than fitting once and trusting it indefinitely; (2) escalates genuinely novel market conditions — by definition, the ones a fixed rule set cannot anticipate — to an LLM judgment layer and a human decision-maker, instead of silently misclassifying them; and (3) requires a real, tracked live occurrence, not just a favorable backtest, before ever calling a pattern "validated." This doesn't guarantee a different live outcome than the static study found — it's a mechanistically different hypothesis (adaptive discovery plus continuous re-validation, versus one rule set fit once), and this project exists to test it for real rather than assume it inherits the static result.
+Given that a fixed rule set doesn't hold up on its own, this project's central bet is architectural rather than statistical: a system that (1) treats every historical finding as perishable, built to re-validate the full candidate battery on a weekly cadence against live data rather than fitting once and trusting it indefinitely (run on demand today — see Phase 2's own status table for what's automatically scheduled vs. not yet); (2) escalates genuinely novel market conditions — by definition, the ones a fixed rule set cannot anticipate — to an LLM judgment layer and a human decision-maker, instead of silently misclassifying them; and (3) requires a real, tracked live occurrence, not just a favorable backtest, before ever calling a pattern "validated." This doesn't guarantee a different live outcome than the static study found — it's a mechanistically different hypothesis (adaptive discovery plus continuous re-validation, versus one rule set fit once), and this project exists to test it for real rather than assume it inherits the static result.
 
 ---
 
 ## Phase 2: System Architecture
 
-Two cooperating components, running continuously:
+Two cooperating components, designed to run continuously:
 
 | Module | Role | Status |
 |---|---|---|
 | **B — Live Test Engine** | Opens and resolves observational live tests the instant a tracked trigger's condition fires (mechanical, hourly detection, no LLM involved). Never a funded position, never a TP/SL ladder — holds for the horizon `pattern_significance` found significant, resolves by measuring the real forward return, best-case, and worst-case excursion. | ✅ Built, real-data verified (`execution/live_testing.py`); not yet wired to an always-on scheduled job. |
-| **C — Signal Layer** | The candidate battery (Phase 3) plus the Haiku Scout → Sonnet Strategist judgment pipeline. | ✅ Built, real-data verified (`candidates/`, `llm_pipeline/`). |
+| **C — Signal Layer** | The candidate battery (Phase 3) plus the Haiku Scout → Sonnet Strategist judgment pipeline. Intended cadence: hourly for headline/shock scanning, weekly for the full battery refresh. | ✅ Built, real-data verified (`candidates/`, `llm_pipeline/`); run on demand today, not yet wired to an always-on scheduled job. |
 
 <h3 align="center">Haiku Scout → Sonnet Strategist</h3>
 
 The adaptive layer at the center of the Dynamic Agent Thesis — narrowed, deliberately, to exactly two jobs:
 
-- **Haiku (always-on, cheap):** reads news continuously, extracts asset/sentiment/magnitude/event type, and screens out routine, already-classified noise. Only genuinely escalation-worthy headlines reach Sonnet — Sonnet's attention is expensive and reserved for real judgment calls (`llm_pipeline/haiku_sonnet_pipeline.py`).
+- **Haiku (designed to run continuously, cheap):** reads news, extracts asset/sentiment/magnitude/event type, and screens out routine, already-classified noise — run on demand today, intended for an hourly schedule (see Phase 2's status table). Only genuinely escalation-worthy headlines reach Sonnet — Sonnet's attention is expensive and reserved for real judgment calls (`llm_pipeline/haiku_sonnet_pipeline.py`).
 - **Sonnet (escalated, judgment):** given an escalation, a real indicator snapshot for the relevant coin(s), the last 10 days of real macro releases, and the current candidate battery status — never invented, never a hand-maintained file — does exactly one of two things: **proposes testing a genuinely new condition**, or **does nothing** (routine, already-covered territory). That's the entire decision space. Sonnet never opens a live test itself, never decides accepted/watch/rejected, and never answers a direct human question without the real numbers behind it (§4).
 - **A proposal needs a human "yes" before anything is tested — via buttons, not free text.** Every proposal Sonnet makes arrives with two buttons: **Test It** / **Don't Test It**. This is deliberate: a fixed, small set of valid answers is *always* presented as buttons in this project, never left to free-text matching that can silently do nothing for a natural phrasing that doesn't hit an exact string. Pressing **Test It** runs the real methodology engine directly (`test_novel_condition` — the same walk-forward, significance-tested, concentration-checked pipeline the static battery uses) — Sonnet's job ends at proposing the spec; the actual classification is deterministic and Sonnet has no further say in the outcome.
 - **Novel-condition proposals are built as a whitelist, never as code execution.** A proposal can only compose from a fixed registry of twelve indicators (`llm_pipeline/novel_condition_tester.py::SUPPORTED_INDICATORS` — RSI, ATR%, Bollinger %B, Donchian position, funding/volume z-scores, trend efficiency, the shock z-score itself, and more) plus a comparison and a threshold, rendered back to a human in plain English (e.g. *"14-day RSI below 30 AND shock z-score above 3.0"*, never a raw variable name) — chosen specifically so there is no path from an LLM proposal to arbitrary executed code. Tested or not, the condition is written to a persistent registry re-tested every week alongside the static battery, so nothing is trusted forever from one test, and a rejected condition isn't silently re-proposed without genuinely new evidence.
@@ -159,7 +159,7 @@ Every candidate above passes the significance test (p < 0.05) — the interestin
 
 ### The Re-Validation Loop That Keeps This Table Alive
 
-Every week, `scheduler/weekly_revalidation.py` first refreshes local OHLCV/funding data from Binance, then re-runs the full battery's significance test and concentration check against that current data, diffs every candidate's status against the previous run, and notifies a human only when something actually changed. Separately, any time Haiku/Sonnet flag a genuinely novel condition, a human can approve testing it on the spot instead of waiting for the weekly cycle — if it clears the bar, it joins the same weekly regime from then on. One candidate's own bad data or bug can't take the rest of the battery down with it — each is isolated and retried the following run — and any failure that does reach the top level sends a Telegram alert rather than failing silently.
+`scheduler/weekly_revalidation.py` first refreshes local OHLCV/funding data from Binance, then re-runs the full battery's significance test and concentration check against that current data, diffs every candidate's status against the previous run, and notifies a human only when something actually changed — written and tested end-to-end on a weekly cadence, run on demand today rather than on an actual cron job yet. Separately, any time Haiku/Sonnet flag a genuinely novel condition, a human can approve testing it on the spot instead of waiting for the next re-validation run — if it clears the bar, it joins the same weekly regime from then on. One candidate's own bad data or bug can't take the rest of the battery down with it — each is isolated and retried the following run — and any failure that does reach the top level sends a Telegram alert rather than failing silently.
 
 **A second, fully independent opinion — never load-bearing.** A periodic, local-only Freqtrade hyperopt run re-derives TP/SL multipliers for each tracked candidate using a genuinely different search method (Bayesian optimization over a continuous space vs. this project's own grid search) and a different, industry-standard backtesting engine — shown alongside the reference numbers above, purely informational, never gating acceptance and never touching live execution. Deliberately kept off any live host (see [`PROJECT_MAP.md`](PROJECT_MAP.md)'s "Cost Optimization" section) — run it yourself with `python3 -m execution.hyperopt_runner`.
 
@@ -294,9 +294,9 @@ crypto-sentiment-trading-agent/
 ├── telegram/                    # Both interaction modes from Phase 4
 ├── scheduler/                   # weekly_revalidation.py
 ├── data_ingestion/               # market_data/binance_fetcher.py (keeps data/ current, from-scratch backfill capable)
-├── data/                        # Historical + continuously-refreshed market/macro data
+├── data/                        # Historical + periodically-refreshed market/macro data
 ├── replay/                      # Historical walk-forward simulation used to validate the system and build an initial live-test track record before going live -- see PROJECT_MAP.md
-├── docs/case_study/             # PLAN.md, methodology-decisions.md, this project's build log
+├── docs/case_study/             # methodology-decisions.md, this project's build log
 ├── .github/workflows/           # tests.yml -- the tests below run automatically on every push
 └── tests/                       # candidates/methodology.py, status_history.py, novel_condition_tester.py, run_battery.py
 ```
@@ -305,7 +305,7 @@ crypto-sentiment-trading-agent/
 
 **Observation & reporting:** the candidate battery re-validates weekly against live data; a live test's outcome, once resolved, is never retroactively re-tuned. `/summary` and the full decision log are the report at any point — including if the honest result is "no better than the static baseline Phase 1 already found."
 
-Full build plan, phase by phase: [`docs/case_study/PLAN.md`](docs/case_study/PLAN.md). File-by-file guide to what every module does, including cost-optimization details: [`PROJECT_MAP.md`](PROJECT_MAP.md).
+File-by-file guide to what every module does, including cost-optimization details: [`PROJECT_MAP.md`](PROJECT_MAP.md). Every non-obvious methodology or design decision, with its own reasoning: [`docs/case_study/methodology-decisions.md`](docs/case_study/methodology-decisions.md).
 
 ---
 
