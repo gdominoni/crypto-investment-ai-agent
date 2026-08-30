@@ -534,9 +534,15 @@ noise arm's detection count IS the false-positive rate:
     0.150       38.1%                0.0%
     0.200       44.0%                4.0%
 
-Detection of real effects more than triples while false positives stay at zero.
-Under a true null at alpha=0.10 roughly 5 of the 50 noise conditions should
-fire; none did. The moving-block bootstrap is CONSERVATIVE on heavily
+Detection of real effects more than triples while the noise arm stays empty.
+**That last figure was later corrected and is worth keeping visible**: it came
+from a sparse noise arm (50 conditions, events on ~2% of days) whose p-values
+ran unusually conservative. A denser follow-up (`forecast/sentiment_power.py`,
+41 null conditions, events on up to 16% of days) measured 2.4% at alpha=0.05
+and 4.9% at alpha=0.10 -- below nominal, since the block bootstrap really is
+conservative on overlapping windows, but NOT zero. The decision stands; the
+claim "zero false positives" did not, and the real price of alpha=0.10 is
+about a 5% false-positive rate. The moving-block bootstrap is CONSERVATIVE on heavily
 overlapping event windows, so the nominal rate overstates the real one, and
 0.05 was buying error control the test already provided for free. 0.20 is where
 the noise arm finally breaks, leaving 0.10 a wide margin. BH still runs on top,
@@ -594,6 +600,17 @@ reaction by construction), market-relative for coin-specific ones. Caveat kept
 explicit: the plant used the same 7-day relative return the test then measures,
 so 3x is an optimistic ceiling.
 
+**Compute cost of the horizon fix, stated rather than discovered later.** The
+old selector computed one baseline per fold (for the chosen horizon). The
+corrected one needs the period-matched baseline at EVERY candidate horizon in
+order to subtract that horizon's own drift, so baseline work grows by the size
+of the horizon grid -- about 5x at the default (1,3,7,14,21). Measured on the
+dense synthetic sweeps this roughly doubles wall-clock per condition. Accepted:
+the weekly revalidation runs six static candidates plus the dynamic registry,
+where this is seconds, and the alternative is a selector that provably picks the
+wrong horizon. Worth knowing before anyone benchmarks a large sweep and assumes
+something regressed.
+
 **What was deliberately NOT changed.** Concentration thresholds and the
 MFE/MAE gate: the autopsy shows they cost 4 and 0 known-good candidates
 respectively, so tuning them would achieve nothing. `FDR_ALPHA` stays 0.05 --
@@ -621,3 +638,59 @@ expected: it passed significance, direction, MFE/MAE and coin concentration
 designed on a plant whose top-quintile returns cluster in 2021, not evidence
 against the rule; noted so a future reader does not mistake the `watch` for a
 statistical failure.
+
+---
+
+### 2026-08-30 — Would a real sentiment feed have helped? Measured before building it
+
+**Why.** The GDELT backfill was the largest remaining item in this project
+(3-5 days, ~$35 API, plus a replay re-run). It was about to be started on the
+assumption that a sentiment feed would be usable. That assumption is testable
+with no news data at all, so it was tested first.
+
+**Method** (`forecast/sentiment_power.py`). Sentiment modelled as a CONTINUOUS
+daily score -- what a real feed gives you, mostly low with a right tail -- not
+the rare binary event an earlier control used:
+
+    score_t = rho * z(forward_return_t) + sqrt(1 - rho^2) * noise_t
+
+so `rho` is exactly the correlation between the feed and the future return.
+Swept at 0.30 / 0.15 / 0.08 / 0.04 / 0.00, crossed with three trigger
+thresholds (>=1.0/1.5/2.0 sigma, ~16%/7%/2% of days, making sample size a
+parameter) and with the real macro terms in the state grammar. 285 conditions.
+
+**Result.**
+
+    rho    meaning                     accepted   vs noise (Fisher, one-sided)
+    0.30   oracle, not achievable         23/41    p<0.0001  DISTINGUISHABLE
+    0.15   exceptional feed               20/41    p<0.0001  DISTINGUISHABLE
+    0.08   very good feed                  5/41    p=0.216   indistinguishable
+    0.04   realistic news sentiment        3/41    p=0.500   indistinguishable
+    0.00   pure noise (the floor)          2/41    --
+
+**Verdict: do not build broad news ingestion.** A feed at the quality general
+news sentiment actually achieves produces the same number of acceptances as a
+feed containing no information whatsoever. Only rho >= 0.15 separates, which is
+far above what broad news scoring delivers. A narrow, high-signal source
+(exchange listings, regulatory filings, protocol incidents) is the version
+worth pursuing.
+
+**Two corrections this run forced, both recorded rather than quietly fixed.**
+
+1. The earlier claim that alpha=0.10 cost "0.0% false positives" was wrong. It
+   came from a sparse noise arm (50 conditions, events on ~2% of days) whose
+   p-values ran unusually conservative. This denser design (41 null conditions,
+   events on up to 16% of days) measures 2.4% at alpha=0.05 and 4.9% at
+   alpha=0.10 -- below nominal, because the block bootstrap genuinely is
+   conservative on overlapping windows, but not zero. The alpha=0.10 decision
+   stands; the "zero" claim did not.
+
+2. The first verdict rule declared an arm detectable if it beat the noise floor
+   by any margin. On that rule rho=0.08 (5/41 vs 2/41) read as a success and the
+   recommendation came out as "build GDELT". Fisher's exact puts that at
+   p=0.216 -- indistinguishable. A hand-picked margin is not a test, and here it
+   pointed a five-figure engineering decision the wrong way. The check now uses
+   Fisher's exact against the floor, and the floor is expected to be non-empty:
+   at alpha=0.10 a null arm SHOULD produce some acceptances, and an earlier
+   version of the guard that demanded exactly zero declared a correctly-behaving
+   test broken.

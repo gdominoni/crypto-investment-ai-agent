@@ -6,7 +6,35 @@ estimated from intuition -- see `methodology-decisions.md` for the runs.
 
 ---
 
-## 1. News/sentiment backfill (GDELT) -- unblocks the project's own title
+## 1. News/sentiment backfill (GDELT) -- MEASURED AND NOT RECOMMENDED
+
+> **Result, 2026-08-30: do not build this.** The go/no-go test described at the
+> end of this section was run (285 conditions, offline, free). A sentiment feed
+> of realistic quality is **not separable from a feed containing no information
+> at all**:
+>
+>     rho    meaning                     accepted   vs noise (Fisher)
+>     0.30   oracle, not achievable         23/41    p<0.0001  DISTINGUISHABLE
+>     0.15   exceptional feed               20/41    p<0.0001  DISTINGUISHABLE
+>     0.08   very good feed                  5/41    p=0.216   indistinguishable
+>     0.04   realistic news sentiment        3/41    p=0.500   indistinguishable
+>     0.00   pure noise (the floor)          2/41    --
+>
+> Broad news sentiment typically achieves single-digit correlation with
+> next-period returns, i.e. the rho=0.04-0.08 rows -- which here produce the
+> same number of acceptances as pure noise. The 3-5 days of engineering and
+> ~$35 of API spend would buy nothing measurable.
+>
+> **What to do instead**, in order: raise events per candidate (the levers that
+> worked -- real release dates, more release types, lower shock threshold), and
+> if sentiment is still wanted, use a NARROW high-signal source rather than
+> broad news -- exchange listing/delisting announcements, regulatory filings,
+> protocol incidents. Those plausibly sit near rho=0.15, which IS separable.
+>
+> The plan below is kept in full because it is still the right plan *if* a
+> high-signal source is found; only the choice of source changes.
+
+**Original rationale (retained -- the diagnosis was correct, the remedy was not)**
 
 **Why it's blocking.** This project claims to test whether *market
 sentiment* combined with market conditions produces repeatable patterns.
@@ -50,6 +78,43 @@ returns empty immediately. **3,527 days of history missing.**
 
 **Effort / cost.** 3-5 days engineering, ~$35 API, plus ~$15-25 for the
 replay re-run.
+
+**Go/no-go test, run BEFORE any of the above** (`forecast/sentiment_power.py`,
+scored by `forecast/analyse_sentiment_power.py`). The plan above is the largest
+remaining item in this project, so it should not be started on the assumption
+that a sentiment feed would be usable. That assumption is testable without any
+news data at all.
+
+The test models sentiment as a CONTINUOUS score present on every day -- which
+is what a real feed gives you, mostly low with a right tail -- rather than the
+rare binary event an earlier control used:
+
+    score_t = rho * z(forward_return_t) + sqrt(1 - rho^2) * noise_t
+
+so `rho` IS the correlation between the feed and the future return: one
+interpretable number for "how informative is this feed". It is swept at
+rho = 0.30 (oracle), 0.15 (exceptional), 0.08 (very good), 0.04 (realistic)
+and 0.00 (the false-positive floor, which must stay empty), crossed with three
+trigger thresholds (>=1.0/1.5/2.0 sigma, giving ~16%/7%/2% of days -- so
+sample size is a parameter, not a fixed accident) and with real macro terms in
+the state grammar so "sentiment AND a CPI surprise" is expressible.
+
+Published work on news sentiment and next-period returns generally reports
+single-digit correlations, so a real GDELT-derived feed plausibly lands near
+rho = 0.05. That is why 0.04 and 0.08 bracket the decision:
+
+  * detected at rho <= 0.08 -> a realistic feed clears the bar; build it.
+  * detected only at rho >= 0.15 -> only an exceptional feed pays, which
+    broad general-news sentiment is unlikely to be. Effort would be better
+    spent on sample size, or on a narrower high-signal source (exchange
+    listings, regulatory filings, protocol incidents) than on broad news.
+  * detected nowhere -> the constraint is the method at these sample sizes,
+    not the data, and the backfill cannot rescue it.
+
+This is recorded whatever the project ends up doing with GDELT: the point is
+that the decision was made against a measurement rather than an assumption,
+and a future reader can re-run the test in about twenty minutes, offline and
+free, rather than re-arguing it.
 
 **Note on expectations.** The naive hypothesis ("negative news -> price
 falls") is likely priced in and, worse, largely redundant with
