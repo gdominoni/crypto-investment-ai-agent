@@ -40,7 +40,6 @@ from __future__ import annotations
 import sys
 
 import numpy as np
-from scipy import stats
 
 M = 300              # family size, from the real grammar sweep's actionable set
 PI_TRUE = 0.05       # fraction genuinely non-null -- deliberately pessimistic

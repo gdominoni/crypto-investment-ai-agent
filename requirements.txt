@@ -13,4 +13,10 @@ anthropic>=0.40,<1.0
 python-dotenv>=1.0
 ccxt>=4.0
 freqtrade[hyperopt]>=2024.1
+# Used by forecast/ only (Fisher's exact test in the sentiment-feed go/no-go and
+# the prior-weighted-FDR simulation). Nothing in the live system or the test
+# suite imports it -- but it was missing entirely, so two of the offline
+# analyses a reader might re-run failed with ModuleNotFoundError on a clean
+# install while everything else worked.
+scipy>=1.11
 pytest>=8.0
