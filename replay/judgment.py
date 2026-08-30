@@ -374,7 +374,7 @@ def format_telegram_message(as_of, event_description: str, assessment: dict) -> 
         base += (
             f"\n\n<b>This needs your input.</b>\n\n"
             f"<b>Proposed test: \"{escape_html(spec['label'])}\"</b>\n\n"
-            f"({format_spec_clauses(spec)} → {escape_html(spec['direction'])})\n\n"
+            f"<i>Exactly what would be tested:</i> {format_spec_clauses(spec)} → {escape_html(spec['direction'])}\n\n"
             f"Test It runs a real walk-forward backtest of this condition before it's tracked as a live test "
             f"(no real money is ever placed on it). Don't Test It dismisses this proposal."
         )

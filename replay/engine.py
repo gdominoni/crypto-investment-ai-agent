@@ -334,11 +334,16 @@ def _format_live_test_opened(date, direction: str, coin: str, candidate: str, ho
     """Mirrors execution/live_testing.py's own version -- bold header
     isolated on its own line, the trigger description its own paragraph,
     the held-for duration bolded, so the message scans at a glance
-    instead of reading as one dense run-on sentence."""
+    instead of reading as one dense run-on sentence.
+
+    "no TP/SL" used to be appended here and was removed: this project never
+    opens a funded position at all, so saying it of one particular test
+    distinguishes nothing -- it reads as though some other test might have
+    one."""
     return (f"<b>{date}</b>\n\n"
             f"<b>Live test opened -- {direction.upper()} {coin}</b>\n\n"
             f"(candidate <b>{escape_html(candidate)}</b>: {escape_html(_trigger_description(candidate))})\n\n"
-            f"Held for <b>{horizon}d</b>, no TP/SL.")
+            f"Held for <b>{horizon}d</b>.")
 
 
 PRUNE_KEYBOARD_TEMPLATE = lambda candidate: {
@@ -789,6 +794,15 @@ def resolve_pending_test() -> str | None:
              f"<b>Historical backtest -- {escape_html(spec.label)}</b>", "",
              f"({escape_html(condition_str)})"]
     pattern = result.get("pattern_significance") or {}
+    if status == "insufficient_data":
+        # Without this the message was a header and a restatement of the
+        # condition, with no verdict and no numbers -- it told the reader
+        # nothing at all. Say what was missing instead.
+        n_raw = result.get("n_raw_triggers", 0)
+        lines += ["", f"<b>Verdict:</b> not enough history to judge -- "
+                      f"{n_raw} occurrence(s) found, too few for a walk-forward test.",
+                  "", "Re-checked automatically every 7 days; this can change as "
+                      "more occurrences accumulate."]
     if status not in ("insufficient_data",):
         lines.append("")
         lines.append(format_pattern_significance(pattern))
@@ -827,7 +841,7 @@ def resolve_pending_test() -> str | None:
         if execution.get("opened"):
             lines.append("")
             lines.append(f"<b>Live test opened -- {spec.direction.upper()} {escape_html(pending['live_coin'])}</b>\n\n"
-                         f"Held for <b>{execution['horizon']}d</b>, then resolved -- no TP/SL, this measures the same pattern the backtest found.")
+                         f"Held for <b>{execution['horizon']}d</b>, then resolved -- measuring the same pattern the backtest found.")
     state.queue_reveal("\n".join(lines), str(reveal_date.date()))
     return status
 

@@ -409,7 +409,7 @@ def handle_test_it_confirmation(pending_spec: ConditionSpec, coins: list[str], a
             when = f"backdated to {execution['entry_date'].date()}" if decision_date is not None else "opened now"
             lines.append("")
             lines.append(f"<b>Live test {when} -- {pending_spec.direction.upper()} {escape_html(live_coin)}</b>\n\n"
-                         f"Held for <b>{execution['horizon']}d</b>, then resolved -- no TP/SL, tagged '{escape_html(signal_class)}'.")
+                         f"Held for <b>{execution['horizon']}d</b>, then resolved -- tagged '{escape_html(signal_class)}'.")
     if status != "accepted":
         lines.append("")
         lines.append("No significant pattern found (or the risk profile doesn't clear the bar). Logged as "

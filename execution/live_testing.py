@@ -64,11 +64,16 @@ def _format_live_test_opened(date, direction: str, coin: str, candidate: str, ho
     _scan_mechanical_triggers below -- bold header isolated on its own
     line, the (often long) trigger description on its own paragraph, the
     held-for duration bolded, so the message scans at a glance instead of
-    reading as one dense run-on sentence."""
+    reading as one dense run-on sentence.
+
+    "no TP/SL" used to be appended and was removed here and in
+    replay/engine.py together: no funded position is ever opened anywhere in
+    this project, so saying it of one test implies some other test might have
+    one."""
     return (f"<b>{date}</b>\n\n"
             f"<b>Live test opened -- {direction.upper()} {coin}</b>\n\n"
             f"(candidate <b>{escape_html(candidate)}</b>: {escape_html(_trigger_description(candidate))})\n\n"
-            f"Held for <b>{horizon}d</b>, no TP/SL.")
+            f"Held for <b>{horizon}d</b>.")
 
 
 def _open_live_test(candidate: str, coin: str, direction: str, decision_date: pd.Timestamp | None = None) -> dict:
