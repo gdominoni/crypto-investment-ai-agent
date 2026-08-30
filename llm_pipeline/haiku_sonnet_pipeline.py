@@ -26,7 +26,6 @@ from anthropic import Anthropic
 from dotenv import load_dotenv
 
 from candidates.macro_vintage import recent_releases_summary
-from data_ingestion.market_data.binance_fetcher import update_all as update_market_data
 from data_ingestion.news_sentiment.cryptocompare_fetcher import fetch_cryptocompare_news
 from llm_pipeline.context_builder import build_context_summary, build_technical_snapshot
 from llm_pipeline.novel_condition_tester import (
@@ -422,6 +421,14 @@ def run_shock_scan(coins: list[str] | None = None) -> None:
     now. A fetch failure is logged, not fatal -- the scan still runs
     against whatever data is already on disk."""
     try:
+        # Imported lazily, inside the one function that uses it. At module level
+        # this pulled `ccxt` into everything downstream -- importing telegram/bot.py
+        # to test message chunking dragged in a whole exchange client, and CI failed
+        # on it. Same convention execution/hyperopt_runner.py already uses for
+        # Freqtrade: a heavy dependency needed by one call site should not become a
+        # hard dependency of every module that transitively imports it.
+        from data_ingestion.market_data.binance_fetcher import update_all as update_market_data
+
         update_market_data(coins or SHOCK_SCAN_COINS)
     except Exception as e:
         print(f"Market data refresh failed, scanning with existing data: {e}")

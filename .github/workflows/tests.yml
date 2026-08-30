@@ -26,8 +26,10 @@ jobs:
       # This list going stale is a real failure mode, not a hypothetical one: CI was
       # red from 2026-08-29 to 2026-08-30 because the Telegram chunking tests were
       # added without it, and the four failures were invisible against a suite that
-      # otherwise passed. If a future test imports anything under execution/ or the
-      # rest of llm_pipeline/, add its real dependency here.
+      # otherwise passed. ccxt is deliberately absent -- rather than install an
+      # exchange client so that a string-chunking test can import telegram/bot.py,
+      # the one call site that needed it now imports it lazily. If a future test
+      # needs a heavy dependency, prefer making that import lazy over adding it here.
       - name: Install test dependencies
         run: pip install pandas numpy pytest pyarrow requests anthropic python-dotenv
 
