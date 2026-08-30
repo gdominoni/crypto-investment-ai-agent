@@ -156,6 +156,7 @@ python3 -m scheduler.live_daemon
 
 | Symptom | Likely cause / fix |
 |---|---|
+| `TypeError: Messages.create() got an unexpected keyword argument 'temperature'` (or the test `test_messages_create_accepts_every_kwarg_the_project_passes` fails) | You have version 1.x of the `anthropic` library, which removed that setting. This project pins `temperature=0` so that repeated runs give the same answer, so `requirements.txt` asks for `anthropic<1.0`. Fix it with `pip install -r requirements.txt --upgrade`. If you are not inside the virtual environment from Step 2, you may be picking up a different, newer copy of the library — activate it and try again. |
 | `ModuleNotFoundError: No module named 'anthropic'` (or similar) | Your virtual environment isn't active. Run `source .venv/bin/activate` again (Step 2), or re-run Step 3. |
 | `KeyError: 'ANTHROPIC_API_KEY'` or similar at startup | `.env` is missing, misnamed, or in the wrong folder. It must be named exactly `.env` and sit in the project's root folder (Step 5). |
 | No message ever arrives on Telegram | Double-check `TELEGRAM_CHAT_ID` (Step 4c) — a wrong ID fails silently from Telegram's side. Also confirm you sent your bot at least one message before running `getUpdates`. |

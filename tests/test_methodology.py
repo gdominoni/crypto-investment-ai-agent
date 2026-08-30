@@ -530,3 +530,86 @@ class TestPriorWeightedFDR:
         from candidates.methodology import benjamini_hochberg as bh
         bad = [None, 0.0, -1.0, float("nan")] + [1.0] * 4
         assert bh(self.PS, 0.05, bad) == bh(self.PS, 0.05)
+
+
+class TestExplainNonAcceptanceHandlesNaN:
+    """A concentration share can legitimately be NaN ("could not be assessed").
+    NaN is truthy and every comparison with it is False, so it survives an
+    `or 0` guard and then silently wins branch selection."""
+
+    BASE = {"status": "watch", "n": 163, "pattern_significant": True,
+            "pattern_p_value": 0.98, "pattern_mfe_mae_ratio": 0.67,
+            "pattern_excess_return": -0.01}
+
+    def test_a_nan_year_share_does_not_hijack_the_coin_explanation(self):
+        """The real observed case: c1_short had a 97.4% COIN share and a NaN
+        year share, and /summary told the user "nan% of it comes from a single
+        year (nan)" because 0.974 >= nan is False."""
+        from candidates.methodology import explain_non_acceptance
+        out = explain_non_acceptance({**self.BASE, "max_coin_share": 0.974,
+                                      "dominant_coin": "XRPUSDT",
+                                      "max_year_share": float("nan"),
+                                      "dominant_year": float("nan")})
+        assert "nan" not in out.lower()
+        assert "single coin" in out and "XRPUSDT" in out
+
+    def test_the_symmetric_case_also_holds(self):
+        from candidates.methodology import explain_non_acceptance
+        out = explain_non_acceptance({**self.BASE, "max_coin_share": float("nan"),
+                                      "dominant_coin": float("nan"),
+                                      "max_year_share": 0.80, "dominant_year": 2026})
+        assert "nan" not in out.lower()
+        assert "single year" in out and "2026" in out
+
+    def test_no_user_facing_summary_line_ever_contains_nan(self):
+        """End-to-end over the real committed battery output."""
+        import re
+
+        import pandas as pd
+
+        from candidates.methodology import format_trigger_summary
+        d = pd.read_csv("docs/case_study/assets/candidate_battery_status.csv")
+        rows = {r["candidate"]: r.to_dict() for _, r in d.iterrows()}
+        under, discarded = format_trigger_summary(rows)
+        for part in (under, discarded):
+            assert "nan" not in re.sub(r"<[^>]+>", "", part).lower()
+
+
+class TestInstalledSdkSupportsWhatTheCodeSends:
+    """Guards a break that no unit test could catch and CI would not notice:
+    every LLM call site passes `temperature=0`, and the anthropic 1.x SDK
+    removed that parameter. With `anthropic>=0.40` unbounded, a fresh install
+    resolved to 1.2.0 and every Claude call raised TypeError -- the whole live
+    system, dead on arrival, while 112 tests passed.
+    """
+
+    def test_messages_create_accepts_every_kwarg_the_project_passes(self):
+        import inspect
+        import re
+        from pathlib import Path
+
+        import anthropic
+
+        sig = inspect.signature(anthropic.Anthropic(api_key="not-used").messages.create)
+        accepted = set(sig.parameters)
+
+        # the kwargs actually used at the real call sites, read from source
+        used = set()
+        for f in Path(".").rglob("*.py"):
+            if any(p in f.parts for p in (".venv", "tests", "forecast")):
+                continue
+            src = f.read_text()
+            for call in re.findall(r"messages\.create\((.*?)\n\s*\)", src, re.S):
+                # Strip comments first. A comment inside the call block mentioning
+                # e.g. stop_reason="max_tokens" is prose about the RESPONSE, not a
+                # kwarg being sent, and counting it made this test demand a
+                # parameter no call site actually passes.
+                body = "\n".join(ln.split("#", 1)[0] for ln in call.split("\n"))
+                used |= set(re.findall(r"(\w+)\s*=(?!=)", body))
+        used -= {"role", "content"}          # inner dict keys, not call kwargs
+        assert used, "found no messages.create() call sites to check"
+        missing = sorted(used - accepted)
+        assert not missing, (
+            f"installed anthropic {anthropic.__version__} does not accept {missing}, "
+            f"which this project's LLM call sites pass. Check requirements.txt's upper bound."
+        )

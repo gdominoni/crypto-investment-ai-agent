@@ -1124,7 +1124,18 @@ def explain_non_acceptance(row: dict, min_report_events: int = 50) -> str:
     # and observed: a candidate concentrated in one coin/year is "watch" regardless
     # of its p-value, but the wrong order made it look like "not significant" was
     # the reason even when the true (and often unrelated) p-value said otherwise.
-    max_coin_share, max_year_share = row.get("max_coin_share") or 0, row.get("max_year_share") or 0
+    # `or 0` does NOT handle NaN -- float("nan") is truthy, so it survives that
+    # guard and then poisons every comparison below, since any comparison with
+    # NaN is False. Observed in /summary on real output: c1_short has a coin
+    # share of 97.4% and a year share of NaN (its year concentration could not
+    # be assessed), so `max_coin_share >= max_year_share` evaluated False, fell
+    # through to the year branch, and told the user "nan% of it comes from a
+    # single year (nan)". NaN here means "not assessable", which for the purpose
+    # of picking WHICH dimension to report is the same as "not the reason".
+    def _share(key):
+        v = row.get(key)
+        return v if isinstance(v, (int, float)) and v == v else 0.0
+    max_coin_share, max_year_share = _share("max_coin_share"), _share("max_year_share")
     if max_coin_share > MAX_GROUP_SHARE or max_year_share > MAX_GROUP_SHARE:
         qualifier = "a statistically significant pattern" if significant else "a pattern"
         rule = f"no single coin or year may carry more than {MAX_GROUP_SHARE:.0%} of the positive return"

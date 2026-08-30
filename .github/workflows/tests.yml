@@ -31,7 +31,7 @@ jobs:
       # the one call site that needed it now imports it lazily. If a future test
       # needs a heavy dependency, prefer making that import lazy over adding it here.
       - name: Install test dependencies
-        run: pip install pandas numpy pytest pyarrow requests anthropic python-dotenv
+        run: pip install pandas numpy pytest pyarrow requests "anthropic<1.0" python-dotenv
 
       - name: Run tests
         run: python -m pytest tests/ -v
