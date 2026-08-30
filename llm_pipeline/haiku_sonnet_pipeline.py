@@ -109,6 +109,16 @@ settings, and getting it wrong wastes the test:
     coin's move is simply the market's move, so removing it removes mostly noise.
 Only name coins in "coins" if the event genuinely is specific to them. If you are unsure, omit it.
 
+"prior_weight" (optional, 0.25-4.0, default 1.0) is HOW PLAUSIBLE you think this hypothesis is \
+BEFORE it is tested, and it must be justified by the mechanism you can actually articulate -- not by \
+how much you would like it to be true. 1.0 is neutral. Use above 1.0 only when there is a specific \
+reason to expect this effect (a plausible causal story linking THIS event type to THIS market state \
+in THIS direction); use below 1.0 for a speculative combination you are proposing mainly to rule it \
+out. This does NOT make a hypothesis easier to accept on its own: the family shares one fixed error \
+budget, so weighting one condition up makes every other condition tested alongside it harder to \
+accept. Marking everything highly plausible therefore achieves exactly nothing. Your weight is \
+recorded now and never revised after the result is seen.
+
 IMPORTANT -- conditions may be SEQUENCED, not just simultaneous. Each clause takes an optional \
 "within_days" (integer, 0-14, default 0). 0 means "true on the day the condition fires"; K means \
 "was true at any point in the last K days". This is what lets you express an ORDERING rather than a \

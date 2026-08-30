@@ -79,6 +79,9 @@ def run_replay_battery(as_of: pd.Timestamp) -> dict:
             status_summary[variant] = {"status": status, "n": rep["n"], "win_rate": rep["win_rate"],
                                         "strict_win_rate": rep["strict_win_rate"], "sortino": rep["sortino"],
                                         "pattern_significant": pattern.get("significant"), "pattern_p_value": pattern.get("p_value"),
+                # carried so /details can say whether a NULL was informative or merely
+                # underpowered -- see required_n_for_power()
+                "pattern_oos_sd": pattern.get("oos_sd"),
                                         "pattern_mfe_mae_ratio": pattern.get("mfe_mae_ratio"),
                                         "max_coin_share": coin_conc.get("max_group_share"), "dominant_coin": coin_conc.get("dominant_group"),
                                         "max_year_share": year_conc.get("max_group_share"), "dominant_year": year_conc.get("dominant_group")}
@@ -125,8 +128,14 @@ def run_replay_battery(as_of: pd.Timestamp) -> dict:
             coin_conc, year_conc = result.get("coin_concentration") or {}, result.get("year_concentration") or {}
             pattern = result.get("pattern_significance") or {}
             status_summary[label] = {"status": result["status"], "n": result.get("n"), "win_rate": result.get("win_rate"),
+                                      # proposal-time plausibility -> prior-weighted BH,
+                                      # mirroring candidates/run_battery.py
+                                      "prior_weight": spec.prior_weight,
                                       "strict_win_rate": result.get("strict_win_rate"), "sortino": result.get("sortino"),
                                       "pattern_significant": pattern.get("significant"), "pattern_p_value": pattern.get("p_value"),
+                # carried so /details can say whether a NULL was informative or merely
+                # underpowered -- see required_n_for_power()
+                "pattern_oos_sd": pattern.get("oos_sd"),
                                       "pattern_mfe_mae_ratio": pattern.get("mfe_mae_ratio"),
                                       "max_coin_share": coin_conc.get("max_group_share"), "dominant_coin": coin_conc.get("dominant_group"),
                                       "max_year_share": year_conc.get("max_group_share"), "dominant_year": year_conc.get("dominant_group")}

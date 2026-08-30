@@ -153,6 +153,9 @@ def run_all() -> tuple[pd.DataFrame, dict, dict]:
                 "dominant_year": year_conc.get("dominant_group"), "max_year_share": year_conc.get("max_group_share"),
                 "n_shock_excluded": n_shock_events,
                 "pattern_significant": pattern.get("significant"), "pattern_p_value": pattern.get("p_value"),
+                # carried so /details can say whether a NULL was informative or merely
+                # underpowered -- see required_n_for_power()
+                "pattern_oos_sd": pattern.get("oos_sd"),
                 "pattern_excess_return": pattern.get("excess_return"), "pattern_mfe_mae_ratio": pattern.get("mfe_mae_ratio"),
             }
             if horizon_changed_to is not None:
@@ -214,6 +217,10 @@ def run_all() -> tuple[pd.DataFrame, dict, dict]:
 
             row = {
                 "candidate": spec.label, "direction": spec.direction, "status": status,
+                # Proposal-time plausibility, feeding prior-weighted BH in
+                # apply_fdr_demotion. Static candidates carry no weight and default
+                # to 1.0 (neutral), so an all-static family behaves as before.
+                "prior_weight": spec.prior_weight,
                 "n": result["n"], "win_rate": result["win_rate"], "strict_win_rate": result["strict_win_rate"],
                 "sortino": result["sortino"], "total_expectancy": result["total_expectancy"], "timeout_fraction": result["timeout_fraction"],
                 "dominant_coin": coin_conc.get("dominant_group"), "max_coin_share": coin_conc.get("max_group_share"),

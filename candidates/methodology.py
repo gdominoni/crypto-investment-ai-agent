@@ -803,7 +803,8 @@ STATUS_PLAIN: dict[str, str] = {
 FDR_ALPHA = 0.05
 
 
-def benjamini_hochberg(p_values: list[float], alpha: float = FDR_ALPHA) -> list[bool]:
+def benjamini_hochberg(p_values: list[float], alpha: float = FDR_ALPHA,
+                        weights: list[float] | None = None) -> list[bool]:
     """Benjamini-Hochberg step-up: which of a FAMILY of p-values survive
     at false-discovery-rate `alpha`. Returns one bool per input, in input
     order; NaN/None p-values never survive.
@@ -829,7 +830,42 @@ def benjamini_hochberg(p_values: list[float], alpha: float = FDR_ALPHA) -> list[
 
     Applied as a DEMOTION-ONLY pass by the callers: BH is uniformly at
     least as strict as raw p<alpha, so it can only ever remove a
-    candidate from `accepted`, never add one."""
+    candidate from `accepted`, never add one.
+
+    `weights` (optional) is PRIOR-WEIGHTED BH, after Genovese, Roeder &
+    Wasserman (2006): each p-value is divided by its hypothesis's weight
+    before the step-up, and the weights are normalised to mean 1 so the
+    total error budget is CONSERVED, not increased. A hypothesis judged
+    more plausible in advance gets a larger share of alpha; a scattershot
+    one gets less.
+
+    Two properties make this safe to use, and both matter:
+      * FDR control holds for ANY fixed weights. Uninformative weights
+        cost power; they cannot inflate false discoveries. The downside
+        is bounded, the upside is not.
+      * The weights must be fixed BEFORE the p-values are seen. Weighting
+        a hypothesis up because its result looks good is not a prior, it
+        is choosing the answer, and it voids the guarantee entirely. This
+        is why the intended source is a proposal-time judgement recorded
+        with the condition, never a re-reading of the battery output.
+
+    Non-positive or non-finite weights are treated as absent rather than
+    silently zeroing a hypothesis out of the family."""
+    if weights is not None:
+        w = [float(x) if x is not None and isinstance(x, (int, float)) and x == x and x > 0 else None
+             for x in weights]
+        usable = [x for x in w if x is not None]
+        if usable:
+            mean_w = sum(usable) / len(usable)
+            if mean_w > 0:
+                # Normalise to mean 1: this is what conserves the error budget.
+                # Without it, uniformly large weights would simply buy a laxer
+                # alpha for everyone, which is not a prior, it is cheating.
+                w = [(x / mean_w if x is not None else 1.0) for x in w]
+                p_values = [(p / wi if p is not None and isinstance(p, (int, float)) and p == p and wi > 0
+                             else p)
+                            for p, wi in zip(p_values, w)]
+
     indexed = [(i, p) for i, p in enumerate(p_values)
                if p is not None and isinstance(p, (int, float)) and p == p]
     survives = [False] * len(p_values)
@@ -892,7 +928,11 @@ def apply_fdr_demotion(rows: list[dict], live_state: dict | None = None, alpha: 
     in_family = [r for r in rows
                  if r.get("pattern_p_value") is not None
                  and (r.get("n") is None or r.get("n") > min_n)]
-    survives = benjamini_hochberg([r["pattern_p_value"] for r in in_family], alpha)
+    # Prior weights, where a proposal recorded one. Static candidates and any
+    # condition proposed before this field existed carry 1.0, i.e. neutral --
+    # so an unweighted family behaves exactly as it did before.
+    survives = benjamini_hochberg([r["pattern_p_value"] for r in in_family], alpha,
+                                   [r.get("prior_weight", 1.0) or 1.0 for r in in_family])
     verdict = {id(r): bool(ok) for r, ok in zip(in_family, survives)}
     for row in rows:
         if row.get("pattern_p_value") is None:
@@ -1116,7 +1156,7 @@ def explain_non_acceptance(row: dict, min_report_events: int = 50) -> str:
 
 def format_candidate_details(candidate: str, row: dict, definition: str | None = None, horizon: int | None = None,
                               milestone: dict | None = None, tp_mult: float | None = None, sl_mult: float | None = None,
-                              min_report_events: int = 50) -> str:
+                              min_report_events: int = 20) -> str:
     """Full numeric breakdown for one candidate, in bullet points --
     powers Telegram's `/details <name>`/`/replay_details <name>`.
     Deliberately the detail `_trigger_summary_line()`/`format_trigger_summary()`
@@ -1183,6 +1223,27 @@ def format_candidate_details(candidate: str, row: dict, definition: str | None =
         p_bit = f" (p={p:.3f})" if p is not None else ""
         excess_bit = f", excess return vs. this coin's own baseline: {excess:+.2%}" if excess is not None else ""
         lines.append(f"• Statistical significance: {verdict}{p_bit}{excess_bit}")
+
+    # WAS THIS NULL INFORMATIVE, or was there never a chance? A p-value above
+    # the threshold is routinely read as "we tested it and there is nothing
+    # here", when at these sample sizes it usually means "we could not have
+    # detected it either way". That distinction was computable but invisible --
+    # `required_n_for_power` existed and was reported to nobody.
+    oos_sd = row.get("pattern_oos_sd")
+    if (sig is False and oos_sd is not None and n is not None
+            and not (isinstance(oos_sd, float) and np.isnan(oos_sd))):
+        need = required_n_for_power(oos_sd)
+        if need == need:
+            if n >= need:
+                lines.append(f"• This null IS informative: with N={n} and this candidate's own volatility "
+                             f"({oos_sd:.1%} per holding period), roughly {need:.0f} occurrences give an 80% "
+                             f"chance of detecting an effect of {MIN_INTERESTING_EFFECT:.0%}. There was power "
+                             f"to find one, and none was found.")
+            else:
+                lines.append(f"• This null is NOT conclusive: with this candidate's own volatility "
+                             f"({oos_sd:.1%} per holding period) it would take roughly {need:.0f} occurrences "
+                             f"to have an 80% chance of detecting a {MIN_INTERESTING_EFFECT:.0%} effect, and "
+                             f"there are {n}. 'Not significant' here means undetermined, not disproved.")
 
     ratio = row.get("pattern_mfe_mae_ratio")
     if ratio is not None and not (isinstance(ratio, float) and np.isnan(ratio)):

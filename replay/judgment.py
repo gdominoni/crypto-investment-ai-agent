@@ -65,6 +65,16 @@ IS THIS EVENT ABOUT ONE COIN OR THE WHOLE MARKET? The two need different setting
     the market's move, so removing it isolates what is specific to this one.
 If unsure, omit both and the whole-market defaults apply.
 
+"prior_weight" (optional, 0.25-4.0, default 1.0) is HOW PLAUSIBLE you think this hypothesis is \
+BEFORE it is tested, and it must be justified by the mechanism you can actually articulate -- not by \
+how much you would like it to be true. 1.0 is neutral. Use above 1.0 only when there is a specific \
+reason to expect this effect (a plausible causal story linking THIS event type to THIS market state \
+in THIS direction); use below 1.0 for a speculative combination you are proposing mainly to rule it \
+out. This does NOT make a hypothesis easier to accept on its own: the family shares one fixed error \
+budget, so weighting one condition up makes every other condition tested alongside it harder to \
+accept. Marking everything highly plausible therefore achieves exactly nothing. Your weight is \
+recorded now and never revised after the result is seen.
+
 No prose, no markdown fences, just the JSON object."""
 
 

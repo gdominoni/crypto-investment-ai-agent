@@ -791,3 +791,80 @@ a capability the model is never told about does not exist. Both prompts now
 document `within_days`, `coins` and `outcome`, with the market-wide vs
 coin-specific rule stated explicitly, since choosing `market_relative` for a
 market-wide event would guarantee a null result.
+
+---
+
+### 2026-08-30 — Two things the system computed and told nobody, and one it should ask for
+
+**1. `/details` now says whether a null result means anything.** `required_n_for_power`
+was implemented, correct, and reported to no one. A p-value above the threshold
+is routinely read as "we tested it and there is nothing here" when at these
+sample sizes it usually means "we could not have detected it either way", and
+those are different claims. `/details` now says which one applies, from the
+candidate's OWN realised volatility:
+
+    NOT conclusive:  "it would take roughly 379 occurrences to have an 80%
+                      chance of detecting a 5% effect, and there are 60.
+                      'Not significant' here means undetermined, not disproved."
+    IS informative:  "roughly 37 occurrences give an 80% chance ... There was
+                      power to find one, and none was found."
+
+Only shown for candidates that are NOT significant -- it answers a question
+about a negative result and would be noise on a positive one.
+
+**2. Prior-weighted FDR, measured before being built.** The proposal was that
+Sonnet assign each condition a plausibility weight at proposal time, with
+Benjamini-Hochberg allocating alpha in proportion (Genovese, Roeder & Wasserman
+2006). Whether that is worth paying for reduces to one number: how strongly the
+model's judgement correlates with which hypotheses are real. Simulated at this
+project's own family size (m=300) and its own measured power (27%), rather than
+textbook power:
+
+    prior quality q   true found   vs unweighted   realised FDR
+    0.0 (noise)            0.37          +0%           4.7%
+    0.2                    0.54         +45%           4.1%
+    0.4                    0.80        +114%           3.6%
+    0.6                    1.09        +193%           2.4%
+    1.0 (oracle)           1.82        +387%           0.9%
+
+Even a WEAK prior (q=0.2) yields ~45% more true discoveries, and realised FDR
+stays at or under alpha at every quality level -- which is the property that
+makes this safe: a useless prior is wasteful, never dangerous. Implemented, with
+`prior_weight` on `ConditionSpec` (clamped 0.25-4.0), both system prompts asking
+for it, and both batteries carrying it into `apply_fdr_demotion`.
+
+**On the real battery, the diagnostic separates the candidates immediately** --
+three of the five non-significant candidates have INFORMATIVE nulls and two do
+not, and nothing in the p-values alone distinguishes them:
+
+    c1_long   n=314  sd=7.3%   needs ~80    null IS informative
+    c2_long   n=241  sd=3.4%   needs ~18    null IS informative
+    c2_short  n=202  sd=16.8%  needs ~417   NOT conclusive
+    c6_short  n=167  sd=14.7%  needs ~322   NOT conclusive
+
+c2_long and c2_short have almost the same N and both read "not significant",
+but one of them is genuine evidence of absence and the other is a shrug. That
+distinction was computable all along and was never shown to anyone.
+
+**The honest caveat on magnitude.** The relative gains are large and the
+absolute ones are small: 0.37 -> 0.54 true discoveries per run means roughly one
+extra real pattern every six runs. This is worth having because it is cheap and
+provably safe, not because it transforms the project.
+
+**Two guards that matter more than the feature.** Weights are normalised to mean
+1, so marking every hypothesis highly plausible achieves exactly nothing --
+without that, uniformly large weights would simply buy a laxer alpha for the
+whole family, which is not a prior but cheating. And the weight is recorded at
+PROPOSAL time and never revised: a weight raised because a result looked good is
+choosing the answer, and voids the FDR guarantee outright. Both prompts state
+this to the model explicitly, including that weighting one condition up makes
+every other condition tested alongside it harder to accept.
+
+**A measurement error caught in my own instrument, recorded because it was
+nearly reported as a finding.** The first version of this simulation computed
+realised FDR as the ratio of pooled totals across trials, which reported 16.4%
+at the unweighted baseline and made a correctly-behaving BH look like it was
+failing to control FDR at all. FDR is E[V/max(R,1)] -- the expectation of the
+PER-TRIAL ratio -- and the two diverge sharply in exactly this regime, where
+most trials make zero discoveries. Corrected, the baseline is 4.7%, comfortably
+under alpha.

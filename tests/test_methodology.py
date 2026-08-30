@@ -457,3 +457,76 @@ class TestPerCandidatePower:
         as_rejected = apply_fdr_demotion([dict(r) for r in base] + [dict(hit)])
         relabelled = apply_fdr_demotion([{**r, "status": "insufficient_data"} for r in base] + [dict(hit)])
         assert as_rejected[-1]["fdr_significant"] == relabelled[-1]["fdr_significant"]
+
+
+class TestNullInformativenessInDetails:
+    """`/details` must distinguish "we tested it and found nothing" from
+    "we could never have detected it" -- the same p-value, two different
+    claims, and only one of them is evidence of absence."""
+
+    BASE = {"status": "rejected", "n": 60, "pattern_significant": False,
+            "pattern_p_value": 0.42, "pattern_excess_return": 0.01,
+            "pattern_oos_sd": 0.16, "pattern_mfe_mae_ratio": 1.1}
+
+    def _text(self, row):
+        import re
+        from candidates.methodology import format_candidate_details
+        return re.sub(r"<[^>]+>", "", format_candidate_details("c", row))
+
+    def test_underpowered_null_says_undetermined_not_disproved(self):
+        t = self._text(self.BASE)
+        assert "NOT conclusive" in t and "undetermined, not disproved" in t
+
+    def test_well_powered_null_says_the_absence_is_real_evidence(self):
+        t = self._text({**self.BASE, "n": 400, "pattern_oos_sd": 0.05})
+        assert "IS informative" in t and "There was power to find one" in t
+
+    def test_a_significant_candidate_is_not_given_a_power_verdict(self):
+        t = self._text({**self.BASE, "pattern_significant": True, "pattern_p_value": 0.02})
+        assert "null" not in t.lower()
+
+    def test_missing_volatility_degrades_silently(self):
+        """Rows written before `oos_sd` existed must not crash /details."""
+        row = {k: v for k, v in self.BASE.items() if k != "pattern_oos_sd"}
+        assert "null" not in self._text(row).lower()
+
+
+class TestPriorWeightedFDR:
+    """Weighted BH: the error budget is redistributed, never enlarged."""
+
+    PS = [0.001, 0.02, 0.03, 0.04, 0.20, 0.30, 0.40, 0.50]
+
+    def test_uniform_weights_are_exactly_the_unweighted_procedure(self):
+        from candidates.methodology import benjamini_hochberg as bh
+        assert bh(self.PS, 0.05, [1.0] * len(self.PS)) == bh(self.PS, 0.05)
+        # scale-invariant: only the RATIOS matter, because weights are
+        # normalised to mean 1 before use
+        assert bh(self.PS, 0.05, [7.0] * len(self.PS)) == bh(self.PS, 0.05)
+
+    def test_uniformly_large_weights_do_not_buy_a_laxer_alpha(self):
+        """The failure mode worth guarding: if weights were used unnormalised,
+        marking every hypothesis 'highly plausible' would simply widen alpha
+        for the whole family. That is not a prior, it is cheating."""
+        from candidates.methodology import benjamini_hochberg as bh
+        assert bh(self.PS, 0.05, [100.0] * len(self.PS)) == bh(self.PS, 0.05)
+
+    def test_a_favoured_hypothesis_can_be_promoted(self):
+        from candidates.methodology import benjamini_hochberg as bh
+        w = [0.5, 4.0] + [0.5] * 6
+        assert bh(self.PS, 0.05, w)[1] and not bh(self.PS, 0.05)[1]
+
+    def test_promotion_is_paid_for_by_the_rest_of_the_family(self):
+        """Conservation, stated as a test: weighting one hypothesis up must
+        make the others strictly harder, never free."""
+        from candidates.methodology import benjamini_hochberg as bh
+        ps = [0.004, 0.004, 0.004, 0.9, 0.9]
+        even = bh(ps, 0.05, [1.0] * 5)
+        skewed = bh(ps, 0.05, [50.0, 0.01, 0.01, 0.01, 0.01])
+        assert sum(skewed) <= sum(even)
+
+    def test_unusable_weights_are_ignored_not_treated_as_zero(self):
+        """A zero weight would divide a p-value to infinity and silently drop
+        that hypothesis out of consideration entirely."""
+        from candidates.methodology import benjamini_hochberg as bh
+        bad = [None, 0.0, -1.0, float("nan")] + [1.0] * 4
+        assert bh(self.PS, 0.05, bad) == bh(self.PS, 0.05)
