@@ -226,6 +226,66 @@ def _handle_assessment(as_of: pd.Timestamp, event_desc: str, assessment: dict, l
     return None
 
 
+
+def _is_systemic_api_failure(e: Exception) -> str | None:
+    """Is this "the model returned something odd" (skip the event and carry on)
+    or "we can no longer reach the API at all" (stop the whole replay)?
+
+    The distinction is load-bearing and used to be missing. Both cases were
+    caught by the same `except Exception`, which printed "skipping" and then let
+    the day advance and be CHECKPOINTED AS DONE. So a replay that ran out of
+    credit at, say, 2020 would walk silently through the remaining ~2,000
+    simulated days doing no LLM work whatsoever, finish, and leave a checkpoint
+    claiming it had reached the present -- and because the checkpoint had
+    advanced, resuming later would never revisit those years. Hours of simulated
+    time, quietly empty, and nothing in the final state to show it.
+
+    Returns a human-readable reason when the failure is systemic, else None.
+    """
+    import anthropic
+
+    if isinstance(e, (anthropic.AuthenticationError, anthropic.PermissionDeniedError)):
+        return "the API key was rejected"
+    if isinstance(e, anthropic.APIConnectionError):
+        return "could not reach the Anthropic API (network)"
+    # Out of credit arrives as a 400, not a dedicated exception type, so it has
+    # to be recognised from the message. Checked broadly on purpose: a false
+    # positive costs a stopped replay that resumes cleanly, a false negative
+    # costs the silent-empty-run above.
+    text = str(getattr(e, "message", "") or e).lower()
+    if any(k in text for k in ("credit balance", "insufficient", "billing", "quota", "payment")):
+        return "the Anthropic account is out of credit"
+    return None
+
+
+
+def _halt_replay(day, reason: str, events_this_chunk: int) -> dict:
+    """Stop cleanly on a systemic API failure, leaving state that resumes correctly.
+
+    Checkpoints the day BEFORE `day`, not `day` itself. The current day was only
+    partially processed -- some of its events may have been judged before the
+    failure -- so marking it done would silently drop the rest. Redoing one day
+    costs a handful of API calls; skipping one loses events with nothing to show
+    for it.
+
+    The alert is sent to Telegram as well as printed, because the whole point is
+    that this must not be something you discover afterwards from a suspiciously
+    cheap run.
+    """
+    resume_from = (pd.Timestamp(day) - pd.Timedelta(days=1)).date()
+    state.save_checkpoint(str(resume_from), status="halted")
+    msg = (f"<b>Replay stopped at {pd.Timestamp(day).date()}</b>\n\n"
+           f"Reason: {escape_html(reason)}.\n\n"
+           f"Nothing has been lost. The checkpoint is set to {resume_from}, so resuming "
+           f"re-runs {pd.Timestamp(day).date()} from the start rather than skipping it. "
+           f"Processed {events_this_chunk} event(s) before stopping.\n\n"
+           f"Fix the cause, then send <b>replay continue</b> to pick up from here.")
+    print(f"[replay] HALTED at {pd.Timestamp(day).date()}: {reason}. Resume point: {resume_from}")
+    _send(msg)
+    return {"stopped": "api_failure", "reason": reason,
+            "current_date": str(resume_from), "events": events_this_chunk}
+
+
 def _shock_transition(ohlc_full: pd.DataFrame, day: pd.Timestamp) -> tuple[float, str] | None:
     """Fires only on the transition INTO shock regime, not every day a
     multi-day shock persists -- checks `day` and `day - 1` against the
@@ -573,6 +633,11 @@ def advance(chunk_days: int = CHUNK_DAYS) -> dict:
                 # A malformed model response for ONE event must not cost
                 # every other day already processed this chunk -- same
                 # reasoning as llm_pipeline/haiku_sonnet_pipeline.py::run_once().
+                # But a SYSTEMIC failure must stop everything: see
+                # _is_systemic_api_failure for what silently carrying on costs.
+                halt = _is_systemic_api_failure(e)
+                if halt:
+                    return _halt_replay(d, halt, events_this_chunk)
                 print(f"Failed to judge event on {d.date()} ({series_label}), skipping: {e}")
                 continue
             events_this_chunk += 1
@@ -589,6 +654,9 @@ def advance(chunk_days: int = CHUNK_DAYS) -> dict:
             try:
                 assessment = judgment.judge_event(event_desc, client, as_of=d, coin=coin)
             except Exception as e:
+                halt = _is_systemic_api_failure(e)
+                if halt:
+                    return _halt_replay(d, halt, events_this_chunk)
                 print(f"Failed to judge event on {d.date()} ({coin} shock), skipping: {e}")
                 continue
             events_this_chunk += 1

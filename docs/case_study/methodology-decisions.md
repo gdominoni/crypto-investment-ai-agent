@@ -919,3 +919,40 @@ was killing the raw arm. With both changes in place the contributions separate:
     matters for a weaker signal and for surviving family-level FDR.
 
 Both are worth having; the honest split is not the one first reported.
+
+---
+
+### 2026-08-30 — Running out of API credit mid-replay must stop the run, not empty it
+
+**The failure mode, found by asking what happens on a partial budget rather than
+by hitting it.** Both LLM paths in `replay/engine.py` wrapped their call in a
+single `except Exception` that printed "skipping" and continued. That is right
+for a malformed model response -- one bad JSON payload should not end a run that
+is otherwise working. It is badly wrong for a systemic failure.
+
+If the Anthropic account runs out of credit at, say, 2020, every subsequent call
+raises, each is caught and skipped, and the day is **checkpointed as done**
+before the date advances. The replay then walks silently through the remaining
+~2,000 simulated days doing no LLM work whatsoever, finishes, and leaves a
+checkpoint claiming it reached the present. Because the checkpoint advanced,
+resuming later never revisits those years. The run looks complete, costs almost
+nothing, and contains nothing -- and the only clue is a suspiciously small bill.
+
+**The fix distinguishes the two cases.** `_is_systemic_api_failure()` returns a
+reason for an exhausted account, a rejected key, or an unreachable API, and
+`None` for anything that looks like one bad response. Out-of-credit arrives as a
+generic 400 rather than a dedicated exception type, so it is recognised from the
+message text -- deliberately broadly, because a false positive costs a stopped
+replay that resumes cleanly while a false negative costs the silent empty run.
+
+**`_halt_replay()` checkpoints the day BEFORE the failure, not the failing day.**
+That day was only partially processed -- some of its events may already have
+been judged -- so marking it done would drop the remainder. Redoing one day
+costs a handful of calls; skipping one loses events with nothing to show for it.
+The alert goes to Telegram as well as stdout, since the entire point is that
+this must not be something discovered afterwards.
+
+**Practical consequence.** A replay can now be run deliberately on a partial
+budget: it will stop where the money stops, say so, and resume exactly there
+once topped up. That was already the intent of checkpointing after every
+simulated day; it just did not survive the API failing.
