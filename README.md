@@ -2,13 +2,30 @@
 
 ![Python](https://img.shields.io/badge/Python-3.11+-blue) ![Claude](https://img.shields.io/badge/Claude-Haiku%20%2B%20Sonnet-6B4FBB) ![Telegram](https://img.shields.io/badge/Telegram-human--in--the--loop-26A5E4) ![Freqtrade](https://img.shields.io/badge/Freqtrade-hyperopt%20cross--check-orange) ![Status](https://img.shields.io/badge/Status-Case%20Study-blue)
 
-## TL;DR / Key Engineering Highlights
-
-**Architecture:** Autonomous, 2-tier LLM Agent (Claude Haiku for routing → Claude Sonnet for reasoning) integrated with a Telegram bot interface & human-in-the-loop gating.
-
-**Statistical Rigor:** Block-bootstrap significance testing, Benjamini–Hochberg FDR control, and walk-forward validation with strict causality-lag controls.
-
-**Production & DevOps:** Python 3.11+, crash-safe atomic JSON state (fsync + atomic replace), synchronous single-process Telegram daemon, and a zero-funded-position observational engine running via a single daemon scheduler.
+<div align="center">
+<table width="82%">
+<tr>
+<td align="center">
+<br>
+<b>TL;DR — Key Engineering Highlights</b>
+<br><br>
+<sub><b>ARCHITECTURE</b><br>
+Autonomous, 2-tier LLM Agent (Claude Haiku for routing → Claude Sonnet for reasoning),<br>
+integrated with a Telegram bot interface &amp; human-in-the-loop gating.</sub>
+<br><br>
+<sub><b>STATISTICAL RIGOR</b><br>
+Block-bootstrap significance testing, Benjamini–Hochberg FDR control,<br>
+and walk-forward validation with strict causality-lag controls.</sub>
+<br><br>
+<sub><b>PRODUCTION &amp; DEVOPS</b><br>
+Python 3.11+, crash-safe atomic JSON state (fsync + atomic replace),<br>
+a synchronous single-process Telegram daemon, and a zero-funded-position<br>
+observational engine running via a single daemon scheduler.</sub>
+<br><br>
+</td>
+</tr>
+</table>
+</div>
 
 ## What This Project Tests
 
