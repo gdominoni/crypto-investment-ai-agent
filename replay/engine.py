@@ -259,6 +259,15 @@ def _is_systemic_api_failure(e: Exception) -> str | None:
 
 
 
+# If this many events in a row fail, something is wrong with the WORLD, not with
+# one model response. Message-matching alone was not enough: `_is_systemic_api_failure`
+# looked for credit/billing wording and sailed straight past a 400 reading
+# "`temperature` is deprecated for this model", so a real run skipped every event
+# for seven simulated months while advancing and checkpointing normally. A count
+# needs no foresight about what the next breaking change will say.
+CONSECUTIVE_FAILURE_HALT = 8
+
+
 def _halt_replay(day, reason: str, events_this_chunk: int) -> dict:
     """Stop cleanly on a systemic API failure, leaving state that resumes correctly.
 
@@ -599,6 +608,7 @@ def advance(chunk_days: int = CHUNK_DAYS) -> dict:
     static_triggers_full = _static_triggers_full(hourly_full)  # precomputed once per chunk, not per simulated day
 
     events_this_chunk = 0
+    consecutive_failures = 0
     last_battery_refresh = current
     d = current + pd.Timedelta(days=1)
     while d <= chunk_end:
@@ -636,10 +646,14 @@ def advance(chunk_days: int = CHUNK_DAYS) -> dict:
                 # But a SYSTEMIC failure must stop everything: see
                 # _is_systemic_api_failure for what silently carrying on costs.
                 halt = _is_systemic_api_failure(e)
+                consecutive_failures += 1
+                if not halt and consecutive_failures >= CONSECUTIVE_FAILURE_HALT:
+                    halt = (f"{consecutive_failures} events failed in a row -- last error: {e}")
                 if halt:
                     return _halt_replay(d, halt, events_this_chunk)
                 print(f"Failed to judge event on {d.date()} ({series_label}), skipping: {e}")
                 continue
+            consecutive_failures = 0
             events_this_chunk += 1
             if _handle_assessment(d, event_desc, assessment) == "STOP":
                 state.save_checkpoint(str(d.date()), status="waiting_for_human")
@@ -655,10 +669,14 @@ def advance(chunk_days: int = CHUNK_DAYS) -> dict:
                 assessment = judgment.judge_event(event_desc, client, as_of=d, coin=coin)
             except Exception as e:
                 halt = _is_systemic_api_failure(e)
+                consecutive_failures += 1
+                if not halt and consecutive_failures >= CONSECUTIVE_FAILURE_HALT:
+                    halt = (f"{consecutive_failures} events failed in a row -- last error: {e}")
                 if halt:
                     return _halt_replay(d, halt, events_this_chunk)
                 print(f"Failed to judge event on {d.date()} ({coin} shock), skipping: {e}")
                 continue
+            consecutive_failures = 0
             events_this_chunk += 1
             if _handle_assessment(d, event_desc, assessment, live_coin=coin) == "STOP":
                 state.save_checkpoint(str(d.date()), status="waiting_for_human")

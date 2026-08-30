@@ -250,7 +250,7 @@ def handle_natural_language(text: str, client: Anthropic) -> str:
         # itemized question. The model emits a thinking block even without
         # `thinking` being requested, and it can consume over half the budget
         # on its own (see docs/case_study/methodology-decisions.md).
-        model=SONNET_MODEL, max_tokens=2000, temperature=0, system=MARKET_CHECK_SYSTEM_PROMPT,
+        model=SONNET_MODEL, max_tokens=2000, system=MARKET_CHECK_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": f"USER QUESTION: {text}\n\nSTATE:\n{snapshot}\n\n{live_tests}\n\n{context}"}],
     )
     _usage.record(response, "prod.market_check", SONNET_MODEL)

@@ -265,7 +265,7 @@ def haiku_scout(articles: list[dict], client: Anthropic) -> list[dict]:
         return []
     headlines_block = "\n".join(f"- {a['headline']}" for a in articles)
     response = client.messages.create(
-        model=HAIKU_MODEL, max_tokens=2048, temperature=0, system=HAIKU_SYSTEM_PROMPT,
+        model=HAIKU_MODEL, max_tokens=2048, system=HAIKU_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": headlines_block}],
     )
     _usage.record(response, "prod.haiku_scout", HAIKU_MODEL)
@@ -303,7 +303,7 @@ def sonnet_strategist(flagged: dict, client: Anthropic) -> dict:
         # 2000, not 700 -- see replay/judgment.py::judge_event's comment: observed
         # live, the model emits a thinking block even though `thinking` is never
         # requested, and 700 sometimes left no budget for the actual JSON answer.
-        model=SONNET_MODEL, max_tokens=2000, temperature=0, system=SONNET_SYSTEM_PROMPT,
+        model=SONNET_MODEL, max_tokens=2000, system=SONNET_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_content}],
     )
     _usage.record(response, "prod.sonnet_strategist", SONNET_MODEL)
@@ -341,7 +341,7 @@ def sonnet_shock_response(shock: dict, client: Anthropic) -> dict:
     )
     response = client.messages.create(
         # 2000, not 700 -- see sonnet_strategist's comment above / replay/judgment.py.
-        model=SONNET_MODEL, max_tokens=2000, temperature=0, system=SHOCK_SYSTEM_PROMPT,
+        model=SONNET_MODEL, max_tokens=2000, system=SHOCK_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_content}],
     )
     _usage.record(response, "prod.shock", SONNET_MODEL)
@@ -369,7 +369,7 @@ def sonnet_prune_advice(candidate: str, years_tracked: float, recent_summary: st
     )
     response = client.messages.create(
         # 1000, not 600 -- same headroom reasoning as sonnet_strategist above.
-        model=SONNET_MODEL, max_tokens=1000, temperature=0, system=PRUNE_SYSTEM_PROMPT,
+        model=SONNET_MODEL, max_tokens=1000, system=PRUNE_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_content}],
     )
     _usage.record(response, "prod.prune_advice", SONNET_MODEL)

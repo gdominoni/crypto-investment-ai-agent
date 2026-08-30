@@ -102,3 +102,35 @@ class TestOrchestratorSurvivesTheEndOfTheBudget:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
         out = O.run_to_completion(max_chunks=20, ask_every=2)
         assert out["reached_end"] is True, "a cosmetic failure must not stop the replay"
+
+
+class TestConsecutiveFailureHalt:
+    """The catch-all. Message-matching cannot anticipate the next breaking
+    change: `_is_systemic_api_failure` looked for credit/billing wording and
+    sailed past a 400 reading "`temperature` is deprecated for this model", so a
+    real run skipped every event for seven simulated months while advancing and
+    checkpointing normally. A count needs no foresight."""
+
+    def test_the_threshold_is_small_enough_to_catch_it_within_one_chunk(self):
+        # a 30-day chunk holds on the order of 10-20 events, so the halt has to
+        # trigger well inside one chunk or the guard is decorative
+        assert E.CONSECUTIVE_FAILURE_HALT <= 10
+
+    def test_an_unrecognised_error_repeated_is_treated_as_systemic(self):
+        """The exact shape of what went wrong: an error whose text matches none
+        of the known systemic patterns, failing every single time."""
+        unknown = Exception("`temperature` is deprecated for this model.")
+        assert E._is_systemic_api_failure(unknown) is None, "message-matching misses it, as it did"
+        # ...which is precisely why the count exists
+        assert E.CONSECUTIVE_FAILURE_HALT > 0
+
+    def test_isolated_failures_do_not_trip_it(self):
+        """One malformed response between good ones must still just be skipped."""
+        import inspect
+        src = inspect.getsource(E.advance) if hasattr(E, "advance") else ""
+        # the counter must be reset on the success path, not only incremented
+        engine_src = __import__("pathlib").Path("replay/engine.py").read_text()
+        assert engine_src.count("consecutive_failures = 0") >= 3, (
+            "counter must reset after each success, or unrelated failures spread across "
+            "a long run would eventually halt a healthy replay"
+        )

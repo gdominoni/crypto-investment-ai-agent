@@ -576,11 +576,16 @@ class TestExplainNonAcceptanceHandlesNaN:
 
 
 class TestInstalledSdkSupportsWhatTheCodeSends:
-    """Guards a break that no unit test could catch and CI would not notice:
-    every LLM call site passes `temperature=0`, and the anthropic 1.x SDK
-    removed that parameter. With `anthropic>=0.40` unbounded, a fresh install
-    resolved to 1.2.0 and every Claude call raised TypeError -- the whole live
-    system, dead on arrival, while 112 tests passed.
+    """Guards a break no unit test could catch and CI would not notice: the
+    kwargs the LLM call sites send must be accepted by the installed SDK.
+
+    Written after `temperature=0` broke every Claude call. Note the first fix
+    was wrong: the SDK was pinned below 1.0 because 1.x had dropped the
+    parameter, when in fact the API itself now rejects it ("`temperature` is
+    deprecated for this model") on every SDK version. Pinning treated the
+    symptom one layer below the cause. The parameter is gone from the call
+    sites now, and the code runs on both 0.x and 1.x -- verified against the
+    live API on each.
     """
 
     def test_messages_create_accepts_every_kwarg_the_project_passes(self):

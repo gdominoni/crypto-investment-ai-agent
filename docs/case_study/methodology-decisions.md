@@ -956,3 +956,33 @@ this must not be something discovered afterwards.
 budget: it will stop where the money stops, say so, and resume exactly there
 once topped up. That was already the intent of checkpointing after every
 simulated day; it just did not survive the API failing.
+
+**And then it happened for real, from a cause the message-matching missed.**
+Launching the replay, every single call returned a 400: **"`temperature` is
+deprecated for this model."** The API now rejects the parameter on these models
+-- which is why the 1.x SDK dropped it. Pinning `anthropic<1.0` earlier the same
+day had treated the symptom one layer below the cause: the SDK accepted the
+argument, the API refused it, so the pin bought nothing and the calls failed
+anyway.
+
+`_is_systemic_api_failure` did not catch it, because it looks for credit and
+billing wording and this said neither. So the run did exactly what the fix was
+meant to prevent: skipped every event, advanced, and checkpointed normally,
+reaching 2018-04-06 with **zero** candidates -- seven simulated months of
+nothing -- before it was killed by hand.
+
+Two changes followed. `temperature=0` is removed from all seven call sites, so
+the code now runs on both 0.x and 1.x SDKs (verified against the live API on
+each), and the version pin is gone. And a **count-based halt** was added:
+`CONSECUTIVE_FAILURE_HALT = 8` stops the replay after eight consecutive event
+failures regardless of what the error says. Message-matching requires
+anticipating the next breaking change; a count does not. The counter resets on
+every success, so an isolated malformed response is still merely skipped.
+
+The honest cost of the fix: `temperature=0` was a deliberate reproducibility
+decision, and it is no longer available on these models. Repeated LLM runs are
+no longer guaranteed identical. Everything statistical in this project remains
+fully deterministic -- the LLM only ever PROPOSES conditions, and every verdict
+is computed offline -- but the specific proposals a replay produces may now vary
+between runs. That is a real reduction in reproducibility, forced by the API,
+and it is recorded rather than quietly absorbed.

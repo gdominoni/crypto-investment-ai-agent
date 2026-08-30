@@ -1,15 +1,7 @@
 pandas>=2.0
 numpy>=1.24
 requests>=2.31
-# UPPER BOUND IS LOAD-BEARING, not caution. The 1.x SDK removed `temperature`
-# from messages.create(); all seven LLM call sites in this project pass
-# temperature=0, so on anthropic 1.x every Claude call raises TypeError and the
-# live system cannot make a single request. `>=0.40` alone resolved to 1.2.0,
-# meaning a reader following HOW_TO_RUN got a build that was broken on arrival.
-# temperature=0 is a deliberate reproducibility decision (see
-# docs/case_study/methodology-decisions.md), so the pin holds the SDK at a
-# version that supports it rather than dropping the guarantee.
-anthropic>=0.40,<1.0
+anthropic>=0.40
 python-dotenv>=1.0
 ccxt>=4.0
 freqtrade[hyperopt]>=2024.1
