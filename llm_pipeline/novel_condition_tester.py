@@ -87,6 +87,13 @@ def _bollinger_pctb(df: pd.DataFrame, funding: pd.Series | None, scale: int = 1,
 SUPPORTED_INDICATORS: dict[str, Callable[..., pd.Series]] = {
     "close_return_1d": lambda df, funding, scale=1, symbol=None: df["close"].pct_change(1 * scale),
     "close_return_5d": lambda df, funding, scale=1, symbol=None: df["close"].pct_change(5 * scale),
+    # Ignores `scale` DELIBERATELY, same as shock_zscore above: one bar's
+    # high-low range is whatever that bar spans, and there is no window to
+    # reinterpret. Safe because it is in DAILY_NATIVE_INDICATORS, so the live
+    # scan evaluates it on the daily frame and forward-fills; if it were ever
+    # removed from that set, an hourly evaluation would silently measure one
+    # HOUR's range against a threshold calibrated on a DAY's (measured:
+    # 0.008-0.194 daily vs 0.001-0.047 hourly, a 0.24x shift).
     "daily_range_pct": lambda df, funding, scale=1, symbol=None: (df["high"] - df["low"]) / df["close"],
     "volume_zscore_30d": lambda df, funding, scale=1, symbol=None: zscore(df["volume"], 30 * scale),
     "funding_zscore_30d": lambda df, funding, scale=1, symbol=None: zscore(funding.reindex(df.index).ffill(), 30 * scale) if funding is not None else pd.Series(np.nan, index=df.index),

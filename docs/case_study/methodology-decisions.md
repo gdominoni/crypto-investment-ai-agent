@@ -868,3 +868,54 @@ failing to control FDR at all. FDR is E[V/max(R,1)] -- the expectation of the
 PER-TRIAL ratio -- and the two diverge sharply in exactly this regime, where
 most trials make zero discoveries. Corrected, the baseline is 4.7%, comfortably
 under alpha.
+
+---
+
+### 2026-08-30 — Cleanup, and a correction to how the coin-scoping gain was attributed
+
+**Duplicated thresholds removed at the source.** The four numbers behind the
+static triggers (funding z 2.0, range multiple 1.5, efficiency ratio 0.40,
+volume multiple 1.8) appeared twice: in `compute_triggers` and again, hand-
+copied, inside the prose of `TRIGGER_NUMERIC_DEFINITIONS` that `/details` shows
+a human as the authoritative definition of what a candidate tests. Drift there
+means telling someone a trigger is something it is not. Now named once and the
+description is built from them, with tests guarding both directions -- that the
+description quotes the constants, and that `compute_triggers` uses them rather
+than literals.
+
+**`daily_range_pct`'s unused `scale` documented** rather than left implying a
+scaling it does not do. It is safe only because the indicator is in
+`DAILY_NATIVE_INDICATORS`; were it ever removed from that set, an hourly
+evaluation would silently measure one HOUR's range against a threshold
+calibrated on a DAY's (0.008-0.194 daily vs 0.001-0.047 hourly).
+
+**A break the `forecast/` harness caught.** Adding `symbol` to every indicator
+signature broke every synthetic indicator in `forecast/`, which still had the
+old three-argument form. Nothing failed loudly -- the sweeps caught the
+`TypeError` per-condition and recorded it as a status string, so a full run
+would have completed and reported nothing but errors. Fixed across all four
+modules. The lesson worth keeping: the offline harness is not covered by the
+test suite and has to be exercised deliberately after any signature change.
+
+**`forecast/coin_specific_test.py` modernised** to use the shipped
+`ConditionSpec.coins`/`outcome` instead of monkeypatching `_forward_return` and
+reloading modules to undo it. It is now a regression test for the feature rather
+than a parallel implementation of it that could quietly diverge. It also drops
+the hack that identified a coin by its price-series LENGTH -- the exact gap that
+motivated threading `symbol` through in the first place.
+
+**The correction.** That re-run changed the finding's attribution. The original
+test reported 2/9 raw vs 6/9 market-relative and credited the gap to
+market-relative measurement. That was half right: at the time, the
+coin-concentration check was still gating a declared single-coin spec, and it
+was killing the raw arm. With both changes in place the contributions separate:
+
+  * declaring a spec coin-scoped -- which waives a coin-concentration check that
+    is meaningless for a single-coin hypothesis -- does most of the work:
+    0/9 -> 6/9 acceptances.
+  * market-relative measurement no longer changes the COUNT at this signal
+    strength, but shrinks every p-value roughly 5-10x (0.0140 -> 0.0005,
+    0.0480 -> 0.0000). It buys margin rather than new acceptances, which is what
+    matters for a weaker signal and for surviving family-level FDR.
+
+Both are worth having; the honest split is not the one first reported.

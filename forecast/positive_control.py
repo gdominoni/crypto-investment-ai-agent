@@ -96,7 +96,7 @@ def make_planted(top_frac: float, event_frac: float = 0.02, seed: int = 0):
     planting on 20% of all days would prove only that the pipeline can
     detect an effect it will never be given.
     """
-    def indicator(df, funding, scale=1):
+    def indicator(df, funding, scale=1, symbol=None):
         fwd = _forward_return(df)
         thresh = fwd.quantile(1.0 - top_frac)
         eligible = (fwd >= thresh).fillna(False)
@@ -107,7 +107,7 @@ def make_planted(top_frac: float, event_frac: float = 0.02, seed: int = 0):
 
 
 def make_random(event_frac: float = 0.02, seed: int = 7):
-    def indicator(df, funding, scale=1):
+    def indicator(df, funding, scale=1, symbol=None):
         rng = np.random.default_rng(seed)
         return (pd.Series(rng.random(len(df)), index=df.index) < event_frac).astype(float)
     return indicator
@@ -116,7 +116,7 @@ def make_random(event_frac: float = 0.02, seed: int = 7):
 def make_real_news():
     dates = pd.DatetimeIndex([pd.Timestamp(d) for d in REAL_NEWS_DATES])
 
-    def indicator(df, funding, scale=1):
+    def indicator(df, funding, scale=1, symbol=None):
         idx = df.index.floor("D") if scale > 1 else df.index
         return pd.Series(idx.normalize().isin(dates), index=df.index).astype(float)
     return indicator

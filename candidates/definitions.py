@@ -67,21 +67,21 @@ def compute_triggers(daily: pd.DataFrame, funding: pd.Series | None = None, scal
     bar_range = (daily["high"] - daily["low"]) / close
     range_avg = bar_range.rolling(w20, min_periods=max(w20 // 2, 1)).mean()
     is_macro_day = pd.Series(idx.floor("D").isin(macro_days) if scale > 1 else idx.isin(macro_days), index=idx)
-    breakout = bar_range > 1.5 * range_avg
+    breakout = bar_range > C2_RANGE_MULT * range_avg
     out["c2_long"] = is_macro_day & breakout & (close < daily["open"])
     out["c2_short"] = is_macro_day & breakout & (close > daily["open"])
 
     er = trend_efficiency_ratio(close, w20)
-    vol_surge = volume > 1.8 * volume.rolling(w20, min_periods=max(w20 // 2, 1)).mean()
+    vol_surge = volume > C6_VOLUME_MULT * volume.rolling(w20, min_periods=max(w20 // 2, 1)).mean()
     prior_ret = close.pct_change(w5)
-    trend_base = (er > 0.40) & vol_surge
+    trend_base = (er > C6_EFFICIENCY_RATIO) & vol_surge
     out["c6_long"] = trend_base & (prior_ret > 0)
     out["c6_short"] = trend_base & (prior_ret < 0)
 
     if funding is not None:
         fz = zscore(funding.reindex(idx).ffill(), window=w30)
-        out["c1_long"] = fz < -2.0
-        out["c1_short"] = fz > 2.0
+        out["c1_long"] = fz < -C1_FUNDING_Z
+        out["c1_short"] = fz > C1_FUNDING_Z
     else:
         out["c1_long"], out["c1_short"] = False, False
 
@@ -91,6 +91,17 @@ def compute_triggers(daily: pd.DataFrame, funding: pd.Series | None = None, scal
 def build_triggers(symbol: str) -> pd.DataFrame:
     return compute_triggers(load_daily(symbol), load_funding(symbol))
 
+
+# The thresholds behind the static triggers, named ONCE. They used to appear
+# twice -- in `compute_triggers` and again, hand-copied, inside the prose of
+# `TRIGGER_NUMERIC_DEFINITIONS` that `/details` shows a human. A duplicated
+# number is a number that can drift, and this one is shown to humans as the
+# authoritative definition of what a candidate tests, so drift here means
+# telling someone the trigger is something it is not.
+C1_FUNDING_Z = 2.0          # |30-day funding z-score| beyond this
+C2_RANGE_MULT = 1.5         # day's range vs its trailing 20-day average
+C6_EFFICIENCY_RATIO = 0.40  # 20-day Kaufman efficiency ratio above this
+C6_VOLUME_MULT = 1.8        # volume vs its trailing 20-day average
 
 CANDIDATE_DIRECTIONS = {
     "c1_long": "long", "c1_short": "short",
@@ -117,7 +128,7 @@ TRIGGER_DESCRIPTIONS = {
 # leaves a reader unable to answer "elevated funding rate -- how
 # elevated, exactly?" with an actual number.
 TRIGGER_NUMERIC_DEFINITIONS = {
-    "c1": "30-day funding-rate z-score below -2.0 (long) or above +2.0 (short) -- extreme relative to that coin's own trailing 30-day funding history, not a fixed absolute rate.",
-    "c2": "on a real FOMC / CPI / initial-jobless-claims release day (publication dates, taken from the ALFRED vintages' own realtime_start): that day's own high-low range exceeds 1.5x its trailing 20-day average range, AND the day closes below its open (long) or above its open (short).",
-    "c6": "20-day Kaufman efficiency ratio above 0.40, AND that day's volume above 1.8x its trailing 20-day average; fires as 'long' when the 5-day price change is positive, 'short' when it's negative.",
+    "c1": f"30-day funding-rate z-score below -{C1_FUNDING_Z} (long) or above +{C1_FUNDING_Z} (short) -- extreme relative to that coin's own trailing 30-day funding history, not a fixed absolute rate.",
+    "c2": f"on a real FOMC / CPI / initial-jobless-claims release day (publication dates, taken from the ALFRED vintages' own realtime_start): that day's own high-low range exceeds {C2_RANGE_MULT}x its trailing 20-day average range, AND the day closes below its open (long) or above its open (short).",
+    "c6": f"20-day Kaufman efficiency ratio above {C6_EFFICIENCY_RATIO:.2f}, AND that day's volume above {C6_VOLUME_MULT}x its trailing 20-day average; fires as 'long' when the 5-day price change is positive, 'short' when it's negative.",
 }

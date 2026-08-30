@@ -88,7 +88,7 @@ def make_sentiment(rho: float, seed: int = 11):
     """A continuous sentiment score on EVERY day, correlated `rho` with
     that day's forward return. Standard-normal by construction so a
     threshold in sigmas means the same thing at every rho."""
-    def indicator(df, funding, scale=1):
+    def indicator(df, funding, scale=1, symbol=None):
         fwd = df["close"].shift(-HORIZON) / df["close"] - 1.0
         z = ((fwd - fwd.mean()) / fwd.std()).fillna(0.0)
         rng = np.random.default_rng(seed + len(df))  # per-coin, deterministic
