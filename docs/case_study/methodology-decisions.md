@@ -694,3 +694,32 @@ worth pursuing.
    at alpha=0.10 a null arm SHOULD produce some acceptances, and an earlier
    version of the guard that demanded exactly zero declared a correctly-behaving
    test broken.
+
+**Battery re-run under the corrected thresholds (2026-08-30).** Re-running the
+static battery after the three changes above did move a candidate, and the
+result is worth recording precisely because it is a near-miss rather than a
+discovery.
+
+`c6_long` now clears **every individual gate**: n=264, p=0.0805 against the
+corrected significance level of 0.10, excess +6.75%, MFE/MAE 2.30, coin
+concentration 30.1% and year concentration 49.3% (both inside the 60% bar).
+`classify_status` returns `accepted`. Benjamini-Hochberg then demotes it:
+six candidates were tested in one family, so the smallest p-value must beat
+(1/6) x 0.05 = 0.0083 to survive, and 0.0805 does not. Verified by hand against
+the procedure, not just read off the flag.
+
+So the headline "0 accepted" is unchanged but its REASON has changed. Before,
+nothing came close. Now one candidate passes every test taken individually and
+is removed only by the correction for having looked six times. That is exactly
+what family-level control is for, and reporting a bare "0 accepted" would hide
+the more informative fact.
+
+Two caveats recorded with it: **c6 is the Kaufman efficiency-ratio trigger, a
+pure chart pattern with no news term**, so it is off-thesis under this project's
+own necessary-condition rule whatever its p-value does; and its previous figure
+(p=0.0710) was produced by the biased horizon selector, so the two are not
+comparable.
+
+The corrected selector's effect is also visible in the holding horizons: c1_long
+and c2_long now resolve at **1 day** instead of drifting to the longest horizon
+offered, which is the drift bias described above disappearing on real data.
