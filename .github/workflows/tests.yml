@@ -15,15 +15,21 @@ jobs:
           python-version: "3.11"
 
       # The test suite only exercises candidates/ and llm_pipeline/novel_condition_tester.py,
-      # neither of which touches Freqtrade, ccxt, or the Anthropic/Telegram clients -- installing
-      # just what's actually imported keeps CI fast and avoids Freqtrade's native build
-      # dependencies (TA-Lib) for a job that would never use them. pyarrow is needed because
-      # test_run_battery.py reads the real historical parquet files (an integration test, not
-      # a synthetic-data unit test). If a future test imports execution/, telegram/, or
-      # llm_pipeline/haiku_sonnet_pipeline.py, add its real dependency here rather than
-      # switching to the full requirements.txt.
+      # plus telegram/bot.py, which the message-chunking tests import. Deliberately
+      # NOT the full requirements.txt: this avoids Freqtrade's native build
+      # dependencies (TA-Lib) for a job that would never use them. pyarrow is needed
+      # because test_run_battery.py reads the real historical parquet files (an
+      # integration test, not a synthetic-data unit test); requests, anthropic and
+      # python-dotenv are needed only because importing telegram/bot.py pulls them in
+      # at module level -- no test makes a network call.
+      #
+      # This list going stale is a real failure mode, not a hypothetical one: CI was
+      # red from 2026-08-29 to 2026-08-30 because the Telegram chunking tests were
+      # added without it, and the four failures were invisible against a suite that
+      # otherwise passed. If a future test imports anything under execution/ or the
+      # rest of llm_pipeline/, add its real dependency here.
       - name: Install test dependencies
-        run: pip install pandas numpy pytest pyarrow
+        run: pip install pandas numpy pytest pyarrow requests anthropic python-dotenv
 
       - name: Run tests
         run: python -m pytest tests/ -v
