@@ -986,3 +986,54 @@ fully deterministic -- the LLM only ever PROPOSES conditions, and every verdict
 is computed offline -- but the specific proposals a replay produces may now vary
 between runs. That is a real reduction in reproducibility, forced by the API,
 and it is recorded rather than quietly absorbed.
+
+---
+
+### 2026-08-30 — Prompt caching: on the system block, and measured rather than assumed
+
+**Sizing it first.** Measured on 83 real replay calls: 2,855 input tokens and
+632 output tokens per call, so input is 47% of cost and output 53%. Of that
+input, only the system prompt is identical between calls -- the event, the
+indicator snapshot, the lead-up table and the battery context all change every
+time. Caching therefore addresses roughly 41% of 47%, about 17% of total spend:
+~$5 across a full replay. Real, but the smaller of the available levers, and
+worth saying so before implementing it.
+
+**Where the breakpoint goes, and why not the obvious place.** Cache prefixes are
+built tools -> system -> messages, so the last position identical across calls
+is the **system block**. Putting `cache_control` on the user message instead --
+the intuitive "mark the end of the prompt" move -- is the documented classic
+mistake: every request would hash a different prefix, find no prior entry to
+read, and pay a fresh cache WRITE at 1.25x forever. That is strictly worse than
+not caching at all, and it looks like it is working. One breakpoint suffices
+here: each call is a fresh single-turn request, so nothing grows toward the
+20-block lookback limit.
+
+**Only three of six prompts qualify.** The minimum cacheable prefix is 1,024
+tokens for Sonnet and 2,048 for Haiku. Counted with the API's own
+`count_tokens`, not estimated from characters:
+
+    SONNET_SYSTEM_PROMPT   2408   cached
+    REPLAY_SYSTEM_PROMPT   1575   cached
+    SHOCK_SYSTEM_PROMPT    1399   cached
+    PRUNE_SYSTEM_PROMPT     529   below the floor
+    MARKET_CHECK_PROMPT     316   below the floor
+    HAIKU_SYSTEM_PROMPT     187   below the floor (and Haiku's floor is 2048)
+
+The three short ones are deliberately NOT marked. Below the floor a breakpoint
+is silently ignored, and marking them would leave code that reads as cached and
+is not. Worth noting `REPLAY_SYSTEM_PROMPT` sits 551 tokens above the floor:
+trimming that prompt would disable its caching entirely, with nothing to signal
+it.
+
+**Verified on live calls, not assumed.** Two requests with the same system
+prompt and deliberately different user content:
+
+    call 1: input=13  cache_write=1570  cache_read=0
+    call 2: input=13  cache_write=0     cache_read=1570
+
+Second call reads. `llm_pipeline/usage.py` now records
+`cache_creation_input_tokens` and `cache_read_input_tokens` separately, prices
+them at 1.25x and 0.1x, and `/usage` prints **reads / (reads + writes)**. That
+ratio is the health check: near 0% means the breakpoint has drifted onto content
+that changes, which is otherwise invisible because the calls still succeed.

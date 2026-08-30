@@ -249,6 +249,37 @@ def format_spec_clauses(spec: dict) -> str:
     )
 
 
+# Minimum cacheable prefix: 1024 tokens for Sonnet, 2048 for Haiku. Measured with
+# the API's own count_tokens rather than guessed:
+#     SONNET_SYSTEM_PROMPT   2408   cached
+#     REPLAY_SYSTEM_PROMPT   1575   cached
+#     SHOCK_SYSTEM_PROMPT    1399   cached
+#     PRUNE_SYSTEM_PROMPT     529   too short
+#     MARKET_CHECK_PROMPT     316   too short
+#     HAIKU_SYSTEM_PROMPT     187   too short (and Haiku's floor is 2048)
+# The short ones are deliberately NOT marked: below the floor the breakpoint is
+# silently ignored, which would leave code that looks cached and isn't.
+CACHE_MIN_TOKENS_SONNET = 1024
+
+
+def cached_system(prompt: str) -> list[dict]:
+    """The system prompt as a cache breakpoint.
+
+    The breakpoint goes HERE, on the system block, and never on the user
+    message. Cache prefixes are built tools -> system -> messages, so the system
+    block is the last position identical across calls: the user content carries
+    the date, the coin and the indicator readings and differs every single time.
+    Marking the varying block instead is the documented classic mistake -- every
+    request would compute a new prefix hash, find no prior entry to read, and pay
+    for a fresh cache WRITE at 1.25x forever, which is worse than not caching.
+
+    One breakpoint is enough here. There is no growing conversation to push it
+    out of the 20-block lookback window: every call is a fresh single-turn
+    request with the same static system prefix.
+    """
+    return [{"type": "text", "text": prompt, "cache_control": {"type": "ephemeral"}}]
+
+
 def extract_text(response) -> str:
     """A response's content blocks aren't always [text] -- a model can
     emit a ThinkingBlock (or other non-text block) before its actual
@@ -303,7 +334,7 @@ def sonnet_strategist(flagged: dict, client: Anthropic) -> dict:
         # 2000, not 700 -- see replay/judgment.py::judge_event's comment: observed
         # live, the model emits a thinking block even though `thinking` is never
         # requested, and 700 sometimes left no budget for the actual JSON answer.
-        model=SONNET_MODEL, max_tokens=2000, system=SONNET_SYSTEM_PROMPT,
+        model=SONNET_MODEL, max_tokens=2000, system=cached_system(SONNET_SYSTEM_PROMPT),
         messages=[{"role": "user", "content": user_content}],
     )
     _usage.record(response, "prod.sonnet_strategist", SONNET_MODEL)
@@ -341,7 +372,7 @@ def sonnet_shock_response(shock: dict, client: Anthropic) -> dict:
     )
     response = client.messages.create(
         # 2000, not 700 -- see sonnet_strategist's comment above / replay/judgment.py.
-        model=SONNET_MODEL, max_tokens=2000, system=SHOCK_SYSTEM_PROMPT,
+        model=SONNET_MODEL, max_tokens=2000, system=cached_system(SHOCK_SYSTEM_PROMPT),
         messages=[{"role": "user", "content": user_content}],
     )
     _usage.record(response, "prod.shock", SONNET_MODEL)

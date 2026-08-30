@@ -16,7 +16,7 @@ from anthropic import Anthropic
 from candidates.macro_vintage import recent_releases_summary
 from candidates.methodology import STATUS_PLAIN
 from candidates.run_battery import COINS
-from llm_pipeline.haiku_sonnet_pipeline import SONNET_MODEL, _strip_fences, escape_html, extract_text, format_spec_clauses
+from llm_pipeline.haiku_sonnet_pipeline import SONNET_MODEL, _strip_fences, cached_system, escape_html, extract_text, format_spec_clauses
 from llm_pipeline.novel_condition_tester import SUPPORTED_INDICATORS, build_indicator_leadup, build_indicator_snapshot
 from replay import state
 from replay import status_history as sh
@@ -185,7 +185,7 @@ def judge_event(event_description: str, client: Anthropic, as_of: pd.Timestamp |
         # all (extract_text raising "No text block"), or truncated the JSON mid-
         # string (json.loads raising). Headroom fixes both, whatever the model's
         # exact reason for thinking is -- see docs/case_study/methodology-decisions.md.
-        model=SONNET_MODEL, max_tokens=2000, system=REPLAY_SYSTEM_PROMPT,
+        model=SONNET_MODEL, max_tokens=2000, system=cached_system(REPLAY_SYSTEM_PROMPT),
         messages=[{"role": "user", "content": user_content}],
     )
     _usage.record(response, "replay.shock" if coin else "replay.macro", SONNET_MODEL)
