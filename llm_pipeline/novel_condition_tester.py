@@ -517,9 +517,8 @@ class ConditionSpec:
     """`clauses` are ANDed together -- one clause is just the single-
     condition case, there's no separate code path for it. No cap on how
     many clauses: the real constraint on over-specific combinations is
-    statistical (each extra AND shrinks the sample, and N > 100 is
-    already a hard gate in classify_status), not an arbitrary limit
-    here."""
+    statistical (each extra AND shrinks the sample, and classify_status
+    already gates on a minimum event count), not an arbitrary limit here."""
     label: str
     clauses: tuple[Clause, ...]
     direction: str  # "long" or "short"

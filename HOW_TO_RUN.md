@@ -110,7 +110,7 @@ Leave `CRYPTOCOMPARE_API_KEY` and `FREQTRADE_DB_PATH` exactly as shown unless St
 python3 -m pytest tests/ -q
 ```
 
-**Check it worked:** you should see a line like `87 passed in 15.8s` with no `FAILED` or `ERROR` lines. This runs entirely offline — it does not call Anthropic or Telegram, so it can't cost anything or send you a message. If anything fails here, stop and re-check Steps 2–3 before continuing (a failure this early is almost always a missing dependency, not a real code bug).
+**Check it worked:** you should see a line like `112 passed in 22s` with no `FAILED` or `ERROR` lines. This runs entirely offline — it does not call Anthropic or Telegram, so it can't cost anything or send you a message. If anything fails here, stop and re-check Steps 2–3 before continuing (a failure this early is almost always a missing dependency, not a real code bug).
 
 ---
 
