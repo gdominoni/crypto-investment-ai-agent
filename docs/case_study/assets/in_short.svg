@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 716" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="sArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#9aa3b0"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1180" height="716" fill="#fbfaf8"/>
+
+  <text x="590" y="42" text-anchor="middle" font-size="24" font-weight="700" fill="#1f2430">In short</text>
+  <text x="590" y="66" text-anchor="middle" font-size="13" fill="#6b7280">The five steps on the left; an illustration of one pass through them on the right. No funded trade is ever placed.</text>
+
+  <!-- COLUMN HEADERS -->
+  <text x="60" y="106" font-size="13" font-weight="700" fill="#c2540c" letter-spacing="0.6">HOW IT WORKS</text>
+  <text x="620" y="106" font-size="13" font-weight="700" fill="#92720a" letter-spacing="0.6">A WORKED EXAMPLE <tspan font-weight="400" fill="#8a8f98">(illustrative, not a result)</tspan></text>
+  <line x1="60" y1="116" x2="540" y2="116" stroke="#e6e2db" stroke-width="1.5"/>
+  <line x1="620" y1="116" x2="1120" y2="116" stroke="#e6e2db" stroke-width="1.5"/>
+
+  <!-- STEP 1 -->
+  <circle cx="78" cy="156" r="15" fill="#eef1f5" stroke="#c9d1dc"/>
+  <text x="78" y="161" text-anchor="middle" font-size="13" font-weight="700" fill="#3d4657">1</text>
+  <text x="106" y="150" font-size="15" font-weight="600" fill="#1f2430">Collect the data, hourly</text>
+  <text x="106" y="172" font-size="13" fill="#4b5563">Price candles for 7 coins, plus real macro releases</text>
+  <text x="106" y="190" font-size="13" fill="#4b5563">dated by when they were actually published, plus</text>
+  <text x="106" y="208" font-size="13" fill="#4b5563">live news headlines.</text>
+
+  <rect x="620" y="130" width="500" height="86" rx="6" fill="#ffffff" stroke="#e6e2db"/>
+  <text x="638" y="154" font-size="13" fill="#3d4657">CPI is published on 12 March. The system already knows</text>
+  <text x="638" y="174" font-size="13" fill="#3d4657">that date is a real release day, not an estimate — and that</text>
+  <text x="638" y="194" font-size="13" fill="#3d4657">Bitcoin fell 9% three days earlier.</text>
+
+  <line x1="78" y1="222" x2="78" y2="256" stroke="#9aa3b0" stroke-width="1.5" marker-end="url(#sArrow)"/>
+
+  <!-- STEP 2 -->
+  <circle cx="78" cy="278" r="15" fill="#eef1f5" stroke="#c9d1dc"/>
+  <text x="78" y="283" text-anchor="middle" font-size="13" font-weight="700" fill="#3d4657">2</text>
+  <text x="106" y="272" font-size="15" font-weight="600" fill="#1f2430">Two Claude models look for a pattern worth testing</text>
+  <text x="106" y="294" font-size="13" fill="#4b5563">Haiku reads the news cheaply and forwards only what</text>
+  <text x="106" y="312" font-size="13" fill="#4b5563">looks significant. Sonnet gets the real indicator readings</text>
+  <text x="106" y="330" font-size="13" fill="#4b5563">and proposes a specific, testable combination.</text>
+
+  <rect x="620" y="252" width="500" height="86" rx="6" fill="#ffffff" stroke="#e6e2db"/>
+  <text x="638" y="276" font-size="13" fill="#3d4657">Sonnet proposes: <tspan font-weight="600">"a sharp drop in the days BEFORE a</tspan></text>
+  <text x="638" y="296" font-size="13" fill="#3d4657"><tspan font-weight="600">CPI release, with Bitcoin already oversold"</tspan> — an order,</text>
+  <text x="638" y="316" font-size="13" fill="#3d4657">not a coincidence. The order is part of the claim.</text>
+
+  <line x1="78" y1="344" x2="78" y2="378" stroke="#9aa3b0" stroke-width="1.5" marker-end="url(#sArrow)"/>
+
+  <!-- STEP 3 : HUMAN GATE -->
+  <circle cx="78" cy="400" r="15" fill="#fdf0e6" stroke="#e8b389"/>
+  <text x="78" y="405" text-anchor="middle" font-size="13" font-weight="700" fill="#c2540c">3</text>
+  <text x="106" y="394" font-size="15" font-weight="600" fill="#c2540c">A human says yes or no</text>
+  <text x="106" y="416" font-size="13" fill="#4b5563">Nothing is tested without approval, given by pressing a</text>
+  <text x="106" y="434" font-size="13" fill="#4b5563">button in Telegram. This is the only decision a person</text>
+  <text x="106" y="452" font-size="13" fill="#4b5563">makes; everything after it is automatic.</text>
+
+  <rect x="620" y="374" width="500" height="86" rx="6" fill="#fffaf5" stroke="#f0d9c4"/>
+  <text x="638" y="398" font-size="13" fill="#3d4657">The proposal arrives on the phone in plain English, with</text>
+  <text x="638" y="418" font-size="13" fill="#3d4657">two buttons: <tspan font-weight="600" fill="#c2540c">Test It</tspan> / <tspan font-weight="600" fill="#6b7280">Don't Test It</tspan>. No typing, so the</text>
+  <text x="638" y="438" font-size="13" fill="#3d4657">model can never be talked into running its own idea.</text>
+
+  <line x1="78" y1="466" x2="78" y2="500" stroke="#9aa3b0" stroke-width="1.5" marker-end="url(#sArrow)"/>
+
+  <!-- STEP 4 -->
+  <circle cx="78" cy="522" r="15" fill="#eef1f5" stroke="#c9d1dc"/>
+  <text x="78" y="527" text-anchor="middle" font-size="13" font-weight="700" fill="#3d4657">4</text>
+  <text x="106" y="516" font-size="15" font-weight="600" fill="#1f2430">Check it against history, honestly</text>
+  <text x="106" y="538" font-size="13" fill="#4b5563">Every past occurrence is found and measured: is the</text>
+  <text x="106" y="556" font-size="13" fill="#4b5563">effect real or luck, how far does price run in your favour</text>
+  <text x="106" y="574" font-size="13" fill="#4b5563">versus against you, and over how many days.</text>
+
+  <rect x="620" y="496" width="500" height="86" rx="6" fill="#ffffff" stroke="#e6e2db"/>
+  <text x="638" y="520" font-size="13" fill="#3d4657">Found 84 past occurrences. Tested on years the model</text>
+  <text x="638" y="540" font-size="13" fill="#3d4657">never saw when choosing. Best holding period: 7 days.</text>
+  <text x="638" y="560" font-size="13" fill="#3d4657">Most fail here — and being wrong is the normal outcome.</text>
+
+  <line x1="78" y1="588" x2="78" y2="622" stroke="#9aa3b0" stroke-width="1.5" marker-end="url(#sArrow)"/>
+
+  <!-- STEP 5 -->
+  <circle cx="78" cy="644" r="15" fill="#fdf6e0" stroke="#dcc98a"/>
+  <text x="78" y="649" text-anchor="middle" font-size="13" font-weight="700" fill="#92720a">5</text>
+  <text x="106" y="638" font-size="15" font-weight="600" fill="#92720a">Track it forward, in real time</text>
+  <text x="106" y="660" font-size="13" fill="#4b5563">Survivors join a watch list. Each new occurrence is</text>
+  <text x="106" y="678" font-size="13" fill="#4b5563">recorded and measured as it happens — the real test.</text>
+
+  <rect x="620" y="618" width="500" height="82" rx="6" fill="#fffdf6" stroke="#eadfb8"/>
+  <text x="638" y="642" font-size="13" fill="#3d4657">Next time this exact setup occurs, it is logged and held</text>
+  <text x="638" y="662" font-size="13" fill="#3d4657">for 7 days. Only after <tspan font-weight="600">50 such live occurrences</tspan> does it</text>
+  <text x="638" y="682" font-size="13" fill="#3d4657">earn the word "validated". <tspan font-weight="600">So far, nothing has.</tspan></text>
+</svg>

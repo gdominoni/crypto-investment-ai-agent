@@ -12,6 +12,10 @@ Whether an LLM-driven architecture — reading real market news and recognizing 
 
 A prior, static rule-based research phase (Phase 1 below) tested six categories of deterministic market triggers — scheduled macro releases, futures-market crowding, trend-efficiency continuation — across seven-plus years of crypto data, under full walk-forward validation, and found no fully persistent, unconditional edge. This project's response to that finding is the adaptive system described below: a continuously re-validated statistical baseline, a bootstrap significance test that asks whether a pattern is *real* (not merely profitable-looking in one backtest), an LLM judgment layer (Claude Haiku → Claude Sonnet) that discovers and proposes genuinely new conditions, and a human supervisor at exactly one decision point — observed live rather than assumed from a backtest.
 
+<p align="center">
+  <img src="docs/case_study/assets/in_short.svg" alt="In short: the five steps the system runs, and the same five steps again as a worked example" width="100%">
+</p>
+
 ### The System, Live on Telegram — Real Screenshots
 
 Every message below is a real, unedited screenshot from this project's own Telegram bot — nothing staged, nothing mocked up for this README. They show the interface as it actually behaves; the *verdicts* visible in them predate the [2026-08-29 statistical audit](docs/case_study/methodology-decisions.md) and no longer hold — see Phase 3 for the current, corrected battery.
