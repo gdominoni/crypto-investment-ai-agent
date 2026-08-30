@@ -723,3 +723,71 @@ comparable.
 The corrected selector's effect is also visible in the holding horizons: c1_long
 and c2_long now resolve at **1 day** instead of drifting to the longest horizon
 offered, which is the drift bias described above disappearing on real data.
+
+---
+
+### 2026-08-30 — Coin-scoped hypotheses: `coins`, `outcome`, and a conditional concentration check
+
+**The problem, demonstrated rather than argued.** A genuine single-coin pattern
+-- the "SEC sues Ripple" shape, where one asset moves against its peers -- was
+not merely unsupported, it was actively rejected. Run through the pipeline, a
+planted XRP-only signal produced p=0.016, +21.45% excess and MFE/MAE 8.57, and
+came back `watch`: `classify_status` treats single-coin dominance as evidence of
+overfitting. That heuristic is right for a market-wide hypothesis and exactly
+backwards for a genuinely coin-specific one. Separately, the indicator signature
+`(df, funding, scale)` carried no coin identity at all, so a coin-attributed
+indicator could not be WRITTEN -- the test above had to identify XRP by its
+price series LENGTH.
+
+**Four changes, which are one feature.**
+
+1. `symbol` threaded through every indicator, `clause_signal`,
+   `clause_signal_hourly` and both hourly scanners. Almost every indicator
+   ignores it -- RSI does not care what it is computing on -- but without it a
+   news or sentiment score attributed to one coin cannot exist.
+2. `ConditionSpec.coins` -- which coins the claim is about. Intersected with the
+   caller's universe rather than replacing it, so a caller that legitimately
+   restricts the coin set is never silently overridden.
+3. `ConditionSpec.outcome` -- `"raw"` or `"market_relative"`. Raw for
+   market-wide events (a CPI print moves all of crypto, so subtracting the
+   basket deletes the effect); market-relative for coin-specific ones.
+4. The coin-concentration check is skipped for a spec that DECLARED itself
+   single-coin. The year check is untouched: a single-coin pattern still has to
+   hold across time. The skip keys off `spec.coins`, fixed before the test runs
+   -- never off which coin turned out to dominate, which would be choosing the
+   answer after seeing it.
+
+**Measured end to end** on a real XRP-only planted signal:
+
+    configuration                      n     p        excess    year conc   status
+    whole universe, raw outcome      136   0.0125    +15.48%     flagged    watch
+    + coin-scoped to XRP             136   0.0125    +15.48%     flagged    watch
+    + scoped AND market-relative     136   0.0005     +9.94%     passes     ACCEPTED
+
+Coin scoping alone is NOT enough -- the year check still blocked it. The pair
+together works, and market-relative incidentally fixed the year concentration
+too (0.64 -> 0.43) by removing the 2021 bull-market factor that had been
+clustering returns into a single year. Concentration is still REPORTED
+truthfully (coin share 1.0, flagged) in the accepted row; it simply no longer
+gates. Report honestly, gate deliberately.
+
+**One shared serializer, finally.** `spec_to_dict`/`spec_from_dict` replace
+seven hand-rolled versions. Every field ever added to `ConditionSpec` has been
+dropped by at least one of them: `within_days` was lost by all three at once, so
+a sequenced "crash, THEN news" hypothesis round-tripped back as a same-day one
+and was tested as a different claim than the human approved. `coins` and
+`outcome` would fail identically and just as invisibly -- an XRP-scoped
+market-relative spec returning as whole-universe raw, same label, nothing
+looking wrong. Optional fields are omitted at their defaults so existing
+registry files do not churn, and dicts written before these fields existed still
+load.
+
+**A capability-parity bug the earlier audit missed.** The replay's own
+`REPLAY_SYSTEM_PROMPT` never mentioned `within_days`, so the replay's Sonnet
+could not propose a SEQUENCED condition at all -- the exact hypothesis shape
+this project was rebuilt around. The 2026-08-29 parity audit verified 12/12
+parity in CODE and did not check the prompts, which are just as load-bearing:
+a capability the model is never told about does not exist. Both prompts now
+document `within_days`, `coins` and `outcome`, with the market-wide vs
+coin-specific rule stated explicitly, since choosing `market_relative` for a
+market-wide event would guarantee a null result.

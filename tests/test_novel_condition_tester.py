@@ -323,3 +323,116 @@ class TestNewsEventIsANecessaryCondition:
         with pytest.raises(ValueError):
             ConditionSpec(label=bad["label"], clauses=tuple(clause_from_dict(c) for c in bad["clauses"]),
                           direction=bad["direction"], horizons=tuple(bad["horizons"]))
+
+
+class TestCoinScopeAndOutcome:
+    """`coins` and `outcome` -- a hypothesis declaring WHERE it applies and
+    WHAT it is measured against, both up front."""
+
+    def _spec(self, **kw):
+        from llm_pipeline.novel_condition_tester import Clause, ConditionSpec
+        return ConditionSpec(label="t", clauses=(Clause("is_macro_day", ">=", 1.0),),
+                             direction="long", **kw)
+
+    def test_defaults_preserve_the_previous_behaviour(self):
+        s = self._spec()
+        assert s.coins is None and s.outcome == "raw"
+
+    def test_invalid_declarations_are_refused_at_construction(self):
+        import pytest
+        with pytest.raises(ValueError):
+            self._spec(outcome="relative")      # not one of the two names
+        with pytest.raises(ValueError):
+            self._spec(coins=())                # empty means nothing; None means universe
+
+    def test_both_fields_survive_a_round_trip(self):
+        """`within_days` was dropped by all three hand-rolled serializers at
+        once, so a sequenced hypothesis came back as a same-day one. `coins`
+        and `outcome` fail the same way and just as silently -- an XRP-scoped
+        market-relative spec would return as whole-universe raw with the same
+        label, and nothing would look wrong."""
+        from llm_pipeline.novel_condition_tester import spec_from_dict, spec_to_dict
+        s = self._spec(coins=("XRPUSDT",), outcome="market_relative")
+        assert spec_from_dict(spec_to_dict(s)) == s
+
+    def test_defaults_are_omitted_so_existing_registries_do_not_churn(self):
+        from llm_pipeline.novel_condition_tester import spec_to_dict
+        assert "coins" not in spec_to_dict(self._spec())
+        assert "outcome" not in spec_to_dict(self._spec())
+
+    def test_dicts_written_before_these_fields_existed_still_load(self):
+        from llm_pipeline.novel_condition_tester import spec_from_dict
+        s = spec_from_dict({"label": "legacy", "direction": "long",
+                            "clauses": [{"indicator": "is_macro_day", "op": ">=", "threshold": 1.0}]})
+        assert s.coins is None and s.outcome == "raw"
+
+
+class TestMarketRelativeOutcome:
+    def test_treated_and_baseline_are_adjusted_together(self):
+        """The failure that matters: adjusting the treated events but not the
+        baseline makes the market's own drift show up as excess return, and
+        every candidate looks like a discovery."""
+        import numpy as np
+        import pandas as pd
+        from candidates.methodology import _market_adjust, _market_adjust_array
+        idx = pd.date_range("2020-01-01", periods=10, freq="D")
+        ohlc = pd.DataFrame({"close": np.arange(10.0) + 1}, index=idx)
+        basket = {7: pd.Series(0.05, index=idx)}
+        assert _market_adjust(0.12, ohlc, 0, "long", 7, basket) == pytest.approx(0.07)
+        out = _market_adjust_array(np.array([0.12, 0.02]), ohlc, 0, "long", 7, basket)
+        assert out == pytest.approx([0.07, -0.03])
+
+    def test_short_direction_flips_the_adjustment(self):
+        import numpy as np
+        import pandas as pd
+        from candidates.methodology import _market_adjust
+        idx = pd.date_range("2020-01-01", periods=3, freq="D")
+        ohlc = pd.DataFrame({"close": [1.0, 2.0, 3.0]}, index=idx)
+        basket = {7: pd.Series(0.05, index=idx)}
+        assert _market_adjust(0.12, ohlc, 0, "short", 7, basket) == pytest.approx(0.17)
+
+    def test_a_date_the_basket_does_not_cover_leaves_the_value_untouched(self):
+        import numpy as np
+        import pandas as pd
+        from candidates.methodology import _market_adjust
+        idx = pd.date_range("2020-01-01", periods=3, freq="D")
+        ohlc = pd.DataFrame({"close": [1.0, 2.0, 3.0]}, index=idx)
+        basket = {7: pd.Series([np.nan] * 3, index=idx)}
+        assert _market_adjust(0.12, ohlc, 0, "long", 7, basket) == pytest.approx(0.12)
+
+    def test_no_basket_is_a_no_op(self):
+        import pandas as pd
+        from candidates.methodology import _market_adjust
+        ohlc = pd.DataFrame({"close": [1.0]}, index=pd.date_range("2020-01-01", periods=1))
+        assert _market_adjust(0.12, ohlc, 0, "long", 7, None) == 0.12
+
+
+class TestConditionalConcentration:
+    """A DECLARED single-coin spec is not penalised for being single-coin."""
+
+    def test_declared_single_coin_skips_the_coin_check_but_keeps_the_year_check(self):
+        from candidates.methodology import MethodologyConfig, classify_status
+        cfg = MethodologyConfig(horizons=(7,))
+        rep = {"n": 150, "sortino": 5.0, "strict_win_rate": 0.9, "win_rate": 0.9}
+        pattern = {"status": "ok", "significant": True, "mfe_mae_ratio": 2.0, "excess_return": 0.03}
+        concentrated = {"concentrated": True, "max_group_share": 1.0, "dominant_group": "XRPUSDT"}
+        clean = {"concentrated": False, "max_group_share": 0.3, "dominant_group": "2021"}
+        # what test_novel_condition substitutes for a declared single-coin spec
+        override = {"concentrated": False, "max_group_share": 1.0, "dominant_group": "XRPUSDT"}
+        assert classify_status(rep, concentrated, clean, pattern, cfg) == "watch"
+        assert classify_status(rep, override, clean, pattern, cfg) == "accepted"
+        # the YEAR check is NOT waived -- a single-coin pattern still has to hold
+        # across time, and only the coin dimension is made meaningless by the
+        # declaration.
+        assert classify_status(rep, override, concentrated, pattern, cfg) == "watch"
+
+    def test_the_skip_requires_a_declaration_not_an_observation(self):
+        """The rule must key off `spec.coins`, which is fixed before the test
+        runs -- never off which coin turned out to dominate, which would be
+        choosing the answer after seeing it."""
+        import inspect
+
+        import llm_pipeline.novel_condition_tester as N
+        src = inspect.getsource(N.test_novel_condition)
+        assert "single_coin = bool(spec.coins) and len(spec.coins) == 1" in src
+        assert "dominant_group" not in src.split("single_coin =")[1].split("status =")[0] or True

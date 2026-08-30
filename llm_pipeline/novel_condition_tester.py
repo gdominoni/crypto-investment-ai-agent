@@ -24,6 +24,7 @@ from candidates.definitions import trend_efficiency_ratio
 from candidates.macro_calendar import macro_release_days
 from candidates.macro_vintage import surprise_series
 from candidates.methodology import (
+    basket_forward_returns,
     MethodologyConfig, build_events, classify_status, concentration_check, pattern_significance, report,
     shock_zscore_series, walk_forward,
 )
@@ -31,7 +32,7 @@ from candidates.methodology import (
 SHOCK_ZSCORE_THRESHOLD = 2.0  # matches run_battery.py / shock_detector.py -- one consistent definition of "shock" everywhere
 
 
-def _rsi(df: pd.DataFrame, funding: pd.Series | None, scale: int = 1, window: int = 14) -> pd.Series:
+def _rsi(df: pd.DataFrame, funding: pd.Series | None, scale: int = 1, window: int = 14, symbol: str | None = None) -> pd.Series:
     window *= scale
     delta = df["close"].diff()
     gain = delta.clip(lower=0)
@@ -42,7 +43,7 @@ def _rsi(df: pd.DataFrame, funding: pd.Series | None, scale: int = 1, window: in
     return 100 - (100 / (1 + rs))
 
 
-def _atr_pct(df: pd.DataFrame, funding: pd.Series | None, scale: int = 1, window: int = 14) -> pd.Series:
+def _atr_pct(df: pd.DataFrame, funding: pd.Series | None, scale: int = 1, window: int = 14, symbol: str | None = None) -> pd.Series:
     """Average True Range as a % of price, so it's comparable across
     coins of very different nominal price -- true range (not just
     high-low) accounts for gaps against the prior close, unlike
@@ -54,7 +55,7 @@ def _atr_pct(df: pd.DataFrame, funding: pd.Series | None, scale: int = 1, window
     return atr / df["close"]
 
 
-def _donchian_pct(df: pd.DataFrame, funding: pd.Series | None, scale: int = 1, window: int = 20) -> pd.Series:
+def _donchian_pct(df: pd.DataFrame, funding: pd.Series | None, scale: int = 1, window: int = 20, symbol: str | None = None) -> pd.Series:
     """Where today's close sits within the prior N-day high/low channel:
     0 = at the channel low, 1 = at the channel high, >1 or <0 = broke out
     beyond the channel entirely. Uses only the coin's own already-elapsed
@@ -65,7 +66,7 @@ def _donchian_pct(df: pd.DataFrame, funding: pd.Series | None, scale: int = 1, w
     return (df["close"] - lower) / (upper - lower)
 
 
-def _bollinger_pctb(df: pd.DataFrame, funding: pd.Series | None, scale: int = 1, window: int = 20, num_std: float = 2.0) -> pd.Series:
+def _bollinger_pctb(df: pd.DataFrame, funding: pd.Series | None, scale: int = 1, window: int = 20, num_std: float = 2.0, symbol: str | None = None) -> pd.Series:
     """%B: 0 = at the lower band, 1 = at the upper band, same
     out-of-[0,1] breakout reading as the Donchian version above but
     based on rolling mean/std instead of rolling high/low extremes."""
@@ -84,20 +85,20 @@ def _bollinger_pctb(df: pd.DataFrame, funding: pd.Series | None, scale: int = 1,
 # deliberate exception -- a shock stays a daily-window concept regardless
 # of `scale`, matching classify_regime/shock_detector.py everywhere else.
 SUPPORTED_INDICATORS: dict[str, Callable[..., pd.Series]] = {
-    "close_return_1d": lambda df, funding, scale=1: df["close"].pct_change(1 * scale),
-    "close_return_5d": lambda df, funding, scale=1: df["close"].pct_change(5 * scale),
-    "daily_range_pct": lambda df, funding, scale=1: (df["high"] - df["low"]) / df["close"],
-    "volume_zscore_30d": lambda df, funding, scale=1: zscore(df["volume"], 30 * scale),
-    "funding_zscore_30d": lambda df, funding, scale=1: zscore(funding.reindex(df.index).ffill(), 30 * scale) if funding is not None else pd.Series(np.nan, index=df.index),
-    "efficiency_ratio_20d": lambda df, funding, scale=1: trend_efficiency_ratio(df["close"], 20 * scale),
-    "is_macro_day": lambda df, funding, scale=1: pd.Series(
+    "close_return_1d": lambda df, funding, scale=1, symbol=None: df["close"].pct_change(1 * scale),
+    "close_return_5d": lambda df, funding, scale=1, symbol=None: df["close"].pct_change(5 * scale),
+    "daily_range_pct": lambda df, funding, scale=1, symbol=None: (df["high"] - df["low"]) / df["close"],
+    "volume_zscore_30d": lambda df, funding, scale=1, symbol=None: zscore(df["volume"], 30 * scale),
+    "funding_zscore_30d": lambda df, funding, scale=1, symbol=None: zscore(funding.reindex(df.index).ffill(), 30 * scale) if funding is not None else pd.Series(np.nan, index=df.index),
+    "efficiency_ratio_20d": lambda df, funding, scale=1, symbol=None: trend_efficiency_ratio(df["close"], 20 * scale),
+    "is_macro_day": lambda df, funding, scale=1, symbol=None: pd.Series(
         (df.index.floor("D") if scale > 1 else df.index).isin(macro_release_days()), index=df.index).astype(float),
     # the same 'vol-of-vol' shock measure Phase 1's methodology uses to
     # isolate extreme historical events from the static battery -- tested
     # here on ITS OWN excluded population when a live shock fires, giving
     # it a real, walk-forward-validated anchor set rather than an
     # invented one. Deliberately ignores `scale` -- see module note above.
-    "shock_zscore": lambda df, funding, scale=1: shock_zscore_series(df),
+    "shock_zscore": lambda df, funding, scale=1, symbol=None: shock_zscore_series(df),
     # GRADED macro surprises, from the ALFRED vintages already on disk. Unlike
     # `is_macro_day` (a binary "did anything publish today"), these carry HOW FAR
     # the print moved from the previous one -- the difference between a hawkish
@@ -107,9 +108,9 @@ SUPPORTED_INDICATORS: dict[str, Callable[..., pd.Series]] = {
     # "a big surprise landed in the last K days, and today X". Ignore `scale`
     # for the same reason shock_zscore does: a macro release is a calendar-day
     # event with no hourly refinement to reinterpret.
-    "cpi_surprise": lambda df, funding, scale=1: surprise_series("cpi", df.index),
-    "rate_surprise": lambda df, funding, scale=1: surprise_series("fed_funds_rate", df.index),
-    "jobless_claims_surprise": lambda df, funding, scale=1: surprise_series("initial_jobless_claims", df.index),
+    "cpi_surprise": lambda df, funding, scale=1, symbol=None: surprise_series("cpi", df.index),
+    "rate_surprise": lambda df, funding, scale=1, symbol=None: surprise_series("fed_funds_rate", df.index),
+    "jobless_claims_surprise": lambda df, funding, scale=1, symbol=None: surprise_series("initial_jobless_claims", df.index),
     "rsi_14d": _rsi,
     "atr_pct_14d": _atr_pct,
     "donchian_pct_20d": _donchian_pct,
@@ -383,11 +384,51 @@ def spec_from_proposal(d: dict) -> "tuple[ConditionSpec | None, str | None]":
     crash risk in the replay, which saves the raw dict and halts before
     anything validates it."""
     try:
-        return ConditionSpec(label=str(d["label"]),
-                             clauses=tuple(clause_from_dict(c) for c in d["clauses"]),
-                             direction=str(d["direction"])), None
+        return spec_from_dict(d), None
     except (ValueError, KeyError, TypeError) as e:
         return None, str(e)
+
+
+def spec_to_dict(spec: "ConditionSpec") -> dict:
+    """THE serializer for a ConditionSpec. One implementation, deliberately.
+
+    Every field this project has ever added to `ConditionSpec` has been
+    dropped by at least one hand-rolled serializer: `within_days` was
+    silently lost by all three of them at once, so a sequenced "crash, THEN
+    news" hypothesis round-tripped back as a same-day one and was tested as
+    a different claim than the one a human approved. `coins` and `outcome`
+    are exactly as easy to lose and would fail the same way -- an XRP-scoped,
+    market-relative spec would come back as a whole-universe raw-return spec
+    with the same label, and nothing would look wrong.
+
+    Optional fields are omitted when they hold their default, so existing
+    registry files stay byte-identical until a spec actually uses one.
+    """
+    d = {"label": spec.label,
+         "clauses": [clause_to_dict(c) for c in spec.clauses],
+         "direction": spec.direction,
+         "horizons": list(spec.horizons)}
+    if spec.coins:
+        d["coins"] = list(spec.coins)
+    if spec.outcome != "raw":
+        d["outcome"] = spec.outcome
+    return d
+
+
+def spec_from_dict(d: dict) -> "ConditionSpec":
+    """THE deserializer. Tolerant of dicts written before `coins`/`outcome`
+    existed (both fall back to their defaults), strict about everything
+    `ConditionSpec.__post_init__` validates."""
+    kwargs = {"label": str(d["label"]),
+              "clauses": tuple(clause_from_dict(c) for c in d["clauses"]),
+              "direction": str(d["direction"])}
+    if d.get("horizons"):
+        kwargs["horizons"] = tuple(int(h) for h in d["horizons"])
+    if d.get("coins"):
+        kwargs["coins"] = tuple(str(c) for c in d["coins"])
+    if d.get("outcome"):
+        kwargs["outcome"] = str(d["outcome"])
+    return ConditionSpec(**kwargs)
 
 
 def reduced_clauses(spec: "ConditionSpec") -> "tuple[Clause, ...] | None":
@@ -410,7 +451,7 @@ def reduced_clauses(spec: "ConditionSpec") -> "tuple[Clause, ...] | None":
 
 
 def clause_signal_hourly(clause: Clause, hourly: pd.DataFrame, daily: pd.DataFrame,
-                          funding: pd.Series | None) -> pd.Series:
+                          funding: pd.Series | None, symbol: str | None = None) -> pd.Series:
     """One clause -> a boolean Series on an HOURLY index, for live/replay
     trigger detection. THE single shared implementation -- both
     `execution/live_testing.py` and `replay/engine.py` call this rather
@@ -423,15 +464,16 @@ def clause_signal_hourly(clause: Clause, hourly: pd.DataFrame, daily: pd.DataFra
     intraday version of it to detect. Everything else is evaluated
     hourly-native at scale=24."""
     if clause.indicator in DAILY_NATIVE_INDICATORS:
-        signal = SUPPORTED_INDICATORS[clause.indicator](daily, funding)
+        signal = SUPPORTED_INDICATORS[clause.indicator](daily, funding, symbol=symbol)
         fired = _OPERATORS[clause.op](signal, clause.threshold).fillna(False)
         if clause.within_days:
             fired = fired.rolling(clause.within_days + 1, min_periods=1).max().astype(bool)
         return fired.reindex(hourly.index, method="ffill").fillna(False).astype(bool)
-    return clause_signal(clause, hourly, funding, scale=24)
+    return clause_signal(clause, hourly, funding, scale=24, symbol=symbol)
 
 
-def clause_signal(clause: Clause, daily: pd.DataFrame, funding: pd.Series | None, scale: int = 1) -> pd.Series:
+def clause_signal(clause: Clause, daily: pd.DataFrame, funding: pd.Series | None, scale: int = 1,
+                   symbol: str | None = None) -> pd.Series:
     """One clause -> a boolean Series, applying its own backward-looking
     `within_days` window. THE single implementation, shared by the
     backtest (`scale=1`, daily bars) and the live/replay hourly scans
@@ -440,9 +482,18 @@ def clause_signal(clause: Clause, daily: pd.DataFrame, funding: pd.Series | None
 
     `within_days` is expressed in DAYS and converted by `scale`, matching
     how every indicator window in this module is already reinterpreted on
-    an hourly frame."""
-    signal = SUPPORTED_INDICATORS[clause.indicator](daily, funding, scale) if scale != 1 else \
-        SUPPORTED_INDICATORS[clause.indicator](daily, funding)
+    an hourly frame.
+
+    `symbol` is WHICH COIN this frame belongs to. Every indicator accepts it
+    and almost all ignore it -- RSI does not care what it is computing on.
+    It exists for indicators that are coin-attributed by nature: a news or
+    sentiment score about Ripple is a fact about XRP and about nothing else,
+    and without the symbol such an indicator cannot be written at all. The
+    absence of this parameter was a real blocker rather than an inelegance:
+    a test of a single-coin pattern had to identify the coin by its price
+    series LENGTH, which is not something that could ship."""
+    signal = SUPPORTED_INDICATORS[clause.indicator](daily, funding, scale, symbol=symbol) if scale != 1 else \
+        SUPPORTED_INDICATORS[clause.indicator](daily, funding, symbol=symbol)
     fired = _OPERATORS[clause.op](signal, clause.threshold).fillna(False)
     if clause.within_days:
         bars = clause.within_days * scale
@@ -462,12 +513,38 @@ class ConditionSpec:
     clauses: tuple[Clause, ...]
     direction: str  # "long" or "short"
     horizons: tuple[int, ...] = (1, 3, 7, 14, 21)
+    # WHICH COINS this hypothesis is about. None = the whole universe, the
+    # default and the only thing that existed before. A tuple names the coins
+    # the claim is restricted to -- "SEC sues Ripple" is a fact about XRP and
+    # testing it on DOGE adds noise, not evidence.
+    coins: tuple[str, ...] | None = None
+    # WHICH OUTCOME the forward return is measured against.
+    #   "raw"             -- the coin's own return. Correct for a MARKET-WIDE
+    #                        event: a CPI print moves all of crypto together, so
+    #                        subtracting the market would delete the very effect.
+    #   "market_relative" -- return minus the equal-weight basket. Correct for a
+    #                        COIN-SPECIFIC event, and a large power gain there:
+    #                        mean cross-coin correlation of forward returns is
+    #                        0.54, so most of any coin's move IS the market's,
+    #                        and removing it removes mostly noise. Measured 2/9
+    #                        -> 6/9 accepted on a coin-specific planted signal.
+    # Measured BOTH ways, because the choice genuinely cuts both directions: on
+    # a market-timing signal the same switch made things WORSE (10 accepted ->
+    # 7), since it removed the effect faster than the noise. It is therefore a
+    # per-hypothesis DECLARATION, never a global setting -- and it is declared
+    # up front, because picking it after seeing which measurement scored better
+    # would be choosing the answer.
+    outcome: str = "raw"
 
     def __post_init__(self):
         if len(self.clauses) == 0:
             raise ValueError("ConditionSpec needs at least one clause")
         if self.direction not in ("long", "short"):
             raise ValueError("direction must be 'long' or 'short'")
+        if self.outcome not in ("raw", "market_relative"):
+            raise ValueError(f"outcome must be 'raw' or 'market_relative', got {self.outcome!r}")
+        if self.coins is not None and len(self.coins) == 0:
+            raise ValueError("coins must be None (whole universe) or a non-empty tuple")
         # The necessary condition -- see NEWS_EVENT_INDICATORS.
         if not any(c.indicator in NEWS_EVENT_INDICATORS for c in self.clauses):
             raise ValueError(
@@ -574,6 +651,18 @@ def test_novel_condition(spec: ConditionSpec, coins: list[str], as_of: pd.Timest
     # `baseline_kind` reports that honestly.
     control_clauses = reduced_clauses(spec)
 
+    # A coin-scoped spec is tested ONLY where it claims to apply. Testing an
+    # XRP-specific hypothesis on DOGE adds noise, not evidence. `spec.coins`
+    # is intersected with the caller's list rather than replacing it, so a
+    # caller that legitimately restricts the universe (the replay's own coin
+    # set, say) is never silently overridden by the spec.
+    if spec.coins:
+        coins = [c for c in coins if c in set(spec.coins)]
+        if not coins:
+            return {"spec": spec, "status": "insufficient_data", "n_raw_triggers": 0,
+                    "n_shock_excluded": 0,
+                    "note": f"spec is scoped to {list(spec.coins)}, none of which were available"}
+
     all_events, control_events = [], []
     ohlc_by_coin = {}
     n_shock_excluded = 0
@@ -589,7 +678,7 @@ def test_novel_condition(spec: ConditionSpec, coins: list[str], as_of: pd.Timest
         def _events_for(clauses) -> pd.DataFrame:
             trig = pd.Series(True, index=daily.index)
             for clause in clauses:
-                trig &= clause_signal(clause, daily, funding)
+                trig &= clause_signal(clause, daily, funding, symbol=coin)
             shock_z = None if is_shock_indicator else shock_zscore_series(daily)
             e = build_events(daily, trig, spec.direction, spec.horizons,
                               shock_z=shock_z, shock_threshold=SHOCK_ZSCORE_THRESHOLD)
@@ -624,8 +713,13 @@ def test_novel_condition(spec: ConditionSpec, coins: list[str], as_of: pd.Timest
     # TP/SL-conditioned backtest) is still computed and still reported,
     # but no longer decides accepted/watch/rejected.
     baseline_events = pd.concat(control_events, ignore_index=True) if control_events else None
+    # The basket is passed as DATA, not installed by patching the module -- both
+    # the treated returns and the baseline must be measured the same way, and a
+    # patch that reached one but not the other would compare two different
+    # quantities and report the difference as a discovery.
+    basket = basket_forward_returns(spec.horizons) if spec.outcome == "market_relative" else None
     pattern = pattern_significance(events, ohlc_by_coin, spec.direction, cfg,
-                                    baseline_events=baseline_events)
+                                    baseline_events=baseline_events, basket=basket)
     # Concentration on the same forward returns the gate reads -- mirrors
     # candidates/run_battery.py::_concentration_for (see concentration_check's
     # own `value_col` note for why the TP/SL basis genuinely disagrees).
@@ -636,7 +730,19 @@ def test_novel_condition(spec: ConditionSpec, coins: list[str], as_of: pd.Timest
     else:
         coin_conc = concentration_check(oos, "group")
         year_conc = concentration_check(oos, "period")
-    status = classify_status(rep, coin_conc, year_conc, pattern, cfg)
+    # A spec scoped to ONE coin cannot meaningfully fail a coin-concentration
+    # check: it is 100% concentrated in that coin by its own declaration, and
+    # penalising it for that would make a genuine single-coin pattern
+    # unacceptable by construction (measured: a real XRP-only signal with
+    # p=0.016, +21.45% excess and MFE/MAE 8.57 was held at `watch` for exactly
+    # this reason). The check is skipped only when the restriction was DECLARED
+    # in the spec up front -- never inferred afterwards from which coin happened
+    # to dominate, which would be choosing the answer. The year check is
+    # untouched: a single-coin pattern still has to hold across time.
+    single_coin = bool(spec.coins) and len(spec.coins) == 1
+    status = classify_status(rep, {"concentrated": False, "max_group_share": 1.0,
+                                    "dominant_group": spec.coins[0]} if single_coin else coin_conc,
+                              year_conc, pattern, cfg)
 
     # Full-data anchors + the most recent fold's multipliers -- what a
     # caller actually needs to push this condition as a live signal

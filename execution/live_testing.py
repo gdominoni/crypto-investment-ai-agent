@@ -186,7 +186,8 @@ def _check_live_tests() -> None:
         _check_consecutive_failures(trade["candidate"])
 
 
-def _dynamic_trigger_hourly(spec: ConditionSpec, hourly: pd.DataFrame, daily: pd.DataFrame, funding) -> pd.Series:
+def _dynamic_trigger_hourly(spec: ConditionSpec, hourly: pd.DataFrame, daily: pd.DataFrame, funding,
+                             symbol: str | None = None) -> pd.Series:
     """Identical logic to replay/engine.py's own version -- both now
     delegate every clause to `clause_signal_hourly`, the ONE shared
     implementation, which owns both the `DAILY_NATIVE_INDICATORS`
@@ -200,7 +201,7 @@ def _dynamic_trigger_hourly(spec: ConditionSpec, hourly: pd.DataFrame, daily: pd
     constant's own note for the measured distributions."""
     trigger = pd.Series(True, index=hourly.index)
     for clause in spec.clauses:
-        trigger &= clause_signal_hourly(clause, hourly, daily, funding)
+        trigger &= clause_signal_hourly(clause, hourly, daily, funding, symbol=symbol)
     return trigger
 
 
@@ -226,7 +227,7 @@ def find_backdated_entry(spec: ConditionSpec, coin: str, lookback_days: int = BA
     # produces nothing but NaN/False (the exact bug already caught once in
     # replay/engine.py -- see docs/case_study/methodology-decisions.md).
     window_start = hourly.index.max() - pd.Timedelta(days=lookback_days)
-    trig = _dynamic_trigger_hourly(spec, hourly, daily, funding).loc[window_start:]
+    trig = _dynamic_trigger_hourly(spec, hourly, daily, funding, symbol=coin).loc[window_start:]
     true_hours = trig[trig]
     if len(true_hours) == 0:
         return None
@@ -272,7 +273,7 @@ def _scan_mechanical_triggers(hourly_full: dict, ohlc_full: dict, static_trigger
         for spec in dynamic_specs:
             if sh.is_dropped(spec.label) or (spec.label, coin) in open_pairs:
                 continue
-            trig = _dynamic_trigger_hourly(spec, hourly_to_date, ohlc_full[coin], funding).loc[window_start:]
+            trig = _dynamic_trigger_hourly(spec, hourly_to_date, ohlc_full[coin], funding, symbol=coin).loc[window_start:]
             if not trig.any():
                 continue
             execution = _open_live_test(spec.label, coin, spec.direction)

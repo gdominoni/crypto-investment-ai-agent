@@ -22,7 +22,7 @@ from candidates.methodology import (
     pattern_significance, report, shock_zscore_series, walk_forward,
 )
 from candidates.run_battery import COINS, HORIZONS_DAYS, SHOCK_ZSCORE_THRESHOLD
-from llm_pipeline.novel_condition_tester import ConditionSpec, clause_from_dict, test_novel_condition
+from llm_pipeline.novel_condition_tester import ConditionSpec, clause_from_dict, test_novel_condition, spec_from_dict
 from replay import state
 from replay import status_history as sh
 from replay.time_sandbox import daily_as_of, funding_as_of
@@ -115,8 +115,7 @@ def run_replay_battery(as_of: pd.Timestamp) -> dict:
             continue
         try:
             try:
-                spec = ConditionSpec(label=spec_dict["label"], clauses=tuple(clause_from_dict(c) for c in spec_dict["clauses"]),
-                                      direction=spec_dict["direction"], horizons=tuple(spec_dict["horizons"]))
+                spec = spec_from_dict(spec_dict)
             except ValueError:
                 # Recorded before a news/macro event clause became a NECESSARY
                 # condition -- skip rather than crash, see

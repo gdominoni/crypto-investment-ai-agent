@@ -18,7 +18,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from llm_pipeline.novel_condition_tester import ConditionSpec, clause_from_dict, clause_to_dict
+from llm_pipeline.novel_condition_tester import ConditionSpec, spec_from_dict, spec_to_dict
 
 from candidates.atomic_json import write_json
 
@@ -31,15 +31,10 @@ def load_registry() -> dict:
     return json.loads(REGISTRY_PATH.read_text())
 
 
-def _spec_to_dict(spec: ConditionSpec) -> dict:
-    return {"label": spec.label,
-            "clauses": [clause_to_dict(c) for c in spec.clauses],
-            "direction": spec.direction, "horizons": list(spec.horizons)}
-
-
-def _dict_to_spec(d: dict) -> ConditionSpec:
-    return ConditionSpec(label=d["label"], clauses=tuple(clause_from_dict(c) for c in d["clauses"]),
-                          direction=d["direction"], horizons=tuple(d["horizons"]))
+# Delegates to the ONE serializer in novel_condition_tester -- these were
+# hand-rolled here and lost `within_days` for every registry entry once already.
+_spec_to_dict = spec_to_dict
+_dict_to_spec = spec_from_dict
 
 
 def record_test_result(spec: ConditionSpec, status: str, source: str) -> None:

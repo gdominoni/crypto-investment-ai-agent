@@ -321,6 +321,72 @@ def walk_forward(events: pd.DataFrame, ohlc_by_group: dict[str, pd.DataFrame], d
     return pd.DataFrame(oos_rows), pd.DataFrame(params_log)
 
 
+def basket_forward_returns(horizons, coins=None) -> dict:
+    """Equal-weight basket forward return per horizon, indexed by date --
+    the market term subtracted when a spec declares `outcome="market_relative"`.
+
+    Why this exists as shared data rather than a flag on each call: both the
+    treated events AND the unconditional/nested baseline have to be measured
+    against the same benchmark. Subtracting the market from one but not the
+    other compares two different quantities and reports the difference as an
+    effect.
+    """
+    from candidates.data_loading import load_daily
+    if coins is None:
+        coins = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "XRPUSDT", "DOGEUSDT", "ADAUSDT", "LTCUSDT"]
+    closes = {}
+    for c in coins:
+        try:
+            closes[c] = load_daily(c)["close"]
+        except Exception:
+            continue
+    if not closes:
+        return {}
+    idx = sorted(set().union(*[set(v.index) for v in closes.values()]))
+    frame = pd.DataFrame({c: v.reindex(idx) for c, v in closes.items()})
+    return {int(h): (frame.shift(-int(h)) / frame - 1.0).mean(axis=1) for h in horizons}
+
+
+def _market_adjust_array(values, ohlc: pd.DataFrame, start_loc: int, direction: str,
+                          horizon: int, basket: dict | None):
+    """Array form of `_market_adjust`, for the UNCONDITIONAL baseline.
+
+    This one is easy to forget and catastrophic to forget: if the treated
+    events are measured relative to the basket and the baseline is left raw,
+    the "excess return" is the market's own drift and every candidate looks
+    like a discovery. Treated and baseline must always be adjusted together.
+    """
+    if basket is None or len(values) == 0:
+        return values
+    mkt = basket.get(int(horizon))
+    if mkt is None:
+        return values
+    dates = ohlc.index[start_loc:start_loc + len(values)]
+    m = mkt.reindex(dates).to_numpy(dtype=float)
+    sign = 1.0 if direction == "long" else -1.0
+    out = values - sign * np.nan_to_num(m, nan=0.0)
+    return out[np.isfinite(out)]
+
+
+def _market_adjust(value: float, ohlc: pd.DataFrame, entry_loc: int, direction: str,
+                    horizon: int, basket: dict | None) -> float:
+    """Subtract the basket's own move over the same window, signed the same way
+    `_forward_return` signs its result. NaN basket (a date the basket doesn't
+    cover) leaves the raw value untouched rather than poisoning the event."""
+    if basket is None or value != value:
+        return value
+    mkt = basket.get(int(horizon))
+    if mkt is None:
+        return value
+    try:
+        m = mkt.get(ohlc.index[entry_loc], float("nan"))
+    except Exception:
+        return value
+    if m != m:
+        return value
+    return value - (1.0 if direction == "long" else -1.0) * float(m)
+
+
 def _forward_return(entry_loc: int, ohlc: pd.DataFrame, direction: str, horizon: int) -> float:
     """NaN (not a silently-clamped short hold) when the full horizon
     isn't available yet -- a real audit finding: this used to clamp
@@ -430,7 +496,8 @@ def _block_bootstrap_means(chunks: list[np.ndarray], n: int, n_bootstrap: int, b
 
 def pattern_significance(events: pd.DataFrame, ohlc_by_group: dict[str, pd.DataFrame], direction: str,
                           cfg: MethodologyConfig, min_train_periods: int = 3, n_bootstrap: int = 2000,
-                          seed: int = 0, baseline_events: pd.DataFrame | None = None) -> dict:
+                          seed: int = 0, baseline_events: pd.DataFrame | None = None,
+                          basket: dict | None = None) -> dict:
     """Answers a genuinely different question than classify_status does:
     not "is trading this condition with THIS TP/SL ladder profitable"
     (Sortino, win_rate -- both conditioned on the barrier structure), but
@@ -533,7 +600,9 @@ def pattern_significance(events: pd.DataFrame, ohlc_by_group: dict[str, pd.DataF
         # signed (never abs()) -- both properties are load-bearing and unchanged.
         best_h, best_score = cfg.horizons[0], -np.inf
         for h in cfg.horizons:
-            rets = [_forward_return(r.entry_loc, ohlc_by_group[r.group], direction, h) for r in train.itertuples()]
+            rets = [_market_adjust(_forward_return(r.entry_loc, ohlc_by_group[r.group], direction, h),
+                                    ohlc_by_group[r.group], r.entry_loc, direction, h, basket)
+                    for r in train.itertuples()]
             rets = np.array([x for x in rets if x == x])  # drop NaN (horizon not fully available)
             if len(rets) < 2:
                 continue
@@ -542,6 +611,8 @@ def pattern_significance(events: pd.DataFrame, ohlc_by_group: dict[str, pd.DataF
                 locs = train.loc[train["group"] == group, "entry_loc"]
                 chunk = _baseline_forward_returns(ohlc_by_group[group], direction, h,
                                                    int(locs.min()), int(locs.max()) + 1)
+                chunk = _market_adjust_array(chunk, ohlc_by_group[group], int(locs.min()),
+                                              direction, h, basket)
                 if len(chunk):
                     drift.append(chunk)
             baseline_mean = float(np.concatenate(drift).mean()) if drift else 0.0
@@ -555,7 +626,8 @@ def pattern_significance(events: pd.DataFrame, ohlc_by_group: dict[str, pd.DataF
         horizons_used.append(int(best_h))
         fold_mfe, fold_mae = [], []
         for r in test.itertuples():
-            fr = _forward_return(r.entry_loc, ohlc_by_group[r.group], direction, best_h)
+            fr = _market_adjust(_forward_return(r.entry_loc, ohlc_by_group[r.group], direction, best_h),
+                                 ohlc_by_group[r.group], r.entry_loc, direction, best_h, basket)
             if fr != fr:
                 continue
             oos_rows.append({"group": r.group, "period": test_period, "forward_return": fr})
@@ -575,6 +647,8 @@ def pattern_significance(events: pd.DataFrame, ohlc_by_group: dict[str, pd.DataF
             for group in test["group"].unique():
                 locs = test.loc[test["group"] == group, "entry_loc"]
                 chunk = _baseline_forward_returns(ohlc_by_group[group], direction, best_h, int(locs.min()), int(locs.max()) + 1)
+                chunk = _market_adjust_array(chunk, ohlc_by_group[group], int(locs.min()),
+                                              direction, best_h, basket)
                 if len(chunk):
                     baseline_chunks.append(chunk)
         else:
@@ -583,7 +657,8 @@ def pattern_significance(events: pd.DataFrame, ohlc_by_group: dict[str, pd.DataF
             # treatment-vs-control contrast rather than treatment-vs-(treatment+control).
             control = baseline_events[baseline_events["period"] == test_period]
             treated = set(zip(test["group"], test["entry_loc"]))
-            rets = [_forward_return(r.entry_loc, ohlc_by_group[r.group], direction, best_h)
+            rets = [_market_adjust(_forward_return(r.entry_loc, ohlc_by_group[r.group], direction, best_h),
+                                    ohlc_by_group[r.group], r.entry_loc, direction, best_h, basket)
                     for r in control.itertuples() if (r.group, r.entry_loc) not in treated]
             rets = np.array([x for x in rets if x == x])
             if len(rets):

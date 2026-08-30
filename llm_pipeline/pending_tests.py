@@ -35,7 +35,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from llm_pipeline.novel_condition_tester import ConditionSpec, clause_from_dict, clause_to_dict
+from llm_pipeline.novel_condition_tester import ConditionSpec, clause_from_dict, clause_to_dict, spec_from_dict
 
 from candidates.atomic_json import write_json
 
@@ -80,8 +80,7 @@ def push_pending_test(spec: ConditionSpec, coins: list[str], live_coin: str | No
 
 def _spec_from_entry(data: dict) -> ConditionSpec:
     s = data["spec"]
-    return ConditionSpec(label=s["label"], clauses=tuple(clause_from_dict(c) for c in s["clauses"]),
-                          direction=s["direction"], horizons=tuple(s["horizons"]))
+    return spec_from_dict(s)
 
 
 def pop_pending_test_by_id(pending_id: str) -> tuple[ConditionSpec, list[str], str | None, str] | None:

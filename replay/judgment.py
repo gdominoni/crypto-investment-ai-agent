@@ -45,7 +45,25 @@ Return ONLY a JSON object with exactly these fields:
 - "assessment": 1-2 sentences
 - "recommended_action": one of "no_action", "propose_novel_test"
 - "novel_condition_spec": null, or {{"label": "...", "clauses": [{{"indicator": "...", \
-"op": "<"/">"/"<="/">=", "threshold": <number>}}, ...], "direction": "long"/"short"}}
+"op": "<"/">"/"<="/">=", "threshold": <number>, "within_days": <integer 0-14, optional>}}, ...], \
+"direction": "long"/"short", "coins": <optional list>, "outcome": "raw"/"market_relative" (optional)}}
+
+CONDITIONS MAY BE SEQUENCED, not just simultaneous. Each clause takes an optional "within_days" \
+(0-14, default 0). 0 means "true on the day the condition fires"; K means "was true at any point in \
+the last K days". This is what expresses an ORDERING rather than a coincidence, and the two are \
+genuinely different hypotheses:
+  - crash FIRST, then the release:  shock_zscore >= 2 with within_days=3, AND today's condition
+  - release FIRST, then the move:   is_macro_day >= 1 with within_days=2, AND today's condition
+The lead-up table you are given exists precisely so you can tell these apart -- use it.
+
+IS THIS EVENT ABOUT ONE COIN OR THE WHOLE MARKET? The two need different settings:
+  - MARKET-WIDE (a CPI print, an FOMC decision): omit "coins", leave "outcome" as "raw". The whole \
+    market moving together IS the effect; measuring each coin against the market would subtract the \
+    very thing being tested.
+  - COIN-SPECIFIC (something affecting one asset and not its peers): set "coins" to just that coin, \
+    e.g. ["XRPUSDT"], and set "outcome" to "market_relative". About 54% of any coin's move is simply \
+    the market's move, so removing it isolates what is specific to this one.
+If unsure, omit both and the whole-market defaults apply.
 
 No prose, no markdown fences, just the JSON object."""
 

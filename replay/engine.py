@@ -39,7 +39,7 @@ from execution import hyperopt_runner
 from llm_pipeline.haiku_sonnet_pipeline import escape_html, format_spec_clauses, sonnet_prune_advice
 from llm_pipeline.novel_condition_tester import (
     ConditionSpec, clause_from_dict, clause_signal_hourly, clause_to_dict, condition_desc, format_pattern_significance,
-    spec_from_proposal,
+    spec_from_dict, spec_from_proposal,
     test_novel_condition,
 )
 from replay import judgment, state
@@ -410,7 +410,8 @@ def _check_n50_milestones(as_of: pd.Timestamp, status_summary: dict, client: Ant
         sh.mark_milestone_reported(candidate, n_reached, cleared)
 
 
-def _dynamic_trigger_hourly(spec: ConditionSpec, hourly: pd.DataFrame, daily: pd.DataFrame, funding) -> "pd.Series":
+def _dynamic_trigger_hourly(spec: ConditionSpec, hourly: pd.DataFrame, daily: pd.DataFrame, funding,
+                             symbol: str | None = None) -> "pd.Series":
     """Same AND-of-clauses logic as novel_condition_tester.test_novel_condition,
     but evaluated hour-by-hour for live detection (scale=24 reinterprets
     every day-defined indicator window in hours -- see
@@ -426,7 +427,7 @@ def _dynamic_trigger_hourly(spec: ConditionSpec, hourly: pd.DataFrame, daily: pd
     that accepted it and another in the scan that tracks it."""
     trigger = pd.Series(True, index=hourly.index)
     for clause in spec.clauses:
-        trigger &= clause_signal_hourly(clause, hourly, daily, funding)
+        trigger &= clause_signal_hourly(clause, hourly, daily, funding, symbol=symbol)
     return trigger
 
 
@@ -488,14 +489,13 @@ def _scan_mechanical_triggers(d: pd.Timestamp, hourly_full: dict, ohlc_full: dic
             if sh.is_dropped(label) or (label, coin) in open_pairs:
                 continue
             try:
-                spec = ConditionSpec(label=spec_dict["label"], clauses=tuple(clause_from_dict(c) for c in spec_dict["clauses"]),
-                                      direction=spec_dict["direction"], horizons=tuple(spec_dict["horizons"]))
+                spec = spec_from_dict(spec_dict)
             except ValueError:
                 # Recorded before a news/macro event clause became a NECESSARY
                 # condition -- skip rather than crash, see
                 # llm_pipeline/dynamic_candidates.py::registered_specs.
                 continue
-            trig = _dynamic_trigger_hourly(spec, hourly_to_date, ohlc_full[coin], funding).loc[day_start:day_end]
+            trig = _dynamic_trigger_hourly(spec, hourly_to_date, ohlc_full[coin], funding, symbol=coin).loc[day_start:day_end]
             if not trig.any():
                 continue
             execution = _open_live_test(label, coin, spec.direction, d)
@@ -675,7 +675,7 @@ def resolve_pending_test() -> str | None:
     _send("Received — this will be tested against the market.")
 
     s = pending["spec"]
-    spec = ConditionSpec(label=s["label"], clauses=tuple(clause_from_dict(c) for c in s["clauses"]), direction=s["direction"])
+    spec = spec_from_dict(s)
     as_of = pd.Timestamp(pending["as_of"])
     result = test_novel_condition(spec, pending["coins"], as_of=as_of)
     status = result["status"]

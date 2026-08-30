@@ -91,16 +91,29 @@ Return ONLY a JSON object with exactly these fields:
 - "recommended_action": one of "no_action", "propose_novel_test"
 - "novel_condition_spec": null, or {{"label": "...", "clauses": [{{"indicator": "...", \
   "op": "<"/">"/"<="/">=", "threshold": <number>, "within_days": <integer 0-14, optional>}}, ...], \
-  "direction": "long"/"short"}} \
+  "direction": "long"/"short", "coins": <optional list, see below>, \
+  "outcome": "raw"/"market_relative" (optional, default "raw", see below)}} \
   (one clause is fine for a simple condition; multiple clauses are ANDed together for a compound \
   one, e.g. an oversold technical reading combined with a macro surprise -- use as many as the \
   actual evidence supports, not for its own sake)
+
+IMPORTANT -- is this event about ONE coin, or about the whole market? The two need different \
+settings, and getting it wrong wastes the test:
+  - MARKET-WIDE (a CPI print, an FOMC decision, a broad risk-off move): omit "coins", and leave \
+    "outcome" as "raw". The whole market moving together IS the effect here; measuring each coin \
+    against the market would subtract the very thing being tested and guarantee a null result.
+  - COIN-SPECIFIC (a lawsuit against one issuer, an exchange listing or delisting, a protocol \
+    incident): set "coins" to just the affected coin(s), e.g. ["XRPUSDT"], and set "outcome" to \
+    "market_relative". Testing an XRP-specific claim on DOGE adds noise rather than evidence, and \
+    measuring the coin against the market isolates what is specific to it -- roughly 54% of any \
+    coin's move is simply the market's move, so removing it removes mostly noise.
+Only name coins in "coins" if the event genuinely is specific to them. If you are unsure, omit it.
 
 IMPORTANT -- conditions may be SEQUENCED, not just simultaneous. Each clause takes an optional \
 "within_days" (integer, 0-14, default 0). 0 means "true on the day the condition fires"; K means \
 "was true at any point in the last K days". This is what lets you express an ORDERING rather than a \
 coincidence, and the two are genuinely different hypotheses:
-  - crash FIRST, then the news:  shock_zscore >= 3 with within_days=3, AND today's condition
+  - crash FIRST, then the news:  shock_zscore >= 2 with within_days=3, AND today's condition
   - news FIRST, then the move:   is_macro_day >= 1 with within_days=2, AND today's condition
   - both on the same day:        leave within_days at 0 on both
 You are shown a day-by-day LEAD-UP table (the last several days of key indicators, oldest first) \
@@ -412,8 +425,7 @@ def run_shock_scan(coins: list[str] | None = None) -> None:
             reply_markup = None
             if assessment["recommended_action"] == "propose_novel_test" and assessment.get("novel_condition_spec"):
                 s = assessment["novel_condition_spec"]
-                spec = ConditionSpec(label=s["label"], clauses=tuple(clause_from_dict(c) for c in s["clauses"]),
-                                      direction=s["direction"])
+                spec = spec_from_dict(s)
                 pending_id = push_pending_test(spec, scan_coins, live_coin=shock["symbol"], signal_class="shock_reactive")
                 reply_markup = PROPOSAL_KEYBOARD_TEMPLATE(pending_id)
             if assessment["recommended_action"] != "propose_novel_test":
@@ -501,8 +513,7 @@ def run_once() -> None:
             reply_markup = None
             if assessment["recommended_action"] == "propose_novel_test" and assessment.get("novel_condition_spec"):
                 s = assessment["novel_condition_spec"]
-                spec = ConditionSpec(label=s["label"], clauses=tuple(clause_from_dict(c) for c in s["clauses"]),
-                                      direction=s["direction"])
+                spec = spec_from_dict(s)
                 pending_id = push_pending_test(spec, SHOCK_SCAN_COINS, live_coin=_asset_to_coin(item.get("asset", "")), signal_class="manual")
                 reply_markup = PROPOSAL_KEYBOARD_TEMPLATE(pending_id)
             if assessment["recommended_action"] != "propose_novel_test":
