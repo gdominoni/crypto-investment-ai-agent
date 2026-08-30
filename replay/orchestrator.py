@@ -40,8 +40,27 @@ def run_to_completion(max_chunks: int = 200, ask_every: int = 4) -> dict:
         chunk_count += 1
         print(f"[{chunk_count}] {result}")
 
+        # A systemic API failure (out of credit, rejected key, unreachable API)
+        # already checkpointed a clean resume point and alerted on Telegram.
+        # Stop here rather than spending the remaining chunks retrying a call
+        # that cannot succeed -- and, more importantly, rather than falling
+        # through to the check-in question below, whose own failure was not
+        # caught and would end the run in a traceback instead of a resume point.
+        if result.get("stopped") == "api_failure":
+            print(f"Replay halted: {result.get('reason')}. "
+                  f"Resume from {result.get('current_date')} with `replay continue`.")
+            return {"chunks": chunk_count, "reached_end": False,
+                    "halted": result.get("reason"), "resume_from": result.get("current_date")}
+
         if result.get("stopped") == "waiting_for_human":
-            status = resolve_pending_test()
+            try:
+                status = resolve_pending_test()
+            except Exception as e:
+                from replay.engine import _is_systemic_api_failure
+                if _is_systemic_api_failure(e):
+                    print(f"Replay halted while resolving a pending test: {e}")
+                    return {"chunks": chunk_count, "reached_end": False, "halted": str(e)}
+                raise
             print(f"    auto-resolved pending test: {status}")
             continue
 
@@ -52,9 +71,17 @@ def run_to_completion(max_chunks: int = 200, ask_every: int = 4) -> dict:
         if chunk_count % ask_every == 0:
             question = CHECKIN_QUESTIONS[question_idx % len(CHECKIN_QUESTIONS)]
             question_idx += 1
-            reply = answer_market_question(question, client)
-            _send(f"<i>{escape_html(question)}</i>\n\n{reply}")
-            print(f"    asked: {question}")
+            # Cosmetic: this exists so the Telegram history reads like an
+            # attended system. It must never be the thing that ends a run whose
+            # actual work is succeeding -- and if the API is genuinely gone, the
+            # replay's own halt path handles it on the next chunk with a proper
+            # resume point.
+            try:
+                reply = answer_market_question(question, client)
+                _send(f"<i>{escape_html(question)}</i>\n\n{reply}")
+                print(f"    asked: {question}")
+            except Exception as e:
+                print(f"    check-in question failed, continuing anyway: {e}")
 
     print(f"Stopped after reaching the {max_chunks}-chunk safety cap.")
     return {"chunks": chunk_count, "reached_end": False}

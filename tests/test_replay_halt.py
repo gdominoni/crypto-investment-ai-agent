@@ -64,3 +64,41 @@ class TestHaltCheckpoint:
         body = sent[0]
         assert "out of credit" in body and "2021-06-14" in body
         assert "replay continue" in body, "must say how to resume"
+
+
+class TestOrchestratorSurvivesTheEndOfTheBudget:
+    """The unattended driver must end a run out of credit with a resume point,
+    not a traceback."""
+
+    def test_it_stops_on_api_failure_instead_of_burning_the_remaining_chunks(self, monkeypatch):
+        import replay.orchestrator as O
+        calls = {"advance": 0}
+
+        def fake_advance():
+            calls["advance"] += 1
+            return {"stopped": "api_failure", "reason": "the Anthropic account is out of credit",
+                    "current_date": "2023-04-11"}
+        monkeypatch.setattr(O, "advance", fake_advance)
+        monkeypatch.setattr(O, "Anthropic", lambda **kw: object())
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
+        out = O.run_to_completion(max_chunks=200)
+        assert calls["advance"] == 1, "must stop immediately, not retry 200 times"
+        assert out["resume_from"] == "2023-04-11"
+        assert out["reached_end"] is False
+
+    def test_a_failing_checkin_question_does_not_end_a_working_run(self, monkeypatch):
+        """The check-in is cosmetic. Its failure used to be uncaught and would
+        have ended a run whose real work was succeeding."""
+        import replay.orchestrator as O
+        seen = {"n": 0}
+
+        def fake_advance():
+            seen["n"] += 1
+            return {"reached_end": seen["n"] >= 6}
+        monkeypatch.setattr(O, "advance", fake_advance)
+        monkeypatch.setattr(O, "Anthropic", lambda **kw: object())
+        monkeypatch.setattr(O, "answer_market_question",
+                            lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
+        out = O.run_to_completion(max_chunks=20, ask_every=2)
+        assert out["reached_end"] is True, "a cosmetic failure must not stop the replay"
