@@ -138,12 +138,13 @@ Do this **after** item 1, not before -- otherwise it gets paid for twice.
 
 ## 3. Smaller, known, and deliberately left
 
-- **`daily_range_pct` ignores `scale` entirely.** Harmless now that it's
-  in `DAILY_NATIVE_INDICATORS` (so the live scan computes it on the daily
-  frame), but the lambda's signature still implies a scaling it doesn't do.
-- **`TRIGGER_NUMERIC_DEFINITIONS` is hand-synced** to `compute_triggers()`.
-  A duplicated number is a number that can drift; deriving it from the
-  source would remove the hazard.
+- ~~**`daily_range_pct` ignores `scale` entirely.**~~ DONE 2026-08-30 --
+  documented as a deliberate no-op alongside `shock_zscore`'s, including
+  what would break if it were removed from `DAILY_NATIVE_INDICATORS`.
+- ~~**`TRIGGER_NUMERIC_DEFINITIONS` is hand-synced**~~ DONE 2026-08-30 --
+  the four thresholds are named once in `definitions.py` and the
+  human-facing description is built from them, with tests guarding both
+  directions.
 - **Freqtrade-era trade-database queries.** Mostly resolved: `telegram/
   kpi_queries.py` and the `/results` command that opened it were deleted
   (they could only ever answer "no trades"), and
