@@ -2,6 +2,14 @@
 
 ![Python](https://img.shields.io/badge/Python-3.11+-blue) ![Claude](https://img.shields.io/badge/Claude-Haiku%20%2B%20Sonnet-6B4FBB) ![Telegram](https://img.shields.io/badge/Telegram-human--in--the--loop-26A5E4) ![Freqtrade](https://img.shields.io/badge/Freqtrade-hyperopt%20cross--check-orange) ![Status](https://img.shields.io/badge/Status-Case%20Study-blue)
 
+## TL;DR / Key Engineering Highlights
+
+**Architecture:** Autonomous, 2-tier LLM Agent (Claude Haiku for routing → Claude Sonnet for reasoning) integrated with a Telegram bot interface & human-in-the-loop gating.
+
+**Statistical Rigor:** Block-bootstrap significance testing, Benjamini–Hochberg FDR control, and walk-forward validation with strict causality-lag controls.
+
+**Production & DevOps:** Python 3.11+, crash-safe atomic JSON state (fsync + atomic replace), synchronous single-process Telegram daemon, and a zero-funded-position observational engine running via a single daemon scheduler.
+
 ## What This Project Tests
 
 Whether an LLM-driven architecture — reading real market news and recognizing specific, recurring market conditions as they happen — can identify genuine, statistically real patterns in crypto prices. Not a paper-trading guess: every candidate pattern is tested directly against that coin's own historical baseline with a real significance test, and once identified, tracked through real, dated occurrences going forward. In plain terms: after a specific kind of announcement (say, a Federal Reserve rate decision), under a specific kind of market condition (say, Bitcoin's price swinging unusually wide that day and closing lower) — is there a clear, repeatable, *statistically significant* reaction in that coin's price over the following days, one an AI system could actually recognize and track as it happens?
