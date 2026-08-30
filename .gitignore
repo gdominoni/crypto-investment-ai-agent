@@ -1,3 +1,10 @@
+# The virtual environment HOW_TO_RUN Step 2 tells every reader to create.
+# Without this line, a `git add -A` after following the instructions commits
+# a few hundred MB of installed libraries.
+.venv/
+venv/
+env/
+
 __pycache__/
 *.pyc
 .env
