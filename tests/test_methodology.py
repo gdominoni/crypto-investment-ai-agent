@@ -157,17 +157,31 @@ class TestClassifyStatus:
     # must point the SAME way as the direction the candidate trades.
     sig_pattern = {"status": "ok", "significant": True, "mfe_mae_ratio": 2.0, "excess_return": 0.03}
 
-    def test_between_10_and_min_report_events_is_rejected_not_insufficient(self):
-        rep = {**self.ok_rep, "n": 15}
-        assert classify_status(rep, {"concentrated": False}, {"concentrated": False}, self.sig_pattern, self.cfg) == "rejected"
+    def test_below_the_gate_is_insufficient_data_never_rejected(self):
+        """Contract changed 2026-08-30. Anything at or below `min_report_events`
+        is "we could not tell", not "we tested it and there was nothing" --
+        `rejected` asserts an absence of effect that the data cannot support at
+        that sample size, and it would also put the row back into the FDR family."""
+        for n in (11, 15, 20):
+            rep = {**self.ok_rep, "n": n}
+            assert classify_status(rep, {"concentrated": False}, {"concentrated": False},
+                                   self.sig_pattern, self.cfg) == "insufficient_data"
 
     def test_under_10_events_is_insufficient_data(self):
         rep = {**self.ok_rep, "n": 5}
         assert classify_status(rep, {"concentrated": False}, {"concentrated": False}, self.sig_pattern, self.cfg) == "insufficient_data"
 
-    def test_n_at_exactly_the_threshold_is_rejected_not_accepted(self):
-        rep = {**self.ok_rep, "n": 50}
-        assert classify_status(rep, {"concentrated": False}, {"concentrated": False}, self.sig_pattern, self.cfg) == "rejected"
+    def test_n_at_exactly_the_threshold_is_not_accepted(self):
+        """Boundary: the gate is `<=`, so n exactly AT the threshold fails it.
+        Reads the threshold from the config rather than hardcoding it -- this
+        test previously asserted a literal 50 and broke when the measured
+        evidence moved the gate, obscuring a real regression in the same run."""
+        rep = {**self.ok_rep, "n": self.cfg.min_report_events}
+        assert classify_status(rep, {"concentrated": False}, {"concentrated": False},
+                               self.sig_pattern, self.cfg) == "insufficient_data"
+        rep_above = {**self.ok_rep, "n": self.cfg.min_report_events + 1}
+        assert classify_status(rep_above, {"concentrated": False}, {"concentrated": False},
+                               self.sig_pattern, self.cfg) == "accepted"
 
     def test_nan_sortino_in_rep_is_rejected_regardless_of_pattern(self):
         rep = {**self.ok_rep, "sortino": float("nan")}
@@ -412,3 +426,34 @@ class TestAtomicStateWrites:
         p.write_text('{"truncated": ')
         with pytest.raises(ValueError):
             read_json(p, {})
+
+
+class TestPerCandidatePower:
+    """`required_n_for_power` and the FDR family's independence from status labels."""
+
+    def test_required_n_scales_with_the_candidate_s_own_volatility(self):
+        from candidates.methodology import required_n_for_power
+        quiet, loud = required_n_for_power(0.06), required_n_for_power(0.30)
+        assert quiet < loud
+        # 5x the volatility is 25x the sample, not 5x -- the quadratic matters,
+        # and is the reason a flat threshold is wrong in both directions.
+        assert 20 < loud / quiet < 30
+
+    def test_degenerate_inputs_return_nan_not_a_number_someone_will_act_on(self):
+        import math
+        from candidates.methodology import required_n_for_power
+        assert math.isnan(required_n_for_power(float("nan")))
+        assert math.isnan(required_n_for_power(0.0))
+        assert math.isnan(required_n_for_power(0.13, effect=0.0))
+
+    def test_fdr_family_ignores_the_status_label(self):
+        """The family must be defined by sample size, not by verdict. If a row
+        with adequate n were dropped from the family because something relabelled
+        it, `m` would shrink and survivors would pass BH too easily."""
+        from candidates.methodology import apply_fdr_demotion
+        base = [{"candidate": f"c{i}", "pattern_p_value": 0.40, "status": "rejected", "n": 200}
+                for i in range(40)]
+        hit = {"candidate": "hit", "pattern_p_value": 0.004, "status": "accepted", "n": 200}
+        as_rejected = apply_fdr_demotion([dict(r) for r in base] + [dict(hit)])
+        relabelled = apply_fdr_demotion([{**r, "status": "insufficient_data"} for r in base] + [dict(hit)])
+        assert as_rejected[-1]["fdr_significant"] == relabelled[-1]["fdr_significant"]

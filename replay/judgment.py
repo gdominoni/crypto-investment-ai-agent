@@ -21,6 +21,7 @@ from llm_pipeline.novel_condition_tester import SUPPORTED_INDICATORS, build_indi
 from replay import state
 from replay import status_history as sh
 from replay.time_sandbox import daily_as_of
+from llm_pipeline import usage as _usage
 
 REPLAY_SYSTEM_PROMPT = f"""You are a market strategist for a crypto trading system, in a historical replay: \
 you are being asked to make the same real-time judgment call the live system would have made on a specific \
@@ -159,6 +160,7 @@ def judge_event(event_description: str, client: Anthropic, as_of: pd.Timestamp |
         model=SONNET_MODEL, max_tokens=2000, temperature=0, system=REPLAY_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_content}],
     )
+    _usage.record(response, "replay.shock" if coin else "replay.macro", SONNET_MODEL)
     return json.loads(_strip_fences(extract_text(response)))
 
 
@@ -314,6 +316,7 @@ def answer_market_question(question: str, client: Anthropic) -> str:
         model=SONNET_MODEL, max_tokens=2000, temperature=0, system=MARKET_CHECK_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": f"USER QUESTION: {question}\n\nSTATE:\n{snapshot}\n\n{context}"}],
     )
+    _usage.record(response, "replay.market_check", SONNET_MODEL)
     return escape_html(extract_text(response))
 
 

@@ -49,7 +49,7 @@ from replay.time_sandbox import latest_release_with_prior, release_dates
 from telegram.bot import _send
 
 CHUNK_DAYS = 30
-SHOCK_ZSCORE_THRESHOLD = 3.0
+SHOCK_ZSCORE_THRESHOLD = 2.0
 
 
 def _normalize_coin(coin: str) -> str | None:

@@ -28,7 +28,7 @@ from candidates.methodology import (
     shock_zscore_series, walk_forward,
 )
 
-SHOCK_ZSCORE_THRESHOLD = 3.0  # matches run_battery.py / shock_detector.py -- one consistent definition of "shock" everywhere
+SHOCK_ZSCORE_THRESHOLD = 2.0  # matches run_battery.py / shock_detector.py -- one consistent definition of "shock" everywhere
 
 
 def _rsi(df: pd.DataFrame, funding: pd.Series | None, scale: int = 1, window: int = 14) -> pd.Series:

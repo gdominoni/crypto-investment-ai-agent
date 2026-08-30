@@ -2,7 +2,7 @@
 project's README: free-text conversation (routed to Sonnet, but every
 number it cites still comes from a real computation, never invented) and
 structured commands / inline keyboards (routed straight to
-`kpi_queries.py`, no LLM involved at all).
+no LLM involved at all).
 """
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ from llm_pipeline.dynamic_candidates import record_test_result, registered_specs
 from llm_pipeline.haiku_sonnet_pipeline import escape_html, extract_text, format_spec_clauses
 from llm_pipeline.novel_condition_tester import ConditionSpec, condition_desc, format_pattern_significance, test_novel_condition
 from llm_pipeline.pending_tests import discard_pending_test_by_id, pop_pending_test_by_id
-from telegram.kpi_queries import format_kpi_table, kpi_table
+from llm_pipeline import usage as _usage
 
 SONNET_MODEL = "claude-sonnet-5"
 FREQTRADE_DB_PATH = os.environ.get("FREQTRADE_DB_PATH", "execution/tradesv3.sqlite")
@@ -40,15 +40,6 @@ project's internal vocabulary (status codes like "insufficient_data", "watch"; t
 vs. "accepted") -- briefly explain any such term you use in plain language rather than stating it bare, \
 the way you'd explain a piece of jargon to someone unfamiliar with the system. If nothing in the given \
 state answers the question, say so plainly rather than guessing."""
-
-KPI_KEYBOARD = {
-    "inline_keyboard": [
-        [{"text": "By Coin", "callback_data": "kpi:coin"}, {"text": "By Signal", "callback_data": "kpi:signal"}],
-        [{"text": "By Decision Type", "callback_data": "kpi:signal_class"}],
-        [{"text": "Overall", "callback_data": "kpi:overall"}],
-    ]
-}
-
 
 SENT_LOG_PATH = Path(__file__).resolve().parent / "sent_messages.json"
 
@@ -84,7 +75,7 @@ def _chunk_message(text: str, limit: int = _SAFE_CHUNK_LENGTH) -> list[str]:
     Prefers paragraph ("\\n\\n") boundaries, then line boundaries, so an
     HTML tag opened on one line is never split across two Telegram
     messages -- every multi-line tagged block in this project's own
-    messages (e.g. kpi_queries.py's `<pre>...</pre>` table) stays well
+    messages (e.g. a `<pre>...</pre>` table) stays well
     under the limit on its own. A single oversized line (no real
     precedent yet, but not impossible -- e.g. a very large
     'no historical occurrences yet' name list) falls back to a raw
@@ -245,8 +236,9 @@ def delete_recent_messages() -> dict:
 
 def handle_natural_language(text: str, client: Anthropic) -> str:
     """Market checks ("how's the market", "do we have open trades") and
-    conversational follow-ups -- never the KPI path, which is command-
-    driven and LLM-free by design (see `handle_command`). Escaped, not
+    conversational follow-ups -- never the reporting path, which is
+    command-driven and LLM-free by design (`/summary`, `/details`, and
+    their replay twins compute every number they show). Escaped, not
     bolded: this is free-form Sonnet prose with no template around it, so
     only HTML-safety is applied, not formatting Sonnet didn't ask for."""
     snapshot = build_technical_snapshot("MARKET", FREQTRADE_DB_PATH)
@@ -261,23 +253,22 @@ def handle_natural_language(text: str, client: Anthropic) -> str:
         model=SONNET_MODEL, max_tokens=2000, temperature=0, system=MARKET_CHECK_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": f"USER QUESTION: {text}\n\nSTATE:\n{snapshot}\n\n{live_tests}\n\n{context}"}],
     )
+    _usage.record(response, "prod.market_check", SONNET_MODEL)
     return escape_html(extract_text(response))
 
 
 def handle_command(command: str, args: list[str]) -> tuple[str, dict | None]:
-    if command == "/results":
-        return "What breakdown would you like?", KPI_KEYBOARD
-    return f"Unknown command: {command}", None
+    """Fallback for a slash command none of the specific handlers above
+    claimed. Every real command is special-cased before this point; this
+    only tells a human they mistyped one.
 
-
-def handle_kpi_callback(callback_data: str) -> str:
-    _, group = callback_data.split(":")
-    group_by = None if group == "overall" else group
-    df = kpi_table(FREQTRADE_DB_PATH, group_by=group_by)
-    title = f"Results by {group}:" if group_by else "Results (all-time, overall):"
-    table = format_kpi_table(df, title)
-    title_line, _, rest = table.partition("\n")
-    return f"<b>{escape_html(title_line)}</b>\n<pre>{escape_html(rest)}</pre>"  # <pre> preserves the table's column alignment
+    `/results` used to live here, opening a keyboard that queried a
+    Freqtrade trade database. Under the current no-funded-position model
+    no order is ever placed, so that database never receives an entry and
+    the command could only ever answer "no trades" -- removed rather than
+    left as a button that looks like reporting and isn't. `/summary` and
+    `/replay_summary` are the real reporting commands."""
+    return f"Unknown command: {command} -- send /help for the full list.", None
 
 
 def handle_prune_callback(callback_data: str) -> str:
@@ -508,7 +499,15 @@ def _dispatch_update(update: dict, client: Anthropic) -> None:
         elif data.startswith("propose:"):
             reply = handle_propose_callback(data)
         else:
-            reply = handle_kpi_callback(data)
+            # Every button this bot sends carries one of the four prefixes
+            # above. Anything else is a stale button from an older message
+            # format, or malformed data -- answer it plainly instead of
+            # parsing it. The previous fallback here unpacked `data` on ":"
+            # into exactly two parts, so an unrecognised callback raised
+            # ValueError BEFORE _answer_callback_query() below, leaving
+            # Telegram's loading spinner turning on the user's button with
+            # no reply and no visible error.
+            reply = "That button is from an older message and no longer does anything."
         if reply:
             # handle_replay_propose_callback's underlying functions
             # (resolve_pending_test/discard_pending_test) already send
@@ -638,11 +637,11 @@ def _dispatch_update(update: dict, client: Anthropic) -> None:
             "",
             "/summary -- current status of every tracked trigger (production): accepted, watch, rejected, insufficient data. Recomputed fresh, no LLM call.",
             "/details &lt;trigger_name&gt; -- full numeric breakdown for one trigger from /summary: the exact threshold that defines it (e.g. \"funding z-score below -2.0\", not just \"elevated funding\"), N, p-value, concentration percentages, risk-path ratio, and why it isn't accepted if it isn't. Example: /details c2_long. No LLM call.",
-            "/results -- KPI reporting from the real trade database (By Coin / By Signal / By Decision Type / Overall). Buttons, no LLM.",
             "/replay_summary -- same as /summary, for the historical replay (a walk-forward simulation through real past data, used to validate the system and build an initial live-test track record before going live).",
             "/replay_details &lt;trigger_name&gt; -- same as /details, for the historical replay.",
             "/replay_status -- quick snapshot of the replay's simulated date, accepted candidates, live-test count.",
             "\"replay continue\" -- advances the historical replay.",
+            "/usage -- real recorded Anthropic token usage and cost so far, by call site. Measured, never estimated. No LLM call.",
             "",
             "Anything else you type is answered in plain language (Sonnet), grounded only in the real numbers above -- ask about the market, a specific candidate, recent results, anything.",
             "",
@@ -667,6 +666,11 @@ def _dispatch_update(update: dict, client: Anthropic) -> None:
             "Writes execution/hyperopt_results.json -- copy or push that one file to wherever this bot runs when you're done; nothing else needs to move.",
         ]
         _send("\n".join(lines), pin=True)
+        return
+
+    if text.lower().startswith("/usage"):
+        # Real recorded token counts, never an estimate -- see llm_pipeline/usage.py
+        _send(f"<b>Anthropic usage so far</b>\n\n<pre>{escape_html(_usage.summary())}</pre>")
         return
 
     if text.startswith("/"):

@@ -79,12 +79,15 @@ Do this **after** item 1, not before -- otherwise it gets paid for twice.
 - **`TRIGGER_NUMERIC_DEFINITIONS` is hand-synced** to `compute_triggers()`.
   A duplicated number is a number that can drift; deriving it from the
   source would remove the hazard.
-- **Superseded Freqtrade-era modules** (`execution/signal_store.py`,
-  `telegram/kpi_queries.py`, `context_builder.build_technical_snapshot`)
-  still query a trade database that never receives an entry under the
-  no-funded-position model. Kept, not deleted, because the hyperopt
-  cross-check reuses the underlying TP/SL machinery -- but the dead
-  query paths could go.
+- **Freqtrade-era trade-database queries.** Mostly resolved: `telegram/
+  kpi_queries.py` and the `/results` command that opened it were deleted
+  (they could only ever answer "no trades"), and
+  `context_builder.build_technical_snapshot` no longer tells Sonnet the
+  missing database is a setup problem. What remains is its open-position
+  SQL, which is unreachable while no order is ever placed -- harmless,
+  but it is the last piece of the old model still in the LLM's context
+  path. `execution/signal_store.py` is NOT in this category: despite the
+  name, `load_battery_state()` is live and imported by `context_builder`.
 - **The horizon search is itself a multiple comparison** (5 horizons per
   fold). Currently handled correctly by selecting on train and evaluating
   out-of-sample, which is the right discipline -- noted here only so a

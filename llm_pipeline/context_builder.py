@@ -110,7 +110,19 @@ def build_technical_snapshot(asset: str, freqtrade_db_path: str | Path) -> str:
     even with real positions open."""
     db_path = Path(freqtrade_db_path)
     if not db_path.exists():
-        return f"Asset: {asset}. No Freqtrade database found at {db_path} -- treat as no open positions, but flag this as a setup issue, not a genuine flat-market read."
+        # This is the NORMAL, permanent state of this project, not a
+        # misconfiguration: no funded position is ever opened, so
+        # Freqtrade never places an order and never creates this
+        # database. The message used to say "flag this as a setup
+        # issue", which told Sonnet to warn the human their install was
+        # broken every single time they asked a free-text market
+        # question. Open live tests are real and are passed to Sonnet
+        # separately (execution/live_test_state.py); they are what
+        # "anything open right now" actually means here.
+        return (f"Asset: {asset}. No funded positions exist -- by design, this project never "
+                f"places a real order, so there is no trade database. This is expected, NOT a "
+                f"setup problem: do not describe it as one. Open observational live tests, if "
+                f"any, are listed separately below.")
 
     broad = not asset or asset.upper() == "MARKET"
     conn = sqlite3.connect(str(db_path))

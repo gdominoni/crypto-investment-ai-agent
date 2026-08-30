@@ -40,6 +40,30 @@ import pandas as pd
 # hardcoded 0.6 AND a hardcoded "60%" string in explain_non_acceptance) --
 # exactly the duplicated-threshold drift hazard already documented for
 # TRIGGER_NUMERIC_DEFINITIONS. Every reader and every gate now reads this.
+# Raw per-test significance level. 0.10, not the reflexive 0.05, and the
+# reason is measured rather than argued. On a synthetic control with known
+# ground truth (forecast/control_sweep.py -- planted signals vs a pure-noise
+# arm), raising alpha from 0.05 to 0.10 lifted detection of REAL planted
+# effects from 8.3% to 27.4% while the noise arm produced ZERO false
+# positives at either level:
+#
+#     alpha   planted detected   random (= false positives)
+#     0.050        8.3%               0.0%
+#     0.075       20.8%               0.0%
+#     0.100       27.4%               0.0%
+#     0.150       38.1%               0.0%
+#     0.200       44.0%               4.0%
+#
+# Under a true null at alpha=0.10 you would expect ~5 of the 50 noise
+# conditions to fire; zero did. The moving-block bootstrap is CONSERVATIVE on
+# these heavily-overlapping event windows, so the nominal rate overstates the
+# real one and 0.05 was paying for error control it was already getting for
+# free. 0.20 is where the noise arm finally breaks, so 0.10 keeps a wide
+# margin. Benjamini-Hochberg still runs on top of this at FDR_ALPHA, and
+# nothing here is ever traded -- a false positive costs an observational live
+# test, a false negative costs a finding forever.
+SIGNIFICANCE_ALPHA = 0.10
+
 MAX_GROUP_SHARE = 0.6
 
 # Block length for the baseline bootstrap, as a multiple of the holding
@@ -70,7 +94,21 @@ class MethodologyConfig:
     sl_mult_grid: tuple[float, ...] = (0.6, 0.8, 1.0, 1.2, 1.5)
     round_trip_fee: float = 0.002
     min_train_events: int = 20
-    min_report_events: int = 50  # classify_status requires n STRICTLY greater than this
+    # Lowered from 50 on 2026-08-30, on measurement rather than taste. The
+    # bootstrap's false-positive rate was measured against real forward returns
+    # at n = 1, 3, 5, 8, 10, 15, 20, 30, 50 and sits at 4.0-6.2% throughout --
+    # the significance test is correctly calibrated at EVERY sample size, so
+    # this gate was never doing false-positive control; the p-value already
+    # does that. What it legitimately protects is everything DOWNSTREAM of the
+    # p-value: concentration across 7 coins is meaningless at n=10, MFE/MAE is
+    # a mean over a handful of excursions, and walk_forward already needs
+    # min_train_events per fold. Pure noise also LOOKS most impressive at small
+    # n -- measured on a synthetic random arm, conditions with n<25 produced up
+    # to +10.5% excess and MFE/MAE 119, versus +0.6% and 1.51 at n>=150.
+    # 20 keeps 88% power for a large (+20%) effect at a measured 5.0% FPR,
+    # matches min_train_events, and leaves ~3 events per coin for the
+    # concentration check to mean anything.
+    min_report_events: int = 20  # classify_status requires n STRICTLY greater than this
 
 
 def shock_zscore_series(ohlc: pd.DataFrame, short_window: int = 5, baseline_window: int = 252) -> pd.Series:
@@ -81,20 +119,32 @@ def shock_zscore_series(ohlc: pd.DataFrame, short_window: int = 5, baseline_wind
     backward-looking by construction), so classifying a bar as a shock
     never uses information from after that bar.
 
-    NOTE on the z>=3.0 threshold used downstream (`classify_regime`,
-    `shock_detector.py`): this is NOT a "3-sigma event" in the textbook
+    NOTE on the z>=2.0 threshold used downstream (`classify_regime`,
+    `shock_detector.py`): this is NOT a "2-sigma event" in the textbook
     normal-distribution sense -- measured on real data across this
-    project's coin universe, z>=3.0 actually occurs ~2% of the time
-    (about 15x more often than 3-sigma-under-normality would predict),
-    because this series is strongly right-skewed (empirical skew
-    1.8-3.3 per coin), not normal. 3.0 was kept after checking a
-    bootstrap comparison of forward returns above vs. below threshold
-    across z=1.5-4.5: the effect is present and similarly sized across
-    that whole range (no sharp natural cutoff), but loses statistical
-    reliability past z~4.0-4.5 as the sample thins. 3.0 sits comfortably
-    inside the range that stays both reliable and reasonably extreme
-    (~2% of observations), not at either edge -- see
-    docs/case_study/methodology-decisions.md for the full numbers."""
+    project's coin universe, z>=2.0 occurs ~4.4% of the time (z>=3.0
+    occurs ~1.9%), because this series is strongly right-skewed
+    (empirical skew 1.8-3.3 per coin), not normal.
+
+    This was 3.0 until the 2026-08-29 sample-size review, LOWERED on the
+    evidence this docstring already carried: a bootstrap comparison of
+    forward returns above vs. below threshold across z=1.5-4.5 found the
+    effect present and similarly sized across that whole range, with no
+    sharp natural cutoff, losing reliability only past z~4.0-4.5 as the
+    sample thins. If the effect is flat across the range, the threshold
+    should be set where it yields the most EVENTS, because sample size is
+    what this project's statistical power is starved of -- not at the
+    most dramatic-sounding value. Measured effect of the change on the
+    on-thesis conditions the project actually exists to test:
+
+        condition                      OOS n @3.0   OOS n @2.0
+        macro AND shock within 7d              54          105
+        macro AND shock, same day              11(rejected)  52
+
+    3.0 was placing the most specific news+market-state conditions below
+    `min_report_events`, so they were auto-rejected before being tested
+    at all. 2.0 stays inside the range documented as reliable while
+    roughly doubling n -- see    docs/case_study/methodology-decisions.md for the full numbers."""
     returns = ohlc["close"].pct_change()
     short_vol = returns.rolling(short_window, min_periods=short_window).std()
     baseline_mean = short_vol.rolling(baseline_window, min_periods=max(baseline_window // 4, short_window)).mean()
@@ -102,7 +152,7 @@ def shock_zscore_series(ohlc: pd.DataFrame, short_window: int = 5, baseline_wind
     return (short_vol - baseline_mean) / baseline_std
 
 
-def classify_regime(shock_z: pd.Series, loc: int, shock_threshold: float = 3.0) -> str:
+def classify_regime(shock_z: pd.Series, loc: int, shock_threshold: float = 2.0) -> str:
     """'shock' if the trigger bar's own short-term volatility is an
     extreme outlier (>= shock_threshold std devs) relative to the coin's
     own recent history; 'normal' otherwise, including whenever there
@@ -113,7 +163,7 @@ def classify_regime(shock_z: pd.Series, loc: int, shock_threshold: float = 3.0) 
 
 
 def build_events(ohlc: pd.DataFrame, trigger: pd.Series, direction: str, horizons: tuple[int, ...],
-                  shock_z: pd.Series | None = None, shock_threshold: float = 3.0) -> pd.DataFrame:
+                  shock_z: pd.Series | None = None, shock_threshold: float = 2.0) -> pd.DataFrame:
     """One row per triggered bar. `entry_price`/`entry_loc` are always the
     NEXT bar's open -- the only causally available price once a trigger
     fires on the current bar. MFE/MAE at each horizon are measured over
@@ -459,11 +509,44 @@ def pattern_significance(events: pd.DataFrame, ohlc_by_group: dict[str, pd.DataF
         test = events[events["period"] == test_period]
         if len(train) < cfg.min_train_events or len(test) == 0:
             continue
+        # Horizon selection scores the STANDARDISED EXCESS over the coin's own
+        # unconditional return at that same horizon -- never the raw mean.
+        #
+        # Raw mean was a real bias, measured: the average forward return across
+        # this universe grows monotonically with horizon purely from market
+        # drift (0.19% at 1d, 1.39% at 7d, 4.74% at 21d, 12.10% at 45d), so
+        # "pick the horizon with the highest mean return" is very nearly "pick
+        # the longest horizon offered", whatever the event actually did. The
+        # narrow (1..21) grid MASKED this; widening it to 45 exposed it
+        # immediately -- every one of seven folds chose 45, and the p-value got
+        # worse (0.0815 vs 0.0430), i.e. the selection was chasing drift and
+        # away from the real effect.
+        #
+        # Subtracting the period-matched baseline removes the drift. Dividing by
+        # the event returns' own SD then makes horizons comparable to each other:
+        # excess grows ~linearly with h while noise grows ~sqrt(h), so an
+        # unstandardised excess would still tilt long. The question this asks is
+        # "at which horizon is the effect largest RELATIVE TO ITS OWN NOISE",
+        # which is the one worth asking. Still selected on TRAIN only, still
+        # signed (never abs()) -- both properties are load-bearing and unchanged.
         best_h, best_score = cfg.horizons[0], -np.inf
         for h in cfg.horizons:
             rets = [_forward_return(r.entry_loc, ohlc_by_group[r.group], direction, h) for r in train.itertuples()]
-            rets = [x for x in rets if x == x]  # drop NaN (horizon not fully available)
-            score = float(np.mean(rets)) if rets else -np.inf  # SIGNED, not abs() -- see docstring
+            rets = np.array([x for x in rets if x == x])  # drop NaN (horizon not fully available)
+            if len(rets) < 2:
+                continue
+            drift = []
+            for group in train["group"].unique():
+                locs = train.loc[train["group"] == group, "entry_loc"]
+                chunk = _baseline_forward_returns(ohlc_by_group[group], direction, h,
+                                                   int(locs.min()), int(locs.max()) + 1)
+                if len(chunk):
+                    drift.append(chunk)
+            baseline_mean = float(np.concatenate(drift).mean()) if drift else 0.0
+            sd = float(rets.std(ddof=1))
+            if not (sd > 0):
+                continue
+            score = (float(rets.mean()) - baseline_mean) / sd
             if score > best_score:
                 best_h, best_score = h, score
         chosen_horizon = best_h  # persists as the LAST fold's choice -- what a live occurrence discovered now should be held for
@@ -528,7 +611,10 @@ def pattern_significance(events: pd.DataFrame, ohlc_by_group: dict[str, pd.DataF
     return {
         "status": "ok", "n": n, "mean_return": observed_mean, "baseline_mean_return": baseline_mean,
         "excess_return": observed_mean - baseline_mean, "p_value": p_value,
-        "significant": bool(p_value < 0.05 and observed_mean > baseline_mean),
+        # realised OOS volatility -- what `required_n_for_power` needs to say
+        # whether THIS candidate's null result is informative or merely underpowered.
+        "oos_sd": float(np.std(oos_returns, ddof=1)) if len(oos_returns) > 1 else float("nan"),
+        "significant": bool(p_value < SIGNIFICANCE_ALPHA and observed_mean > baseline_mean),
         "p_value_two_sided": p_two_sided,
         # WHICH question was asked -- "unconditional" (does anything happen after
         # this condition at all) vs "incremental" (does the event term add anything
@@ -695,13 +781,51 @@ def apply_fdr_demotion(rows: list[dict], live_state: dict | None = None, alpha: 
     decision -- a single candidate's verdict genuinely depends on how
     many others were tested alongside it, which isn't knowable inside the
     per-candidate loop. `live_state` (if given) has demoted candidates
-    removed, so nothing that failed FDR can open live tests."""
-    p_values = [r.get("pattern_p_value") for r in rows]
-    survives = benjamini_hochberg(p_values, alpha)
-    for row, ok in zip(rows, survives):
+    removed, so nothing that failed FDR can open live tests.
+
+    THE FAMILY IS THE ACTIONABLE SET, not every row with a number in it.
+    `pattern_significance` will happily return `status: "ok"` and a
+    p-value for a candidate with one single out-of-sample event -- a
+    p-value on n=1 is not a test, and `classify_status` already refuses
+    to call such a row anything but `insufficient_data`. Including those
+    rows in the family was pure cost: BH's threshold at rank i is
+    (i/m)*alpha, so every unusable row inflates `m` and shrinks the
+    threshold for every candidate that COULD have been accepted. Measured
+    on a 672-condition grammar sweep (`forecast/grammar_sweep.py`): 360
+    rows carried a p-value but only 162 had enough data to be
+    classifiable, so more than half the family could never have been
+    acted on, and every real candidate was being judged against a
+    threshold roughly twice as strict as it should have been. This
+    project's binding constraint is statistical power, so giving half of
+    it away to rows that cannot be accepted is the opposite of
+    conservative.
+
+    Excluded rows still get `fdr_significant: None` (not False) -- "this
+    was never in the family", which is a different statement from "this
+    was tested and failed", and the two must not read the same to a human.
+    """
+    # Family membership is STRUCTURAL -- "was this a valid test" -- and is keyed
+    # off the sample size, never off the status LABEL. Keying it off the label
+    # would be a live trap: any future rule that relabels well-sampled negative
+    # results (a power-based `required_n_for_power` verdict, say) would silently
+    # remove real tests from the family, shrink `m`, and inflate every survivor's
+    # chance of passing BH -- multiplicity control quietly failing in the
+    # direction of MORE false discoveries, with nothing in the output to show it.
+    min_n = MethodologyConfig(horizons=(1,)).min_report_events
+    in_family = [r for r in rows
+                 if r.get("pattern_p_value") is not None
+                 and (r.get("n") is None or r.get("n") > min_n)]
+    survives = benjamini_hochberg([r["pattern_p_value"] for r in in_family], alpha)
+    verdict = {id(r): bool(ok) for r, ok in zip(in_family, survives)}
+    for row in rows:
         if row.get("pattern_p_value") is None:
             continue
-        row["fdr_significant"], row["fdr_alpha"] = bool(ok), alpha
+        row["fdr_alpha"] = alpha
+        if id(row) not in verdict:
+            row["fdr_significant"] = None  # not in the family; see docstring
+            continue
+        ok = verdict[id(row)]
+        row["fdr_significant"] = ok
         if not ok and row.get("status") == "accepted":
             row["status"] = "rejected"
             row["fdr_demoted"] = True
@@ -718,6 +842,50 @@ def _sortino_unusable(sortino: float) -> bool:
     flawless candidate. Now that the two are distinguished, only the
     genuinely-unusable one gates."""
     return sortino is None or (isinstance(sortino, float) and np.isnan(sortino))
+
+
+# Smallest excess return worth calling a finding, at a 7-day-ish horizon. A
+# judgement, stated rather than buried: below this a "pattern" is not
+# interesting even if it were real. Used only to decide whether a NULL result
+# is informative -- never to permit an acceptance.
+MIN_INTERESTING_EFFECT = 0.05
+
+# The moving-block bootstrap has far more variance than i.i.d. sampling, so the
+# textbook power formula badly understates the sample it needs. Calibrated
+# against this project's own measured power curves (sd=13.18% on real 7d forward
+# returns): 80% power needed n~13 at a +20% effect where i.i.d. predicts 2.7,
+# and n~78 at +10% where i.i.d. predicts 10.7 -- inflation of 4.8x and 7.3x.
+# 6.0 is the deliberately approximate middle; the constant is not precise and is
+# not treated as if it were.
+_BLOCK_VARIANCE_INFLATION = 6.0
+
+
+def required_n_for_power(oos_sd: float, effect: float = MIN_INTERESTING_EFFECT,
+                          power: float = 0.80) -> float:
+    """How many events THIS candidate would need before a null result from it
+    means anything, given its own realised volatility.
+
+    This is the statistically defensible form of a per-candidate threshold.
+    The tempting alternative -- letting a model set the bar case by case from
+    how compelling a hypothesis looks -- inverts the statistics: required
+    sample size is a function of effect size and variance, both properties of
+    the data, and never of how intricate the hypothesis is. Measured on a
+    synthetic pure-noise arm, conditions with n<25 produced up to +10.5%
+    excess return and an MFE/MAE of 119, versus +0.6% and 1.51 at n>=150 --
+    so a rule that lowered the bar for "more specific" conditions would grant
+    the weakest evidence requirement exactly where spurious results look most
+    spectacular.
+
+    Deliberately NOT an acceptance gate. The significance test is calibrated
+    at every sample size (measured FPR 4.0-6.2% from n=1 to n=50), so it
+    already handles small samples correctly on the positive side. What it
+    cannot express is the asymmetry of a negative result: "no effect found"
+    is only informative if there was power to find one.
+    """
+    if not (oos_sd == oos_sd) or oos_sd <= 0 or effect <= 0:
+        return float("nan")
+    z_alpha, z_beta = 1.645, 0.84 if power == 0.80 else 1.282
+    return _BLOCK_VARIANCE_INFLATION * ((z_alpha + z_beta) * float(oos_sd) / float(effect)) ** 2
 
 
 def classify_status(rep: dict, coin_concentration: dict, period_concentration: dict, pattern: dict,
@@ -754,8 +922,23 @@ def classify_status(rep: dict, coin_concentration: dict, period_concentration: d
     rejected: no significant pattern, a pattern pointing the WRONG WAY
     for the direction this candidate trades, or no edge at the
     sample-size gate below."""
-    if rep["n"] <= cfg.min_report_events or _sortino_unusable(rep["sortino"]):
-        return "rejected" if rep["n"] >= 10 else "insufficient_data"
+    # BELOW THE GATE IS ALWAYS "insufficient_data", never "rejected". The old
+    # boundary called anything with n>=10 `rejected`, which asserts "there is no
+    # effect here" -- a claim the data cannot support at that sample size (power
+    # at n=15 is ~22% for a +10% effect). "We could not tell" and "we tested it
+    # and there was nothing" are different statements and must not share a label.
+    # This also matters mechanically: `insufficient_data` rows are excluded from
+    # the FDR family (see apply_fdr_demotion), so labelling them honestly also
+    # stops them consuming other candidates' alpha.
+    if rep["n"] <= cfg.min_report_events:
+        return "insufficient_data"
+    # An unusable Sortino with ADEQUATE data is a different failure and keeps its
+    # own verdict: there was enough data to judge, and the judgement is negative.
+    # Folding this into the branch above (briefly done when the gate was lowered)
+    # would relabel a well-sampled bad candidate as "we could not tell", which is
+    # both false and would quietly return it to the FDR family.
+    if _sortino_unusable(rep["sortino"]):
+        return "rejected"
     if pattern.get("status") != "ok":
         return "watch"
     # `concentrated is None` means "cannot assess" (no positive return anywhere

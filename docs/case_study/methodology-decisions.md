@@ -407,3 +407,217 @@ A condition accepted on `rsi_14d < 35` fires **289 times** in the daily backtest
 **Headline sentiment remains untestable**, and therefore the "Market Sentiment" half of this project's title remains unproven. The whitelist has no sentiment term because there is no historical news archive to backtest one against. Closing it requires backfilling news history (GDELT 2.0 is the only free source plausibly covering 2017→present; scoring it with Haiku batched by day costs roughly $11–35, since ~3,500 daily calls is far cheaper than per-article scoring). Until then the honest scope of this system is **market conditions combined with market and macro events** -- which is now genuinely expressible and correctly tested, and was not before.
 
 **Type.** Capability + methodology. Four fixes make the project's own stated hypothesis representable and correctly controlled; one is a real pre-existing bug that silently prevented a whole class of accepted candidates from ever firing live. Tests 49 → 73.
+
+---
+
+### 2026-08-29 — Sample size, not method: real release dates, jobless claims, and a lower shock threshold
+
+**Context.** A power analysis of the acceptance gate, run against real 7-day
+forward returns (sd = 13.2%) using the project's own `_block_bootstrap_means`,
+produced two findings. The false-positive rate is correctly calibrated at every
+sample size tested — 5.0% / 4.5% / 6.5% / 5.5% / 3.5% at n = 15 / 20 / 30 / 50 /
+100 under a true null, confirming the moving-block bootstrap works. But **power
+is very low**: at n=50 a +6% effect is detected 23% of the time; at n=100, 41%.
+Meanwhile the necessary-condition rule (an event clause is mandatory) makes
+on-thesis conditions rare — "macro AND shock, same day" had 35 events in 9 years
+across 7 coins, 11 of them out-of-sample, which `classify_status` auto-**rejects**
+for falling under `min_report_events`. The system was structurally unable to test
+its own central question: the more specific and more on-thesis the hypothesis, the
+more certainly it was discarded before measurement.
+
+**The bug this uncovered.** Before changing any threshold, the event dates
+themselves turned out to be wrong. `cpi_days()` **approximated** every CPI release
+as the 13th of the month, rolled off weekends. Checked against the real release
+dates already present in `data/macro/fred_vintage/cpi.csv` (ALFRED's
+`realtime_start` IS the publication date):
+
+    exact match      21%
+    off by 1 day     33%
+    off by >= 2 days 46%   (worst case 20 days)
+    mean abs error   2.16 days
+
+CPI was 108 of ~176 macro days, so **the majority of macro events were being
+studied on the wrong day.** At 3- and 7-day horizons this smears a real reaction
+into the baseline and attenuates the effect toward zero — indistinguishable from
+"no pattern exists". Every null this project produced was measured through that
+smearing.
+
+**Changes made.**
+1. `cpi_days()` now reads real publication dates from the ALFRED vintages.
+2. `jobless_claims_days()` added and unioned into `macro_release_days()`. The
+   vintages were already downloaded and already graded into
+   `jobless_claims_surprise`, and the replay was **already spending 506 Sonnet
+   calls judging claims releases** — but `is_macro_day` excluded them, so any
+   condition Sonnet built on `is_macro_day` in response to a claims event could
+   never fire on that event. The calendar is now consistent with what the replay
+   already pays to judge.
+3. `SHOCK_ZSCORE_THRESHOLD` 3.0 → 2.0, on evidence the codebase already carried:
+   a bootstrap across z=1.5–4.5 found the effect similarly sized throughout with
+   no natural cutoff, thinning only past ~4.0. If the effect is flat across the
+   range, set the threshold where it yields the most events — sample size is the
+   binding constraint, not drama.
+
+**Effect on event counts** (out-of-sample, 7 coins, 9 years):
+
+    condition                              before   after
+    macro AND RSI14<35                        147     552
+    macro AND shock within 7d (ordered)        54     382
+    macro AND shock, same day                  11     177   (was auto-rejected)
+    macro AND RSI<35 AND shock within 7d        4      78   (was insufficient_data)
+
+**Effect on the static battery — and this is the part worth reading.** Re-running
+the identical code with the old calendar and threshold isolates the change:
+
+    candidate   n before  n after   p before  p after   excess b   excess a
+    c1_long          325      314     0.7830   0.7775     -1.79%     -1.79%
+    c1_short         166      163     0.8855   0.9030     -0.26%     -0.28%
+    c2_long           62      241     0.2545   0.8230     +2.50%     -2.33%
+    c2_short          86      202     0.8635   0.8905     -1.50%     -1.83%
+    c6_long          289      264     0.0750   0.0710     +9.49%     +9.28%
+    c6_short         184      167     0.7635   0.8745     -3.36%     -3.69%
+
+C2 is the only macro-driven candidate, and it is the only one that moved: n
+nearly 4x, and its apparent positive edge **inverted** (+2.50% → −2.33%, p 0.25 →
+0.82). The small, mis-dated sample had been producing a spurious positive. The
+non-macro candidates (C1 funding, C6 efficiency-ratio) barely moved at all, which
+is the consistency check this result needed to pass — a macro calendar fix should
+not perturb a funding-rate candidate, and it didn't.
+
+**Outcome: still 0 accepted.** The fixes removed a false signal rather than
+producing a true one. That is the correct behaviour and the honest result. C6_long
+remains the only near-miss (p=0.071, excess +9.3%, MFE/MAE 2.67, well distributed
+across coins and years) — but C6 is a pure chart pattern with no news term, so it
+is off-thesis by this project's own current standard and cannot answer its
+question whatever its p-value does.
+
+**Known cost of change 2, stated rather than buried.** `is_macro_day` now fires on
+~18.9% of days (was ~5.2%). A weekly jobless-claims print is a much smaller event
+than an FOMC decision, and the binary flag treats them identically, so the flag is
+now a weaker instrument than it was. The mitigation already exists and should be
+preferred going forward: `cpi_surprise` / `rate_surprise` /
+`jobless_claims_surprise` are graded, point-in-time-correct indicators that can
+demand a LARGE surprise rather than merely a release.
+
+---
+
+### 2026-08-30 — Which gate was actually too tight: an autopsy, and three fixes it justified
+
+**Why this was done.** The standing worry was that the acceptance and validation
+gates were too strict and were discarding good candidates. Rather than argue
+about it, a POSITIVE CONTROL was built (`forecast/positive_control.py`,
+`forecast/control_sweep.py`): synthetic "sentiment" signals planted, by
+deliberate lookahead, on days that genuinely are followed by strong returns, at
+three strengths, plus a pure-noise arm that must stay silent. That gives ground
+truth, and ground truth allows the only question that matters to be asked
+directly: **when a signal really is there, which gate kills it?**
+
+**The autopsy, 294 known-good conditions:**
+
+    significance (p >= 0.05)     154   52.4%
+    n gate (n <= 20)              70   23.8%
+    pattern test unusable         56   19.0%
+    ACCEPTED                      10    3.4%
+    concentration                  4    1.4%
+    MFE/MAE                        0    0.0%
+
+Of those with a valid test AND adequate data, **92% died at significance**.
+Concentration killed four. MFE/MAE killed none. This redirected the work
+entirely: the gates that felt strict were not the problem, and statistical
+power was. Two of the three changes below came directly out of it.
+
+**1. `SIGNIFICANCE_ALPHA` 0.05 -> 0.10.** Measured on the control, where the
+noise arm's detection count IS the false-positive rate:
+
+    alpha   planted detected   noise arm (false positives)
+    0.050        8.3%                0.0%
+    0.100       27.4%                0.0%
+    0.150       38.1%                0.0%
+    0.200       44.0%                4.0%
+
+Detection of real effects more than triples while false positives stay at zero.
+Under a true null at alpha=0.10 roughly 5 of the 50 noise conditions should
+fire; none did. The moving-block bootstrap is CONSERVATIVE on heavily
+overlapping event windows, so the nominal rate overstates the real one, and
+0.05 was buying error control the test already provided for free. 0.20 is where
+the noise arm finally breaks, leaving 0.10 a wide margin. BH still runs on top,
+and nothing is ever traded: a false positive costs an observational live test,
+a false negative costs a finding permanently.
+
+**2. Horizon selection scored the wrong statistic -- a real bias, not a tuning
+choice.** Each fold picked the horizon maximising the TRAIN mean forward
+return. But mean forward return across this universe grows monotonically with
+horizon out of pure market drift:
+
+    1d 0.19% | 3d 0.57% | 7d 1.39% | 14d 2.97% | 21d 4.74% | 30d 7.30% | 45d 12.10%
+
+so "highest mean return" was very nearly "longest horizon offered", whatever
+the event did. The narrow (1..21) grid MASKED this. Widening it to 45 exposed
+it at once: all seven folds chose 45 and the p-value got WORSE (0.0815 vs
+0.0430) -- the selector was chasing drift, away from the real effect.
+
+Now scored as **standardised excess over the period-matched baseline at that
+same horizon**: subtracting the baseline removes the drift, and dividing by the
+event returns' own SD makes horizons comparable (excess grows ~linearly in h,
+noise only ~sqrt(h), so an unstandardised excess still tilts long). Verified
+against ground truth: a signal planted at a 7-day horizon is now selected at
+7 in every fold on BOTH grids, where before the wide grid chose 45 every time;
+its p-value went 0.0430 -> 0.0000. The noise arm still drifts long but stays
+`rejected`, so no false positive was bought. Selection remains train-only and
+signed -- both properties load-bearing and unchanged.
+
+**3. Market-relative outcomes: a genuine gain, but ONLY for coin-specific
+hypotheses.** Power goes as effect/(sigma/sqrt(n)) and every earlier change
+attacked `n`; sigma had never been touched, and it enters quadratically.
+Measured: pooled SD of 7-day forward returns is 16.18% raw and 11.41% after
+subtracting the equal-weight basket (mean cross-coin correlation 0.54), i.e.
+half the sample for the same power.
+
+The first test of this made things WORSE (10 accepted -> 7). The result was
+real but the subject was wrong: that planted signal fired on days when a coin's
+RAW return was high, which -- at 0.54 correlation -- are mostly days the whole
+market rose. It was a market-timing signal, so removing the market removed the
+effect (17.29% -> 4.66% excess) faster than the noise (sigma 0.70x).
+
+Re-run with a signal planted on MARKET-RELATIVE returns (a coin outperforming
+its peers -- the "SEC sues Ripple" shape), the prediction held:
+
+    accepted, raw outcome measurement            2 / 9
+    accepted, market-relative measurement        6 / 9
+
+with excess returns SHRINKING in every row (+13.82% -> +7.50%) while p-values
+fell -- noise removed faster than signal, which is what a real power gain looks
+like. Both results agree: market-relative helps exactly when the signal is
+coin-specific and hurts when it is not. It therefore CANNOT be a global switch;
+it must be declared per hypothesis in the spec, like the concentration rule --
+raw outcome for market-wide events (subtracting the basket would delete a CPI
+reaction by construction), market-relative for coin-specific ones. Caveat kept
+explicit: the plant used the same 7-day relative return the test then measures,
+so 3x is an optimistic ceiling.
+
+**What was deliberately NOT changed.** Concentration thresholds and the
+MFE/MAE gate: the autopsy shows they cost 4 and 0 known-good candidates
+respectively, so tuning them would achieve nothing. `FDR_ALPHA` stays 0.05 --
+the 92% die at the RAW threshold, before FDR ever runs, so raising it would
+address the wrong stage.
+
+**Hierarchical / partial pooling across coins: measured, then NOT built.** The
+proposal was to replace complete pooling (all coins collapsed into one mean)
+with an empirical-Bayes model allowing per-coin effects with shrinkage, on the
+theory that complete pooling dilutes an effect present in only some coins. The
+existing controls could not test this -- their planted signals are homogeneous
+across coins by construction -- so a HETEROGENEOUS plant was built: a real
+effect in XRP/ADA/DOGE, pure noise in BTC/ETH/BNB/LTC.
+
+Complete pooling detected it comfortably: **p=0.003, excess +9.60%, n=243** --
+in fact a *stronger* p-value than testing only the three coins that carry the
+effect (p=0.01, n=95), because the larger sample more than compensates for the
+dilution. There is no detection problem for partial pooling to solve, so it
+would be real complexity for no measured gain. Dropped.
+
+What DID block that candidate is worth recording, because it was not what was
+expected: it passed significance, direction, MFE/MAE and coin concentration
+(55%, under the 60% bar) and was held at `watch` by YEAR concentration at 61%
+-- one point over the threshold. That is the concentration rule behaving as
+designed on a plant whose top-quintile returns cluster in 2021, not evidence
+against the rule; noted so a future reader does not mistake the `watch` for a
+statistical failure.

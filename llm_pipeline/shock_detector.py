@@ -14,7 +14,7 @@ from __future__ import annotations
 from candidates.data_loading import load_daily
 from candidates.methodology import shock_zscore_series
 
-SHOCK_ZSCORE_THRESHOLD = 3.0
+SHOCK_ZSCORE_THRESHOLD = 2.0
 
 
 def current_shock_status(symbol: str, threshold: float = SHOCK_ZSCORE_THRESHOLD) -> dict:

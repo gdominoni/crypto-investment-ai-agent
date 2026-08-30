@@ -35,6 +35,7 @@ from llm_pipeline.novel_condition_tester import (
 )
 from llm_pipeline.pending_tests import push_pending_test
 from llm_pipeline.shock_detector import scan_for_shocks
+from llm_pipeline import usage as _usage
 
 HAIKU_MODEL = "claude-haiku-4-5"
 SONNET_MODEL = "claude-sonnet-5"
@@ -138,7 +139,7 @@ indicator reading, a headline, or a release you weren't shown. Recommend one of:
   clause (just "shock_zscore") is fine when nothing else in the given context looks relevant -- \
   don't force a compound story where the evidence doesn't support one. Use ONLY indicators you were \
   actually shown a reading for. Example: {{"label": "shock_reactive_<coin>", "clauses": \
-  [{{"indicator": "shock_zscore", "op": ">=", "threshold": 3.0, "within_days": 2}}, \
+  [{{"indicator": "shock_zscore", "op": ">=", "threshold": 2.0, "within_days": 2}}, \
   {{"indicator": "rsi_14d", "op": "<", "threshold": 30}}], "direction": "long" or "short"}} -- note \
   "within_days" (integer 0-14, default 0): 0 = true on the day the condition fires, K = true at any \
   point in the last K days. Use it to express that the SHOCK CAME FIRST and something else followed, \
@@ -210,7 +211,7 @@ def format_spec_clauses(spec: dict) -> str:
     """Renders a raw novel_condition_spec dict's (possibly multi-clause)
     'clauses' list as one readable string, e.g. '14-day RSI (momentum,
     0-100 scale) below 30 AND shock z-score (how extreme today's price
-    move is vs. this coin's own history) at least 3.0' -- shared by every
+    move is vs. this coin's own history) at least 2.0' -- shared by every
     message (production and replay) that shows a proposed or tested
     condition to a human, so a compound spec is never silently rendered
     as if it only had one clause, the indicator name is never shown as a
@@ -245,6 +246,7 @@ def haiku_scout(articles: list[dict], client: Anthropic) -> list[dict]:
         model=HAIKU_MODEL, max_tokens=2048, temperature=0, system=HAIKU_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": headlines_block}],
     )
+    _usage.record(response, "prod.haiku_scout", HAIKU_MODEL)
     return json.loads(_strip_fences(extract_text(response)))
 
 
@@ -282,6 +284,7 @@ def sonnet_strategist(flagged: dict, client: Anthropic) -> dict:
         model=SONNET_MODEL, max_tokens=2000, temperature=0, system=SONNET_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_content}],
     )
+    _usage.record(response, "prod.sonnet_strategist", SONNET_MODEL)
     return json.loads(_strip_fences(extract_text(response)))
 
 
@@ -319,6 +322,7 @@ def sonnet_shock_response(shock: dict, client: Anthropic) -> dict:
         model=SONNET_MODEL, max_tokens=2000, temperature=0, system=SHOCK_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_content}],
     )
+    _usage.record(response, "prod.shock", SONNET_MODEL)
     return json.loads(_strip_fences(extract_text(response)))
 
 
@@ -346,6 +350,7 @@ def sonnet_prune_advice(candidate: str, years_tracked: float, recent_summary: st
         model=SONNET_MODEL, max_tokens=1000, temperature=0, system=PRUNE_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_content}],
     )
+    _usage.record(response, "prod.prune_advice", SONNET_MODEL)
     return extract_text(response)
 
 

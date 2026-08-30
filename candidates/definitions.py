@@ -11,7 +11,7 @@ approximate with something weaker):
   C1 -- funding-rate crowding: an extreme funding rate (perpetual futures
         positioning) split by sign, betting on a squeeze in the opposite
         direction.
-  C2 -- post-macro-release reaction: FOMC/CPI day with an unusually wide
+  C2 -- post-macro-release reaction: FOMC / CPI / jobless-claims release day with an unusually wide
         range, betting the day's own initial close direction reverses.
   C6 -- efficiency-ratio trend: a high Kaufman efficiency ratio (a clean,
         low-noise trend) paired with a volume surge, split by the
@@ -105,7 +105,7 @@ CANDIDATE_DIRECTIONS = {
 # funding-rate crowding on its own).
 TRIGGER_DESCRIPTIONS = {
     "c1": "funding-rate crowding: an extreme perpetual-futures funding rate, betting on a squeeze in the opposite direction",
-    "c2": "post-macro-release reaction: FOMC/CPI day with an unusually wide range, betting the day's own initial close direction reverses",
+    "c2": "post-macro-release reaction: FOMC / CPI / initial-jobless-claims release day with an unusually wide range, betting the day's own initial close direction reverses",
     "c6": "efficiency-ratio trend: a high Kaufman efficiency ratio (a clean, low-noise trend) paired with a volume surge, in the direction already in motion",
 }
 
@@ -118,6 +118,6 @@ TRIGGER_DESCRIPTIONS = {
 # elevated, exactly?" with an actual number.
 TRIGGER_NUMERIC_DEFINITIONS = {
     "c1": "30-day funding-rate z-score below -2.0 (long) or above +2.0 (short) -- extreme relative to that coin's own trailing 30-day funding history, not a fixed absolute rate.",
-    "c2": "on an FOMC/CPI release day: that day's own high-low range exceeds 1.5x its trailing 20-day average range, AND the day closes below its open (long) or above its open (short).",
+    "c2": "on a real FOMC / CPI / initial-jobless-claims release day (publication dates, taken from the ALFRED vintages' own realtime_start): that day's own high-low range exceeds 1.5x its trailing 20-day average range, AND the day closes below its open (long) or above its open (short).",
     "c6": "20-day Kaufman efficiency ratio above 0.40, AND that day's volume above 1.8x its trailing 20-day average; fires as 'long' when the 5-day price change is positive, 'short' when it's negative.",
 }

@@ -42,7 +42,7 @@ from llm_pipeline.novel_condition_tester import test_novel_condition
 
 COINS = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "XRPUSDT", "DOGEUSDT", "ADAUSDT", "LTCUSDT"]
 HORIZONS_DAYS = (1, 3, 7, 14, 21)
-SHOCK_ZSCORE_THRESHOLD = 3.0
+SHOCK_ZSCORE_THRESHOLD = 2.0
 ASSETS_DIR = Path(__file__).resolve().parent.parent / "docs" / "case_study" / "assets"
 SIGNAL_STORE_PATH = Path(__file__).resolve().parent.parent / "execution" / "live_battery_state.json"
 

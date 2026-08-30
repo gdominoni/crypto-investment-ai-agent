@@ -22,3 +22,7 @@ execution/freqtrade_userdir/hyperopts/
 execution/freqtrade_userdir/hyperopt_config.json
 execution/freqtrade_userdir/hyperopt.lock
 execution/freqtrade_userdir/strategies/*.json
+llm_usage.json
+
+# in-progress sweep state only; completed result sets are committed as evidence
+forecast/sentiment_power.json
