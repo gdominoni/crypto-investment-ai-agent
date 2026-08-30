@@ -1037,3 +1037,65 @@ Second call reads. `llm_pipeline/usage.py` now records
 them at 1.25x and 0.1x, and `/usage` prints **reads / (reads + writes)**. That
 ratio is the health check: near 0% means the breakpoint has drifted onto content
 that changes, which is otherwise invisible because the calls still succeed.
+
+---
+
+### 2026-08-30 — Why the validation milestone stays at 50, measured rather than assumed
+
+**A correction first.** When the acceptance thresholds were re-derived earlier
+today, `MILESTONE_N = 50` was left alone on the reasoning that it "does no
+statistical work -- the p-value comes from `pattern_significance`; 50 is just the
+evidentiary bar behind the word validated". That was wrong, and it was the one
+threshold in this project defended by argument instead of measurement. At the
+checkpoint the significance test IS re-run, and for a STATIC candidate (C1/C2/C6,
+live-only by rule) those 50 occurrences are the entire evidence base. The number
+is as measurable as `min_report_events` was.
+
+**Measured**, re-running the real bootstrap on real 7-day forward returns at
+`SIGNIFICANCE_ALPHA = 0.10`:
+
+    N live   false positives   detects +10%   detects +20%
+      20          11.7%            58.0%          97.0%
+      30          11.0%            69.7%          98.7%
+      50          11.7%            84.7%         100.0%   <- current
+      75           9.3%            94.7%         100.0%
+     100           7.7%            98.3%         100.0%
+
+The first column is the surprise: **lowering N does not make any single
+validation less trustworthy.** The false-positive rate is flat, as it should be
+for a calibrated test. What lowering N costs is the ability to CONFIRM a real
+pattern -- power falls from 85% to 58% between N=50 and N=20 -- and a candidate
+that fails a checkpoint is not discarded, it simply gets re-checked at the next
+multiple. On that reading alone, a lower bar looks defensible: faster feedback,
+and a real effect gets another attempt later.
+
+**The argument that actually settles it is the one neither the original
+reasoning nor the question considered: the checkpoint REPEATS.** It fires at
+every new multiple of N, and each firing is another opportunity for that ~11.7%
+to land. Over a candidate's life the risk compounds:
+
+    threshold   checkpoints within 150 occurrences   cumulative risk
+        20                     7                          58%
+        30                     5                          46%
+        50                     3                          31%   <- current
+        75                     2                          22%
+
+At a threshold of 20, a candidate with no real effect has a **58%** chance of
+being labelled "validated" at least once, against 31% at 50. Since `validated`
+is the single strongest claim this project permits itself -- deliberately
+reserved, and distinguished from `accepted` everywhere -- doubling the chance of
+awarding it wrongly is the wrong trade at any speed.
+
+**50 stays, now for a measured reason rather than a plausible one.** The same
+table points the other way if anything: 75 would cut cumulative risk to 22% and
+lift power to 95%. Not adopted, because it lengthens an already long wait (a
+market-wide condition needs years to accumulate 50 real occurrences), but
+recorded so the trade is visible rather than rediscovered.
+
+**Unchanged and worth restating**, since it is what makes 50 mean different
+things for different candidates: static candidates count real live occurrences
+only, having been derived by mining this project's own history. Sonnet-proposed
+candidates use a rolling window of the most recent 50, backtest and live mixed,
+because Sonnet never sees the backtest before proposing -- and once 50 genuine
+live occurrences accumulate, backtest stops contributing and the rule collapses
+to the static one.
