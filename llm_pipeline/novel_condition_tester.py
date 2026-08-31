@@ -473,6 +473,122 @@ def count_occurrences(spec: "ConditionSpec", coins: list[str],
     return total
 
 
+# How far a threshold may be loosened, in order, stopping at the first level that
+# clears MIN_HISTORICAL_OCCURRENCES. Small steps first so the tested hypothesis
+# stays as close as possible to the one that was proposed.
+# The value at which each indicator says NOTHING -- the anchor `_loosen` moves
+# thresholds toward and is forbidden to cross. RSI's midline, and consensus (a
+# zero surprise, a flat return, an average volume) for everything measured as a
+# deviation. An indicator absent from this table is never relaxed, which is the
+# safe default: an unknown scale has no known neutral, and guessing one would
+# reintroduce exactly the sign-flip this table exists to prevent.
+RELAXATION_NEUTRAL: dict[str, float] = {
+    "rsi_14d": 50.0,
+    "bollinger_pctb_20d": 0.5,
+    "donchian_pct_20d": 0.5,
+    "cpi_surprise": 0.0,
+    "rate_surprise": 0.0,
+    "jobless_claims_surprise": 0.0,
+    "shock_zscore": 0.0,
+    "volume_zscore_30d": 0.0,
+    "funding_zscore_30d": 0.0,
+    "close_return_1d": 0.0,
+    "close_return_3d": 0.0,
+    "close_return_5d": 0.0,
+    "close_return_7d": 0.0,
+    "close_return_14d": 0.0,
+}
+
+RELAXATION_STEPS = (0.10, 0.25, 0.50)
+
+
+def relax_to_testable(spec: "ConditionSpec", coins: list[str],
+                      as_of: "pd.Timestamp | None" = None) -> "tuple[ConditionSpec, str] | None":
+    """Loosen a too-rare condition just enough to be measurable, or give up.
+
+    A proposal can be directionally sensible and still untestable because its
+    thresholds are extreme -- "CPI surprise above 2 sigma AND a 25% five-day
+    fall" describes about one day in this project's whole history. Rejecting it
+    outright discards the idea along with the numbers. Loosening the numbers
+    keeps the idea.
+
+    WHY THIS IS NOT P-HACKING, which is the obvious objection. The search
+    criterion is the OCCURRENCE COUNT and nothing else: no forward return, no
+    p-value, no outcome of any kind is consulted while choosing a threshold. It
+    is a power calculation, not a result search. Loosening until a condition
+    fires often enough to be measured is legitimate; loosening until it becomes
+    significant would not be, and this function cannot do that because it never
+    sees a return.
+
+    Two further properties keep it honest:
+      * the SMALLEST relaxation that works is taken, so the tested hypothesis is
+        the nearest measurable neighbour of the proposed one, not the loosest;
+      * `as_of` is respected, so a replay never counts occurrences that have not
+        happened yet in order to decide how far to loosen.
+
+    Returns `(relaxed_spec, human-readable note)`, or None when even the loosest
+    step leaves too little to measure. The note exists so the change is recorded
+    with the candidate rather than applied invisibly -- the tested condition is
+    not the proposed one, and a reader has to be able to see that.
+    """
+    for step in RELAXATION_STEPS:
+        clauses = tuple(_loosen(c, step) for c in spec.clauses)
+        try:
+            candidate = ConditionSpec(label=spec.label, clauses=clauses, direction=spec.direction,
+                                       horizons=spec.horizons, coins=spec.coins,
+                                       outcome=spec.outcome, prior_weight=spec.prior_weight)
+        except ValueError:
+            return None
+        if count_occurrences(candidate, coins, as_of=as_of) >= MIN_HISTORICAL_OCCURRENCES:
+            changed = ", ".join(f"{a.indicator} {a.op} {a.threshold:g} -> {b.threshold:g}"
+                                for a, b in zip(spec.clauses, clauses) if a.threshold != b.threshold)
+            return candidate, f"thresholds loosened by {step:.0%} to reach a measurable sample ({changed})"
+    return None
+
+
+def _loosen(clause: "Clause", step: float) -> "Clause":
+    """Move one threshold `step` of the way from its current value toward the
+    indicator's NEUTRAL point -- never past it, and never onto it.
+
+    Measuring the step against the threshold's own magnitude, which is the
+    obvious implementation, silently destroys the hypothesis it claims to be
+    preserving. Two failures, both observed on real proposals from this
+    project's own replay state:
+
+      * "hot CPI with the market OVERBOUGHT, RSI >= 70" loosened to RSI >= 52.5.
+        52.5 is not overbought, it is the neutral line; the relaxed condition
+        tests something the proposal never claimed. Half the history qualifies,
+        which is exactly why the occurrence count looked healthy.
+      * "COOL CPI, surprise <= 0" loosened to surprise <= +0.1 -- the threshold
+        crossed zero and the condition began matching HOT prints. A magnitude of
+        zero has no scale to take a percentage of, so the code fell back to 1.0
+        and moved the boundary in absolute units through the sign change.
+
+    Anchoring on the neutral point fixes both, and fixes them for the same
+    reason: `neutral` is what makes a threshold MEAN something. RSI 70 is
+    overbought because 50 is neutral; a surprise of -1 is dovish because 0 is
+    consensus. Loosening toward neutral weakens the claim, which is the
+    intent; reaching neutral empties it; passing neutral inverts it.
+
+    A threshold sitting AT its neutral point therefore cannot be loosened at
+    all -- distance is zero, so every step is zero. That is correct rather than
+    a limitation: `cpi_surprise <= 0` is already "any cool print", and there is
+    no weaker version of it that is still the same hypothesis.
+    """
+    neutral = RELAXATION_NEUTRAL.get(clause.indicator)
+    if neutral is None or clause.op not in ("<", "<=", ">", ">="):
+        return clause
+    distance = clause.threshold - neutral
+    if distance == 0:
+        return clause
+    # Toward neutral is the permissive direction for a threshold on the far
+    # side of it, which is the only case that arises: a `>=` clause sits above
+    # neutral, a `<=` clause below.
+    new = clause.threshold - distance * step
+    return Clause(indicator=clause.indicator, op=clause.op, threshold=round(new, 4),
+                  within_days=clause.within_days)
+
+
 def spec_to_dict(spec: "ConditionSpec") -> dict:
     """THE serializer for a ConditionSpec. One implementation, deliberately.
 

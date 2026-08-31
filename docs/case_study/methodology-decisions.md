@@ -1279,3 +1279,71 @@ reduction in the cost of a replay, with the decision resting on strictly more of
 the available evidence than before. Applied to the milestone checkpoint as well,
 for the same reason -- it was showing the same kind of opinion from the same kind
 of numbers.
+
+---
+
+## A too-rare condition is loosened toward measurability, not discarded
+
+**Decision.** When a proposed condition occurs fewer than `MIN_HISTORICAL_OCCURRENCES`
+(35) times, the system does not reject it. It searches locally for the smallest
+loosening of its thresholds that reaches the floor, and tests that instead —
+disclosing the substitution in the approval message and storing it with the result.
+
+**Why the previous behaviour left value on the table.** The rarity gate returns a
+yes or a no. Sonnet receives nothing back from it, so a proposal whose *direction*
+is sensible and whose *numbers* are merely extreme was discarded whole. Measured on
+the 118 candidates the replay had accumulated, 17 sat below the floor. All 17 were
+recoverable: loosening reached a measurable sample in every case, at 10% for six of
+them. Those are seventeen hypotheses that the pipeline had already paid an API call
+to generate and was throwing away over a threshold choice.
+
+**Why this is a power calculation and not p-hacking**, which is the obvious
+objection and the one that decides whether any of this is admissible. The search
+criterion is the occurrence count and nothing else. No forward return, no p-value,
+no outcome of any kind is consulted while a threshold is being chosen —
+`relax_to_testable` is not given access to one. Loosening until a condition fires
+often enough to be *measured* is a sample-size decision. Loosening until it becomes
+*significant* would be p-hacking, and the separation between the two is structural
+here rather than a matter of discipline.
+
+Three further constraints keep it honest:
+
+- **The smallest step that works is taken** (10%, then 25%, then 50%), so the tested
+  hypothesis is the nearest measurable neighbour of the proposed one, not the loosest
+  version that clears the bar.
+- **`as_of` is respected.** The search counts occurrences only up to the simulated
+  date, so a 2018 replay day cannot consult 2024 to decide how far to loosen. The
+  time sandbox applies one level up from `count_occurrences`, where it would
+  otherwise have been a second entry point for the same leak.
+- **The substitution is disclosed**, in the Telegram approval message before the
+  human presses the button and in the stored record afterwards. The condition being
+  tested is not the one that was proposed; an approval that did not say so would not
+  be an approval of anything in particular.
+
+**Thresholds move toward the indicator's neutral point, never past it.** The
+straightforward implementation — shift each threshold by a percentage of its own
+magnitude — passes its occurrence-count test while destroying the hypothesis it
+claims to preserve, and did so on real proposals:
+
+| Proposal | Naive relaxation | Problem |
+|---|---|---|
+| hot CPI with the market **overbought**, `rsi_14d >= 70` | `rsi_14d >= 52.5` | 52.5 is the neutral line. Half of all days qualify. Nothing is overbought. |
+| **cool** CPI, `cpi_surprise <= 0` | `cpi_surprise <= +0.1` | The threshold crossed zero and began matching **hot** prints. |
+
+Both look like successes, because the occurrence count rises — which is precisely
+what the search optimises. `RELAXATION_NEUTRAL` fixes it by naming the value at
+which each indicator says nothing: RSI's midline at 50, and consensus (zero) for
+everything measured as a deviation. A threshold may move toward its neutral, never
+onto it and never through it. RSI 70 relaxes to 60, still overbought; `cpi_surprise
+<= -1` relaxes to `-0.5`, still cool. A threshold already sitting at its neutral
+cannot be loosened at all, which is correct: `cpi_surprise <= 0` is already "any
+cool print", and there is no weaker version that is still the same claim.
+
+Four indicators (`atr_pct_14d`, `daily_range_pct`, `efficiency_ratio_20d`,
+`is_macro_day`) are deliberately absent from the table — strictly positive or
+binary scales, where zero is an extreme rather than a midpoint and no neutral
+exists to move toward. They are never relaxed. That costs recall, and is the
+right trade: inventing a neutral for them is how the sign flip above got in.
+
+With the semantic bound applied, the recovery rate is unchanged at 17/17. The
+constraint cost nothing in this instance and removes the failure mode entirely.

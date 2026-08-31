@@ -40,8 +40,8 @@ from execution import hyperopt_runner
 from llm_pipeline.haiku_sonnet_pipeline import escape_html, format_spec_clauses
 from llm_pipeline.novel_condition_tester import (
     ConditionSpec, clause_from_dict, clause_signal_hourly, clause_to_dict, condition_desc, format_pattern_significance,
-    MIN_HISTORICAL_OCCURRENCES, count_occurrences,
-    spec_from_dict, spec_from_proposal,
+    MIN_HISTORICAL_OCCURRENCES, count_occurrences, relax_to_testable,
+    spec_from_dict, spec_from_proposal, spec_to_dict,
     test_novel_condition,
 )
 from replay import judgment, state
@@ -221,12 +221,43 @@ def _handle_assessment(as_of: pd.Timestamp, event_desc: str, assessment: dict, l
         # condition below the floor would consume a walk-forward test and return
         # `insufficient_data` -- where 193 of 234 candidates ended in a real run.
         _n = count_occurrences(_spec, COINS, as_of=as_of)
+        _relax_note = None
         if _n < MIN_HISTORICAL_OCCURRENCES:
-            print(f"[{as_of.date()}] proposal '{s.get('label')}' rejected, not tested: "
-                  f"occurred only {_n} time(s) in the whole history, below the "
-                  f"{MIN_HISTORICAL_OCCURRENCES} needed to measure anything. Thresholds too tight.")
-            return None
-        state.save_pending_test({"spec": s, "coins": COINS, "live_coin": live_coin, "as_of": str(as_of.date())})
+            # Too rare to measure -- but "too rare" is a statement about the
+            # THRESHOLDS, not about the idea. Sonnet gets no feedback from this
+            # gate: it returns yes or no, so a proposal whose direction is
+            # sensible and whose numbers are merely extreme is discarded whole.
+            # Search locally for the nearest measurable version instead.
+            #
+            # This is a power calculation, not a result search, and the
+            # distinction is the only thing that makes it legitimate: the search
+            # criterion is the OCCURRENCE COUNT and nothing else. No return, no
+            # p-value, no outcome is consulted while choosing thresholds --
+            # `relax_to_testable` cannot see one. Loosening until a condition
+            # fires often enough to be measured is a sample-size decision;
+            # loosening until it becomes significant would be p-hacking.
+            _relaxed = relax_to_testable(_spec, COINS, as_of=as_of)
+            if _relaxed is None:
+                print(f"[{as_of.date()}] proposal '{s.get('label')}' rejected, not tested: "
+                      f"occurred only {_n} time(s) in the whole history, below the "
+                      f"{MIN_HISTORICAL_OCCURRENCES} needed to measure anything, and no "
+                      f"loosening within the indicators' meaning reaches the floor.")
+                return None
+            _spec, _relax_note = _relaxed
+            # Substituted, not silently: the condition about to be tested is NOT
+            # the one that was proposed, and both the human approving it and the
+            # record of the result have to say so.
+            # Mutated in place, not rebound: `s` IS assessment["novel_condition_spec"],
+            # and the Telegram message renders that dict. Rebinding the local name
+            # would send the human the original thresholds and test the relaxed
+            # ones -- approval for a condition that was never the one measured.
+            # `update` also preserves any keys the proposal carries beyond the
+            # spec fields (rationale, and anything added later).
+            s.update(spec_to_dict(_spec))
+            s["relaxed_from"] = _relax_note
+            print(f"[{as_of.date()}] proposal '{s.get('label')}': {_relax_note}")
+        state.save_pending_test({"spec": s, "coins": COINS, "live_coin": live_coin, "as_of": str(as_of.date()),
+                                 "relaxed_from": _relax_note})
         _send(judgment.format_telegram_message(as_of, event_desc, assessment), reply_markup=REPLAY_PROPOSAL_KEYBOARD)
         return "STOP"
     # NO MESSAGE on no_action. A "nothing to see here" notification for every

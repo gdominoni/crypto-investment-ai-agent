@@ -415,7 +415,19 @@ def format_telegram_message(as_of, event_description: str, assessment: dict) -> 
         base += (
             f"\n\n<b>This needs your input.</b>\n\n"
             f"<b>Proposed test: \"{escape_html(spec['label'])}\"</b>\n\n"
-            f"<i>Exactly what would be tested:</i> {format_spec_clauses(spec)} → {escape_html(spec['direction'])}\n\n"
+            f"<i>Exactly what would be tested:</i> {format_spec_clauses(spec)} → {escape_html(spec['direction'])}\n\n"        )
+        # The tested condition is not always the proposed one. When thresholds
+        # were loosened to reach a measurable sample, the human approving the
+        # test has to see that BEFORE pressing the button -- the clause line
+        # above already shows the new numbers, but not that they were changed
+        # or why, and silent substitution would make the approval meaningless.
+        if spec.get("relaxed_from"):
+            base += (
+                f"<i>Note: the thresholds originally proposed occurred too rarely to measure. "
+                f"They were {escape_html(spec['relaxed_from'])} — so this is the nearest "
+                f"testable version of the idea, not the original one.</i>\n\n"
+            )
+        base += (
             f"Test It runs a real walk-forward backtest of this condition before it's tracked as a live test "
             f"(no real money is ever placed on it). Don't Test It dismisses this proposal."
         )

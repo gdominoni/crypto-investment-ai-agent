@@ -521,3 +521,47 @@ class TestRarityGateRespectsTheTimeSandbox:
         assert "count_occurrences(_spec, COINS, as_of=as_of)" in src, (
             "the replay must pass its simulated date, or the gate reads the future"
         )
+
+
+def test_relaxation_never_crosses_an_indicator_s_neutral_point():
+    """The bug this exists to prevent, found on real proposals from the
+    replay's own state: relaxing by a percentage of the THRESHOLD's
+    magnitude turned "overbought, RSI >= 70" into RSI >= 52.5 (the neutral
+    line -- half of all days qualify) and "cool CPI, surprise <= 0" into
+    surprise <= +0.1, which matches HOT prints. Both looked like successes
+    because the occurrence count went up, which is exactly what the search
+    optimises. Only the sign and the meaning were lost."""
+    from llm_pipeline.novel_condition_tester import Clause, _loosen, RELAXATION_NEUTRAL
+
+    for step in (0.10, 0.25, 0.50, 0.99):
+        assert _loosen(Clause("rsi_14d", ">=", 70.0), step).threshold > 50.0
+        assert _loosen(Clause("rsi_14d", "<=", 30.0), step).threshold < 50.0
+        assert _loosen(Clause("cpi_surprise", "<=", -1.0), step).threshold < 0.0
+        assert _loosen(Clause("shock_zscore", ">=", 2.0), step).threshold > 0.0
+
+    # A threshold already AT its neutral point is already the weakest form of
+    # its own hypothesis; loosening it could only invert it.
+    assert _loosen(Clause("cpi_surprise", "<=", 0.0), 0.5).threshold == 0.0
+    # An indicator with no defined neutral is left alone rather than guessed at.
+    # ATR is strictly positive: its zero is the extreme, not the midpoint, so
+    # there is no value to loosen toward. Refusing to relax it costs recall and
+    # is the right trade -- inventing a neutral is how the sign flip above got in.
+    assert "atr_pct_14d" not in RELAXATION_NEUTRAL
+    assert _loosen(Clause("atr_pct_14d", ">=", 9.0), 0.5).threshold == 9.0
+
+
+def test_relaxation_respects_as_of():
+    """The relaxation search decides how far to loosen by counting
+    occurrences, so it inherits the time sandbox's constraint exactly: a
+    2018 replay day must not consult occurrences from 2024 when choosing a
+    threshold. Same leak `count_occurrences` already had, one level up."""
+    import pandas as pd
+    from llm_pipeline.novel_condition_tester import (Clause, ConditionSpec,
+                                                     count_occurrences, relax_to_testable)
+    coins = ["BTCUSDT"]
+    spec = ConditionSpec(label="t", direction="long",
+                         clauses=(Clause("cpi_surprise", ">=", 2.0),
+                                  Clause("rsi_14d", "<=", 25.0)))
+    early = relax_to_testable(spec, coins, as_of=pd.Timestamp("2018-06-01"))
+    if early is not None:
+        assert count_occurrences(early[0], coins, as_of=pd.Timestamp("2018-06-01")) >= 35
