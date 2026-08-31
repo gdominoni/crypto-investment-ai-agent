@@ -398,7 +398,7 @@ PRUNE_KEYBOARD_TEMPLATE = lambda candidate: {
 }
 
 
-def _check_prune_decisions(as_of: pd.Timestamp, status_summary: dict, client: Anthropic) -> None:
+def _check_prune_decisions(as_of: pd.Timestamp, status_summary: dict) -> None:
     """The keep-or-drop review, as ONE digest per year rather than a separate
     message and a separate LLM call per candidate.
 
@@ -480,7 +480,7 @@ def _effective_milestone_count(candidate: str, backtest_n: int | None, live_n: i
     return min(backtest_n or 0, sh.MILESTONE_N - live_n) + live_n
 
 
-def _check_n50_milestones(as_of: pd.Timestamp, status_summary: dict, client: Anthropic) -> None:
+def _check_n50_milestones(as_of: pd.Timestamp, status_summary: dict) -> None:
     """NOT one-time -- fires again every time a candidate crosses a NEW
     multiple of sh.MILESTONE_N in its own _effective_milestone_count (50,
     100, 150, ...), states plainly whether it's 'accepted' AT THIS
@@ -685,8 +685,8 @@ def advance(chunk_days: int = CHUNK_DAYS) -> dict:
 
         if (d - last_battery_refresh).days >= 7:
             status_summary = run_replay_battery(d)
-            _check_prune_decisions(d, status_summary, client)
-            _check_n50_milestones(d, status_summary, client)
+            _check_prune_decisions(d, status_summary)
+            _check_n50_milestones(d, status_summary)
             for candidate, info in status_summary.items():
                 if "horizon_changed_to" in info:
                     _send(f"<b>{d.date()}</b>\n\n"
