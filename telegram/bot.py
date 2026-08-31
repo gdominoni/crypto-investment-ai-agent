@@ -7,6 +7,7 @@ no LLM involved at all).
 from __future__ import annotations
 
 import json
+import re
 import os
 import time
 from datetime import datetime, timedelta, timezone
@@ -666,6 +667,37 @@ def _dispatch_update(update: dict, client: Anthropic) -> None:
             "Writes execution/hyperopt_results.json -- copy or push that one file to wherever this bot runs when you're done; nothing else needs to move.",
         ]
         _send("\n".join(lines), pin=True)
+        return
+
+    # Codes from the keep-or-drop digest -- "2019-0003 2020-0011", or "none".
+    # Buttons cannot carry a review of thirty candidates, and typing the labels
+    # themselves (soft_cpi_oversold_bounce_post_claims_beat) is not something a
+    # person does on a phone. Matched before the generic free-text handler so a
+    # reply of bare codes never reaches Sonnet as a question.
+    _codes = re.findall(r"\b(\d{4}-\d{4})\b", text)
+    if _codes or text.strip().lower() == "none":
+        from candidates.methodology import prune_codes
+        from replay import status_history as replay_sh
+        history = replay_sh.load_history()
+        codes = prune_codes({c: e.get("first_tracked_at") for c, e in history.items()})
+        by_code = {v: k for k, v in codes.items()}
+        if not _codes:
+            _send("Nothing dropped -- every candidate stays under test.")
+            return
+        dropped, unknown = [], []
+        for code in _codes:
+            label = by_code.get(code)
+            if label is None:
+                unknown.append(code)
+                continue
+            replay_sh.drop_candidate(label)
+            dropped.append(f"{code} {label}")
+        parts = []
+        if dropped:
+            parts.append("<b>Dropped</b>\n" + "\n".join(escape_html(d) for d in dropped))
+        if unknown:
+            parts.append("<b>Not recognised</b> (nothing done): " + escape_html(", ".join(unknown)))
+        _send("\n\n".join(parts) + "\n\nEverything else stays under test.")
         return
 
     if text.lower().startswith("/usage"):

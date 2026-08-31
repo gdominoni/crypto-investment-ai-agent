@@ -618,3 +618,77 @@ class TestInstalledSdkSupportsWhatTheCodeSends:
             f"installed anthropic {anthropic.__version__} does not accept {missing}, "
             f"which this project's LLM call sites pass. Check requirements.txt's upper bound."
         )
+
+
+class TestPruneRecommendation:
+    """The keep-or-drop call, computed instead of asked. Its whole basis is the
+    distinction between "tested with power and found nothing" and "never
+    actually asked" -- dropping the second discards an open question."""
+
+    def test_a_well_powered_null_is_a_drop(self):
+        from candidates.methodology import prune_recommendation
+        v, why = prune_recommendation({"status": "watch", "n": 400, "pattern_significant": False,
+                                       "pattern_oos_sd": 0.05, "pattern_excess_return": -0.01})
+        assert v == "drop" and "enough power" in why
+
+    def test_an_underpowered_null_is_a_keep(self):
+        """Same p-value, same verdict on paper, opposite decision -- because the
+        volatility says the test could not have detected anything."""
+        from candidates.methodology import prune_recommendation
+        v, why = prune_recommendation({"status": "watch", "n": 100, "pattern_significant": False,
+                                       "pattern_oos_sd": 0.17})
+        assert v == "keep" and "undetermined" in why
+
+    def test_never_testable_is_a_keep_not_a_drop(self):
+        from candidates.methodology import prune_recommendation
+        v, why = prune_recommendation({"status": "insufficient_data", "n": 8})
+        assert v == "keep" and "not a negative result" in why
+
+    def test_a_significant_candidate_is_never_dropped(self):
+        from candidates.methodology import prune_recommendation
+        v, _ = prune_recommendation({"status": "watch", "n": 200, "pattern_significant": True,
+                                     "pattern_oos_sd": 0.08})
+        assert v == "keep"
+
+    def test_missing_volatility_defaults_to_keeping(self):
+        """No basis to judge must never become a reason to discard."""
+        from candidates.methodology import prune_recommendation
+        assert prune_recommendation({"status": "watch", "n": 300,
+                                     "pattern_significant": False})[0] == "keep"
+
+
+class TestPruneCodes:
+    def test_codes_are_stable_and_grouped_by_year(self):
+        from candidates.methodology import prune_codes
+        codes = prune_codes({"b": "2019-07-02", "a": "2019-03-11", "c": "2020-01-15"})
+        assert codes == {"a": "2019-0001", "b": "2019-0002", "c": "2020-0001"}
+        assert prune_codes({"b": "2019-07-02", "a": "2019-03-11", "c": "2020-01-15"}) == codes
+
+    def test_a_missing_timestamp_does_not_crash_the_review(self):
+        from candidates.methodology import prune_codes
+        assert prune_codes({"x": None})["x"].endswith("-0001")
+
+
+class TestPruneDigest:
+    ROWS = {"kept": {"status": "watch", "n": 100, "pattern_significant": False, "pattern_oos_sd": 0.17},
+            "dropped": {"status": "watch", "n": 400, "pattern_significant": False,
+                        "pattern_oos_sd": 0.05, "pattern_excess_return": -0.01}}
+    FIRST = {"kept": "2019-07-02", "dropped": "2019-03-11"}
+
+    def _text(self):
+        import re
+        from candidates.methodology import format_prune_digest
+        return re.sub(r"<[^>]+>", "", format_prune_digest(self.ROWS, self.FIRST, "2021-01-01"))
+
+    def test_both_groups_appear_with_their_codes(self):
+        t = self._text()
+        assert "Recommended to DROP (1)" in t and "Recommended to KEEP (1)" in t
+        assert "2019-0001" in t and "2019-0002" in t
+
+    def test_every_line_carries_the_numbers_the_decision_rests_on(self):
+        t = self._text()
+        assert "N=400" in t and "N=100" in t
+
+    def test_it_says_how_to_answer(self):
+        t = self._text()
+        assert "Reply with the codes" in t and "none" in t

@@ -1220,3 +1220,62 @@ and constrains nothing it can decide. A prompt carries rules and consequences th
 model can act on -- the threshold table earns its tokens because it says what a
 -20% versus a -10% choice does to sample size, which is a property of the data
 the model cannot derive on its own. Everything explanatory belongs here.
+
+---
+
+### 2026-08-31 — The keep-or-drop review: one digest a year, and no model opinion in it
+
+**Where the replay's budget was actually going.** Instrumented across a 5.5-year
+run, the LLM calls split like this:
+
+    prune advice      665    55%
+    macro events      427    35%
+    shock events      110     9%
+
+**More than half of every call was the keep-or-drop opinion, not discovery** --
+$2.73 of $10.11. The mechanism fired per candidate, after two years without an
+acceptance, re-asking every six months; with 234 candidates almost none of which
+were ever accepted, it compounded to ~2.8 requests each.
+
+**The opinion could not have added evidence, by construction.**
+`sonnet_prune_advice` received the candidate's name, its trigger description,
+years tracked, and its numbers -- and its own docstring described the output as
+"a qualitative opinion only, no verification machinery behind it". Meanwhile
+`explain_non_acceptance()` already produced the concrete computed reason
+("97% of it comes from a single coin (XRPUSDT) -- too concentrated to trust as
+general"). The model was being asked to narrate the same figures the human was
+already reading.
+
+**What replaced it uses more of the evidence, not less.** `prune_recommendation()`
+derives keep-or-drop offline, and turns on the distinction the opinion had no
+access to -- whether there was POWER to detect an effect:
+
+    well-powered and nothing found    -> DROP   (evidence of absence)
+    underpowered                      -> KEEP   (undetermined, never asked)
+    never enough occurrences          -> KEEP   (not a negative result)
+    still significant                 -> KEEP   (blocked only by robustness)
+
+Two candidates with the same p-value and the same "not significant" verdict now
+receive opposite recommendations, correctly, because their own volatilities say
+one test could have found an effect and the other could not.
+
+**Delivery changed too, for a human reason rather than a cost one.** The review
+is now a single annual digest split into "Recommended to DROP" and "Recommended
+to KEEP", each line carrying N, p, MFE/MAE and the reason. One message per
+candidate does not get read; 234 candidates in one message is roughly six
+Telegram messages, which also does not get read. Only candidates actually due
+are listed -- a few dozen a year, which fits in one message a person will
+actually work through.
+
+Each candidate carries a short code, `2019-0001`, derived from the year it
+entered the registry and its order within that year. The human replies with the
+codes to drop. Nobody types
+`soft_cpi_oversold_bounce_post_claims_beat` on a phone, and buttons cannot carry
+a thirty-item review. Codes are derived rather than stored, so the same history
+always produces the same codes and nothing extra has to stay in sync.
+
+**Effect.** 665 calls to 0, since the digest needs no model at all: roughly a 27%
+reduction in the cost of a replay, with the decision resting on strictly more of
+the available evidence than before. Applied to the milestone checkpoint as well,
+for the same reason -- it was showing the same kind of opinion from the same kind
+of numbers.

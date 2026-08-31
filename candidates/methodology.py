@@ -1357,6 +1357,125 @@ def _insufficient_data_block(items: list[tuple[str, dict]]) -> list[str]:
     return lines
 
 
+def prune_recommendation(row: dict) -> tuple[str, str]:
+    """Should a human keep re-testing this candidate, or drop it? Returns
+    ("drop"|"keep", one-line reason), computed entirely offline.
+
+    The basis is the distinction `required_n_for_power` exists to make, and it
+    is the whole reason this can be decided without asking a model. "Not
+    significant" carries two completely different meanings:
+
+      * there WAS power to detect an effect of interest and none was found --
+        that is evidence of absence, and the candidate has been answered.
+      * there was NOT power, so the result is undetermined -- dropping it would
+        discard a question that was never actually asked.
+
+    Anything still statistically alive, or blocked only by a robustness check
+    rather than by the effect itself, is kept: those are candidates whose
+    evidence is still accumulating.
+
+    Previously a human got Sonnet's qualitative opinion here. That opinion was
+    formed from exactly these numbers with nothing added -- no extra data, no
+    verification -- while `explain_non_acceptance` already states the concrete,
+    computed reason. The recommendation below uses more of the available
+    evidence than the opinion did, and every line of it is traceable to a
+    calculation.
+    """
+    status = row.get("status")
+    n = row.get("n") or 0
+    sig = row.get("pattern_significant")
+    excess = row.get("pattern_excess_return")
+    sd = row.get("pattern_oos_sd")
+
+    if status == "accepted":
+        return "keep", "currently accepted"
+    if status == "insufficient_data" or n <= MethodologyConfig(horizons=(1,)).min_report_events:
+        return "keep", f"only {n} occurrence(s) so far -- never yet testable, not a negative result"
+    if sig:
+        return "keep", "statistically significant; held back only by a robustness check"
+
+    need = required_n_for_power(sd) if sd is not None else float("nan")
+    if need == need and n >= need:
+        direction = ""
+        if excess is not None and excess == excess:
+            direction = f", and the measured effect runs {excess:+.1%}"
+        return "drop", (f"tested with enough power to detect a {MIN_INTERESTING_EFFECT:.0%} effect "
+                        f"(N={n}, needed ~{need:.0f}) and none was found{direction}")
+    if need == need:
+        return "keep", (f"not significant, but N={n} against the ~{need:.0f} its own volatility "
+                        f"would require -- undetermined, not disproved")
+    return "keep", "not enough information to judge either way"
+
+
+def prune_codes(first_tracked: dict) -> dict:
+    """Short, stable handles for candidates -- "2019-0001" -- keyed off the year
+    a candidate entered the registry and its order within that year.
+
+    Exists because a human answering on a phone cannot reasonably be asked to
+    type `soft_cpi_oversold_bounce_post_claims_beat`. Derived rather than
+    stored: the same history always produces the same codes, so nothing extra
+    has to be persisted or kept in sync.
+
+    `first_tracked`: candidate -> ISO timestamp of when it entered the registry.
+    """
+    by_year = {}
+    for label, ts in sorted(first_tracked.items(), key=lambda kv: (str(kv[1]), kv[0])):
+        year = str(ts)[:4] if ts else "0000"
+        by_year.setdefault(year, []).append(label)
+    return {label: f"{year}-{i:04d}"
+            for year, labels in by_year.items()
+            for i, label in enumerate(labels, start=1)}
+
+
+def format_prune_digest(rows: dict, first_tracked: dict, as_of: str) -> str:
+    """The periodic keep-or-drop review, as ONE message split into a recommended
+    group and a keep group -- replacing a per-candidate Sonnet opinion.
+
+    Computed entirely offline. Each line carries the numbers the decision rests
+    on and the reason the recommendation was made, so a human is reading
+    evidence rather than a model's narrative about evidence.
+
+    Only candidates given to it are listed: the caller decides who is due, since
+    a digest of every candidate ever registered is unreadable (234 candidates is
+    roughly six Telegram messages, which nobody reviews).
+    """
+    codes = prune_codes(first_tracked)
+    drop, keep = [], []
+    for label, row in sorted(rows.items()):
+        verdict, reason = prune_recommendation(row)
+        (drop if verdict == "drop" else keep).append((codes.get(label, "----"), label, row, reason))
+
+    out = [f"<b>{_escape_html(as_of)} -- keep-or-drop review</b>", "",
+           f"{len(drop) + len(keep)} candidate(s) have been tracked long enough to review. "
+           f"Every figure below is computed, not estimated.", ""]
+
+    def block(title, items, note):
+        if not items:
+            return []
+        lines = [f"<b>{title} ({len(items)})</b>", f"<i>{note}</i>", ""]
+        for code, label, row, reason in items:
+            n = row.get("n")
+            p = row.get("pattern_p_value")
+            mm = row.get("pattern_mfe_mae_ratio")
+            bits = [f"N={n}" if n is not None else None,
+                    f"p={p:.3f}" if isinstance(p, (int, float)) and p == p else None,
+                    f"MFE/MAE={mm:.2f}" if isinstance(mm, (int, float)) and mm == mm else None]
+            stats = "  ".join(b for b in bits if b)
+            lines.append(f"<b>{code}</b>  {_escape_html(label)}")
+            lines.append(f"    {stats}")
+            lines.append(f"    {_escape_html(reason)}")
+            lines.append("")
+        return lines
+
+    out += block("Recommended to DROP", drop,
+                 "tested with enough power to find an effect of interest; none was there")
+    out += block("Recommended to KEEP", keep,
+                 "still undetermined -- dropping these would discard a question never actually answered")
+    out += ["Reply with the codes to DROP, separated by spaces (e.g. <code>2019-0003 2020-0011</code>).",
+            "Reply <code>none</code> to keep everything. Anything not named is kept."]
+    return "\n".join(out)
+
+
 def format_trigger_summary(status_summary: dict, dropped_extra: dict | None = None) -> tuple[str, str]:
     """Two-part human-readable report over every tracked trigger --
     'still under test' (accepted/watch/insufficient_data/error) and

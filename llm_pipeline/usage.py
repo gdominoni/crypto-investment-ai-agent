@@ -27,11 +27,27 @@ from candidates.atomic_json import read_json, write_json
 
 USAGE_PATH = Path(__file__).resolve().parent.parent / "llm_usage.json"
 
-# USD per 1M tokens (input, output).
+# USD per 1M tokens (input, output), list prices.
 PRICES = {
     "claude-sonnet-5": (3.00, 15.00),
     "claude-haiku-4-5": (1.00, 5.00),
 }
+
+# Empirical correction, from the only check that can settle this: comparing the
+# figure below against a real invoice. Over one measured window the list-price
+# arithmetic produced $12.25 where the account was actually charged $9.00 -- an
+# overestimate of 36%.
+#
+# Deliberately a single scalar rather than re-derived per-token prices. Two
+# different price sets reconcile that same observation (output at $8.81/M with
+# input unchanged, or everything scaled by 0.735), and one data point cannot
+# distinguish them. Inventing a specific price would be overfitting a noisy
+# measurement and would read as authoritative when it is not.
+#
+# TOKEN COUNTS ARE EXACT regardless -- they come straight off each response.
+# Only the dollar column depends on this. Re-derive the factor by comparing a
+# fresh /usage total against the console's billing page over the same period.
+COST_CALIBRATION = 0.735
 
 
 def _price(model: str) -> tuple[float, float]:
@@ -72,10 +88,11 @@ def record(response, label: str, model: str) -> None:
         e["output_tokens"] += tout
         e["cache_write_tokens"] = e.get("cache_write_tokens", 0) + tcw
         e["cache_read_tokens"] = e.get("cache_read_tokens", 0) + tcr
-        e["usd"] = round(e["input_tokens"] / 1e6 * pin
-                         + e["cache_write_tokens"] / 1e6 * pin * 1.25
-                         + e["cache_read_tokens"] / 1e6 * pin * 0.10
-                         + e["output_tokens"] / 1e6 * pout, 4)
+        e["usd_list"] = round(e["input_tokens"] / 1e6 * pin
+                              + e["cache_write_tokens"] / 1e6 * pin * 1.25
+                              + e["cache_read_tokens"] / 1e6 * pin * 0.10
+                              + e["output_tokens"] / 1e6 * pout, 4)
+        e["usd"] = round(e["usd_list"] * COST_CALIBRATION, 4)
         e["model"] = model
         data["_updated_at"] = datetime.now(timezone.utc).isoformat()
         write_json(USAGE_PATH, data)
@@ -98,6 +115,13 @@ def summary() -> str:
     tu = 0.0
     for label, v in rows:
         w, r = v.get("cache_write_tokens", 0), v.get("cache_read_tokens", 0)
+        # Recomputed at display time rather than read from the stored figure, so
+        # that changing COST_CALIBRATION corrects the whole history at once
+        # instead of applying only to rows written afterwards.
+        pin, pout = _price(v.get("model", ""))
+        v = {**v, "usd": round((v["input_tokens"] / 1e6 * pin + w / 1e6 * pin * 1.25
+                                + r / 1e6 * pin * 0.10 + v["output_tokens"] / 1e6 * pout)
+                               * COST_CALIBRATION, 4)}
         lines.append(f"{label:<22}{v['calls']:>7}{v['input_tokens']:>11,}{w:>10,}{r:>10,}"
                      f"{v['output_tokens']:>10,}{v['usd']:>9.2f}")
         tc += v["calls"]; ti += v["input_tokens"]; to += v["output_tokens"]
@@ -110,6 +134,7 @@ def summary() -> str:
                      f"-- near 0% means the breakpoint is on content that changes")
     if tc:
         lines.append(f"\nAverage cost per call: ${tu/tc:.5f}")
-    lines.append(f"\nPrices are a local assumption ({USAGE_PATH.name} stores real token counts "
-                 f"either way) -- see llm_pipeline/usage.py::PRICES.")
+    lines.append(f"\nToken counts are exact. Dollars apply a {COST_CALIBRATION:.3f} calibration to "
+                 f"list prices, fitted against one real invoice -- treat them as indicative and "
+                 f"check the console for what was actually billed.")
     return "\n".join(lines)

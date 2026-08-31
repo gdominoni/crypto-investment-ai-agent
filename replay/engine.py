@@ -33,10 +33,11 @@ from dotenv import load_dotenv
 from candidates.data_loading import load_daily, load_funding, load_hourly
 from candidates.definitions import CANDIDATE_DIRECTIONS, TRIGGER_DESCRIPTIONS, compute_triggers
 from candidates.macro_vintage import MACRO_SERIES
-from candidates.methodology import explain_non_acceptance, path_outcome, shock_zscore_series
+from candidates.methodology import (explain_non_acceptance, format_prune_digest, path_outcome,
+                                     prune_recommendation, shock_zscore_series)
 from candidates.run_battery import COINS
 from execution import hyperopt_runner
-from llm_pipeline.haiku_sonnet_pipeline import escape_html, format_spec_clauses, sonnet_prune_advice
+from llm_pipeline.haiku_sonnet_pipeline import escape_html, format_spec_clauses
 from llm_pipeline.novel_condition_tester import (
     ConditionSpec, clause_from_dict, clause_signal_hourly, clause_to_dict, condition_desc, format_pattern_significance,
     spec_from_dict, spec_from_proposal,
@@ -355,42 +356,38 @@ PRUNE_KEYBOARD_TEMPLATE = lambda candidate: {
 
 
 def _check_prune_decisions(as_of: pd.Timestamp, status_summary: dict, client: Anthropic) -> None:
-    """Same mechanism as scheduler/weekly_revalidation.py's real one --
-    a candidate tracked 2 simulated years without ever being accepted
-    gets a keep-or-drop proposal, Sonnet's advisory opinion attached, a
-    human decision via Telegram buttons. Checked every battery refresh
-    (~7 simulated days), same cadence the battery itself re-classifies
-    status on."""
+    """The keep-or-drop review, as ONE digest per year rather than a separate
+    message and a separate LLM call per candidate.
+
+    The per-candidate version asked Sonnet for a qualitative opinion on each
+    candidate due for review. Measured over a 5.5-year replay that was 665 of
+    1203 calls -- 55% of everything the run spent -- to produce advice formed
+    from exactly the numbers already in the message, with nothing added and no
+    verification behind it. `prune_recommendation` now derives the same
+    keep-or-drop call from those numbers directly, using the one piece of
+    evidence the opinion could not: whether there was POWER to detect an effect,
+    which separates "tested and found nothing" from "never actually asked".
+
+    Annual rather than continuous because the decision is not urgent -- a
+    candidate is re-tested every ~7 simulated days regardless -- and because a
+    human reviewing thirty candidates once reads them, while a human receiving
+    one message per candidate stops reading.
+    """
     as_of_str = str(as_of.date())
-    for candidate in sh.candidates_due_for_prune_decision(as_of_str):
-        info = status_summary.get(candidate, {})
-        if info.get("status") == "error":
-            reason = "this refresh failed to process this candidate -- its long-term status is unavailable this time"
-            summary = "no current data (processing error)"
-        elif info.get("n") is not None:
-            reason = explain_non_acceptance(info)
-            summary = (f"win_rate={info['win_rate']:.1%}, sortino={info['sortino']:.2f}, N={info['n']} "
-                       f"(reference TP/SL-structure stats, informational only, don't gate acceptance)")
-        else:
-            reason = "no current data" if info.get("status") != "insufficient_data" else explain_non_acceptance({"n": 0})
-            summary = "no current data" if info.get("status") != "insufficient_data" else "not enough historical occurrences yet to compute reference stats"
-        trigger_desc = _trigger_description(candidate)
-        advice = sonnet_prune_advice(
-            candidate, years_tracked=sh.years_tracked(candidate, as_of_str) or sh.PRUNE_YEARS_THRESHOLD,
-            recent_summary=summary, trigger_description=trigger_desc, client=client,
-        )
-        message = (
-            f"<b>{as_of_str}</b>\n\n"
-            f"<b>Keep-or-drop decision -- {escape_html(candidate)}</b>\n\n"
-            f"({escape_html(trigger_desc)})\n\n"
-            f"Tracked 2+ years, never reached 'accepted' status.\n"
-            f"<b>Why:</b> {escape_html(reason)}.\n\n"
-            f"Will keep being re-tested automatically every ~7 days either way, unless dropped below.\n"
-            f"For reference: {escape_html(summary)}\n\n"
-            f"Sonnet's opinion (advisory only, not a verified finding): {escape_html(advice)}"
-        )
-        _send(message, reply_markup=PRUNE_KEYBOARD_TEMPLATE(candidate))
-        sh.mark_asked(candidate, as_of_str)
+    last = state.load_checkpoint().get("last_prune_digest")
+    if last and as_of.year <= pd.Timestamp(last).year:
+        return
+    due = sh.candidates_due_for_prune_decision(as_of_str)
+    if not due:
+        return
+    rows = {c: status_summary.get(c, {}) for c in due}
+    first_tracked = {c: sh.load_history().get(c, {}).get("first_tracked_at") for c in due}
+    _send(format_prune_digest(rows, first_tracked, as_of_str))
+    for c in due:
+        sh.mark_asked(c, as_of_str)
+    cp = state.load_checkpoint()
+    cp["last_prune_digest"] = as_of_str
+    state._write(state.CHECKPOINT_PATH, cp)
 
 
 def _resolved_live_test_counts() -> dict[str, int]:
@@ -458,10 +455,12 @@ def _check_n50_milestones(as_of: pd.Timestamp, status_summary: dict, client: Ant
         else:
             criteria_str = "no current backtest data"
         trigger_desc = _trigger_description(candidate)
-        advice = sonnet_prune_advice(
-            candidate, years_tracked=sh.years_tracked(candidate, as_of_str) or 0.0,
-            recent_summary=criteria_str, trigger_description=trigger_desc, client=client,
-        )
+        # Same reasoning as the keep-or-drop digest: the model's opinion here was
+        # formed from the numbers already in this message, with nothing added.
+        # prune_recommendation derives the call from them directly and can use the
+        # one thing the opinion could not -- whether there was POWER to detect an
+        # effect -- so a "no" means something different from "we could not tell".
+        _verdict, advice = prune_recommendation(info)
         count_basis = (f"{live_n} live occurrence(s) so far" if is_static else
                        f"{n_reached} recent occurrence(s) so far ({live_n} live, the rest backtest -- static "
                        f"candidates count live occurrences only; this one is Sonnet-proposed, so backtest tops "
@@ -478,7 +477,7 @@ def _check_n50_milestones(as_of: pd.Timestamp, status_summary: dict, client: Ant
             f"Re-evaluated fresh at every {sh.MILESTONE_N}-occurrence checkpoint, not a permanent verdict -- re-checked "
             f"again at {n_reached + sh.MILESTONE_N} either way, unless dropped below.\n\n"
             f"{escape_html(hyperopt_runner.format_result(candidate))}\n\n"
-            f"Sonnet's opinion (advisory only, not a verified finding): {escape_html(advice)}"
+            f"Assessment: {escape_html(advice)}"
         )
         _send(message, reply_markup=PRUNE_KEYBOARD_TEMPLATE(candidate))
         sh.mark_milestone_reported(candidate, n_reached, cleared)
