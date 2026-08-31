@@ -392,11 +392,20 @@ should be presented that way.
 
 **Still open after implementation:**
 
-  * **Production still triggers on shocks and news headlines** (`shock_detector.py`,
-    `haiku_sonnet_pipeline.py`), while the replay now triggers on compression. The
-    clause-level bans are shared, but the DISCOVERY moment is not -- a train/serve
-    mismatch of exactly the kind flagged for GDELT in item 1. Decide deliberately:
-    align production, or state the divergence.
+  * ~~Production still triggers on shocks~~ DONE 2026-08-31: `compression_detector.py`
+    replaces `shock_detector.py` as the escalation path, calling the SAME
+    `compression_exit` the replay uses. Fixed a defect in the old path while doing
+    it -- `scan_for_shocks` tested the volatility STATE, so an hourly daemon
+    re-escalated the same multi-day shock every hour; the new scan keeps a ledger
+    keyed on the exit date.
+  * **The news-headline path is still a trigger** (`run_once` -> Haiku scout ->
+    `sonnet_strategist`). By the same principle that removed the macro trigger, a
+    news headline is one of the CAUSES being sought, so triggering on it means
+    never seeing the counterfactual -- a compression that resolves with no news.
+    Left in place deliberately: it is the project's named subject, it is Haiku's
+    only role, and unlike scheduled macro releases it is unscheduled and content-
+    bearing. Not measurable either way without a historical headline archive
+    (item 1). Flagged so the asymmetry is a choice on record, not an oversight.
   * The p-values behind the compression finding are optimistic: 14-day forward
     windows overlap heavily and the seven coins are correlated. The effect SIZES
     (16.1% vs 11.1%) are the part to trust.
