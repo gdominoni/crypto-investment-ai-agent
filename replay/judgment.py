@@ -193,7 +193,7 @@ def format_shock_event(symbol: str, shock_z: float, direction: str) -> str:
 
 
 def judge_event(event_description: str, client: Anthropic, as_of: pd.Timestamp | None = None,
-                 coin: str | None = None) -> dict:
+                 coin: str | None = None, model: str = SONNET_MODEL) -> dict:
     """`as_of`, when given (always passed by the day-by-day walker), adds
     real, time-sandboxed indicator readings and the real macro releases
     from the last 10 (simulated) days -- the same real, dated context
@@ -226,10 +226,14 @@ def judge_event(event_description: str, client: Anthropic, as_of: pd.Timestamp |
         # all (extract_text raising "No text block"), or truncated the JSON mid-
         # string (json.loads raising). Headroom fixes both, whatever the model's
         # exact reason for thinking is -- see docs/case_study/methodology-decisions.md.
-        model=SONNET_MODEL, max_tokens=2000, system=cached_system(REPLAY_SYSTEM_PROMPT),
+        # `model` is a parameter only so the same prompt, the same context and the
+        # same scoring can be pointed at a cheaper model for comparison
+        # (forecast/model_comparison.py). The replay itself never overrides it.
+        model=model, max_tokens=2000, system=cached_system(REPLAY_SYSTEM_PROMPT),
         messages=[{"role": "user", "content": user_content}],
     )
-    _usage.record(response, "replay.shock" if coin else "replay.macro", SONNET_MODEL)
+    _usage.record(response, ("replay.shock" if coin else "replay.macro")
+                            + ("" if model == SONNET_MODEL else f".{model.split('-')[1]}"), model)
     return json.loads(_strip_fences(extract_text(response)))
 
 
