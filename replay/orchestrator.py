@@ -29,10 +29,16 @@ CHECKIN_QUESTIONS = [
 ]
 
 
-def run_to_completion(max_chunks: int = 200, ask_every: int = 4) -> dict:
+def run_to_completion(max_chunks: int = 1500, ask_every: int = 4) -> dict:
     load_dotenv()
     client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
+    # 200 was too low and stopped a real run at 2023-03 with budget still
+    # available. A chunk ends early on every proposal, so the cap is consumed by
+    # DISCOVERY, not by elapsed time: 197 proposals plus ~110 thirty-day chunks
+    # exhausted it well before the timeline did. The cap exists only to bound a
+    # runaway loop, and the api_failure halt now covers the failure mode that
+    # actually needed bounding, so it can be generous.
     chunk_count = 0
     question_idx = 0
     while chunk_count < max_chunks:

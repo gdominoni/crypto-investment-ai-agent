@@ -134,3 +134,37 @@ class TestConsecutiveFailureHalt:
             "counter must reset after each success, or unrelated failures spread across "
             "a long run would eventually halt a healthy replay"
         )
+
+
+class TestUnattendedPruneDigest:
+    """The replay must not stall on a decision nobody is there to make."""
+
+    def test_the_replay_applies_drop_recommendations_itself(self, monkeypatch):
+        """Same treatment the orchestrator gives a test proposal. Production
+        sends the identical digest and waits, because there the decision is the
+        human's -- this is a property of the simulation, not of the system."""
+        import inspect
+        src = inspect.getsource(E._check_prune_decisions)
+        assert "sh.drop_candidate(c)" in src, "recommendations must be applied, not just sent"
+        assert "prune_recommendation" in src
+
+    def test_only_drops_are_acted_on(self):
+        """`keep` is the default for every candidate including those not named,
+        so acting on it would be a no-op."""
+        import inspect
+        src = inspect.getsource(E._check_prune_decisions)
+        assert '== "drop"' in src
+
+    def test_the_message_says_the_decision_was_automatic(self):
+        import inspect
+        src = inspect.getsource(E._check_prune_decisions)
+        assert "Unattended replay" in src, "a reader of the transcript must not think a human chose"
+
+    def test_the_chunk_cap_is_high_enough_for_a_full_timeline(self):
+        """The cap is consumed by DISCOVERY, not elapsed time -- a chunk ends
+        early on every proposal. 200 stopped a real run at 2023-03 with budget
+        left: ~110 thirty-day chunks plus 197 proposals exhausted it."""
+        import inspect
+        import replay.orchestrator as O
+        default = inspect.signature(O.run_to_completion).parameters["max_chunks"].default
+        assert default >= 110 + 400

@@ -382,9 +382,28 @@ def _check_prune_decisions(as_of: pd.Timestamp, status_summary: dict, client: An
         return
     rows = {c: status_summary.get(c, {}) for c in due}
     first_tracked = {c: sh.load_history().get(c, {}).get("first_tracked_at") for c in due}
-    _send(format_prune_digest(rows, first_tracked, as_of_str))
+    digest = format_prune_digest(rows, first_tracked, as_of_str)
+
+    # The replay runs unattended, so the recommendations are APPLIED rather than
+    # left waiting for a reply that will never come -- the same treatment the
+    # orchestrator gives a test proposal. This is a property of the simulation,
+    # not of the system: production sends the identical digest and waits for a
+    # human, because there the decision is the human's to make.
+    #
+    # Only "drop" is acted on. "Keep" is the default for everything, including
+    # every candidate not named, so applying it would be a no-op.
+    dropped = [c for c in due if prune_recommendation(rows[c])[0] == "drop"]
+    for c in dropped:
+        sh.drop_candidate(c)
     for c in due:
         sh.mark_asked(c, as_of_str)
+    if dropped:
+        digest += (f"\n\n<i>Unattended replay: the {len(dropped)} recommended drop(s) were applied "
+                   f"automatically. The other {len(due) - len(dropped)} stay under test.</i>")
+    else:
+        digest += "\n\n<i>Unattended replay: nothing was recommended for dropping; all stay under test.</i>"
+    _send(digest)
+    print(f"[{as_of_str}] keep-or-drop digest: {len(due)} reviewed, {len(dropped)} dropped automatically")
     cp = state.load_checkpoint()
     cp["last_prune_digest"] = as_of_str
     state._write(state.CHECKPOINT_PATH, cp)
