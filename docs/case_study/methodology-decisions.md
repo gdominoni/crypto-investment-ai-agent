@@ -1161,42 +1161,68 @@ problem.
 
 ---
 
-### 2026-08-31 — The 87 off-thesis proposals were a framing bug, not a compliance bug
+### 2026-08-31 — Framing the model as a researcher, and the cost metric that justifies it
 
-**The diagnosis.** Every system prompt in this project opened with *"You are a
-market strategist for a crypto trading system."* Then, further down, it required
-a news/macro clause in every proposal. In the replay's own run, **87 proposals
-arrived with no event term at all** and were discarded unread.
+**The unit of cost that matters is not the call.** A replay call costs $0.0114.
+That number is nearly useless for deciding anything, because most calls buy
+nothing usable. The metric that governs the discovery budget is **cost per
+testable hypothesis produced**, and measured over the 2017-08 to 2023-03 run it
+was **$0.34** -- thirty times the headline figure.
 
-Reading that as the model ignoring instructions was the wrong diagnosis. A
-market strategist for a trading system looks for entry setups, and an entry
-setup is made of RSI, Bollinger position, volume and volatility. The model was
-doing precisely the job it had been given a title for. The requirement further
-down the prompt was fighting the role stated in its first sentence, and the role
-was winning.
+The funnel, measured:
 
-**The change.** All three prompts (production, shock, replay) now open with the
-research framing instead:
+    calls to Sonnet                          1203    $13.75
+      no_action (no proposal at all)          162
+      proposals formulated                    284
+        discarded: no event term               87    31% of proposals
+        passed validation and tested          197
 
-> You are a quantitative researcher, not a trader. Your subject is a single
-> question: does a real-world macro or news EVENT produce a measurable,
-> repeatable change in crypto prices over the following days? Nothing here is a
-> trading system -- no position is ever opened, no money is ever at risk, and
-> there is no entry signal to find.
+    candidates registered                     234
+      never judgeable (insufficient_data)     193    82%
+      judgeable                                41    18%
 
-with the operative test stated plainly: *if your idea would still make sense with
-the macro release deleted from it, it is a chart pattern and does not belong
-here.* The technical readings are named explicitly as CONTEXT -- the state the
-market was in when the event landed -- rather than as the subject.
+    cost per judgeable hypothesis           $0.34
 
-**Cost.** This does not reduce spend per call: a rejected proposal costs the same
-as an accepted one, because the call is already paid for by the time the spec is
-validated. What it should improve is YIELD -- 87 of ~197 proposals in the last
-run produced nothing usable, so nearly half the discovery budget bought
-discarded output.
+Two multiplicative losses. Roughly a third of proposals never contained the
+event term this project exists to test, so they were discarded before any
+computation. Of what survived, four fifths described conditions so rare they
+never accumulated enough occurrences to be judged either way. From 284 proposals,
+41 usable hypotheses: **14%**.
 
-**Stated as a prediction, not a result.** The reasoning is sound and the change
-is nearly free, but its effect is unmeasured: it needs a replay run under the new
-framing to compare off-thesis proposal rates. The prior run's 87/197 is the
-baseline to beat. Recorded now so the comparison is honest later rather than
-reconstructed to fit whatever happens.
+**The first loss is a prompt design choice, not model disobedience.** Every
+system prompt opened with *"You are a market strategist for a crypto trading
+system"*, then required a news/macro clause several paragraphs later. A market
+strategist for a trading system looks for entry setups, and entry setups are
+built from RSI, Bollinger position, volume and volatility. The role stated in the
+first sentence and the constraint stated later were asking for different things,
+and the role won 31% of the time.
+
+The prompts now open as a quantitative researcher whose subject is whether a
+macro or news EVENT produces a measurable change in prices, with no position ever
+opened and no entry signal to find -- and with the operative test stated plainly:
+*if the idea would still make sense with the macro release deleted from it, it is
+a chart pattern and does not belong here.* Technical readings are named as
+CONTEXT for the event rather than as the subject. The second loss is addressed
+separately by the clause cap and the threshold guidance.
+
+**What this does and does not buy.** Spend per call is unchanged: a discarded
+proposal costs exactly what a good one does, since the call is paid for before
+the spec is validated. What changes is yield. As arithmetic on the funnel above,
+clearly a projection rather than a measurement:
+
+    off-thesis rate falls to 20%   ->  1.15x testable hypotheses  ->  $0.29 each
+    off-thesis rate falls to 10%   ->  1.30x testable hypotheses  ->  $0.26 each
+
+**Left as a prediction on purpose.** The 31% off-thesis rate under a trading
+framing is the measured baseline; the rate under the research framing is not yet
+known and requires a run to establish. Recorded before that run so the comparison
+is honest afterwards rather than reconstructed to fit whatever it produces.
+
+**A separate note on what belongs in a prompt.** An earlier draft of this change
+put the funnel numbers above INTO the system prompts -- "87 of the proposals made
+under a trading framing had no event term". That was a category error: the model
+has no memory of those proposals and no notion of this project's history, so the
+text cost tokens and constrained nothing. Prompts carry rules and consequences
+the model can act on (the threshold table, which tells it what a -20% versus a
+-10% choice does to sample size, is worth its tokens); justification belongs
+here.
