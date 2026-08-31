@@ -96,13 +96,43 @@ def surprise_series(name: str, index: pd.DatetimeIndex, window: int = 12) -> pd.
     return pd.Series(by_pub.reindex(target).to_numpy(), index=index, dtype=float)
 
 
-def release_dates(name: str, start: pd.Timestamp, end: pd.Timestamp) -> pd.DatetimeIndex:
-    """Every distinct real-world date this series actually published a
-    NEW number, within [start, end] -- these are the real, dated events
-    the replay reacts to, not an approximation."""
+def release_dates(name: str, start: pd.Timestamp, end: pd.Timestamp,
+                   new_periods_only: bool = False) -> pd.DatetimeIndex:
+    """Every distinct real-world date this series published anything within
+    [start, end] -- real, dated events rather than an approximation.
+
+    `new_periods_only=True` keeps only dates on which a period was published
+    for the FIRST time, dropping days that carry nothing but revisions of
+    periods already released.
+
+    Why that distinction is worth a parameter. ALFRED records a
+    `realtime_start` for revisions too, and the annual seasonal-adjustment
+    pass re-publishes years of history at once. Measured over 2018-2026, 37
+    of 687 firings (5.4%, across 19 distinct days) landed on days where no
+    new period appeared at all -- and they were not scattered: almost every
+    one falls on 1 JANUARY, when no US statistical agency releases anything,
+    plus the February CPI seasonal-factor revisions.
+
+    On such a day the replay told Sonnet "CPI was released", while
+    `latest_release_with_prior` handed back the latest period's value
+    UNCHANGED from what it had already seen -- an event that did not happen,
+    described as though it had, for 5.4% of the macro discovery budget. Not a
+    lookahead (the revision genuinely is dated that day), but not an
+    information event either.
+
+    The default stays False because the other two callers want revisions
+    included: `recent_releases_summary` reports what became public, and
+    `macro_calendar` builds the release calendar, where a revision is a real
+    publication. Only the replay's event trigger asks "did something NEW come
+    out today", and only it passes True."""
     df = _load_vintage(name)
-    dates = df["realtime_start"][(df["realtime_start"] >= start) & (df["realtime_start"] <= end)]
-    return pd.DatetimeIndex(sorted(dates.unique()))
+    in_window = (df["realtime_start"] >= start) & (df["realtime_start"] <= end)
+    if new_periods_only:
+        # A period's first publication, not its latest -- the market reacted to
+        # the number as originally printed, same convention as surprise_series.
+        first_pub = df.sort_values("realtime_start").groupby("date")["realtime_start"].min()
+        in_window &= df["realtime_start"].isin(set(first_pub))
+    return pd.DatetimeIndex(sorted(df["realtime_start"][in_window].unique()))
 
 
 def latest_release_with_prior(name: str, as_of: pd.Timestamp | None = None) -> dict | None:

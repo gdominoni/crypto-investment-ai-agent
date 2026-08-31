@@ -697,7 +697,9 @@ def advance(chunk_days: int = CHUNK_DAYS) -> dict:
             last_battery_refresh = d
 
         for series_key, series_label in MACRO_SERIES.items():
-            if len(release_dates(series_key, d, d)) == 0:
+            # new_periods_only: a day carrying only revisions of already-published
+            # periods is not an information event -- see macro_vintage.release_dates.
+            if len(release_dates(series_key, d, d, new_periods_only=True)) == 0:
                 continue
             release = latest_release_with_prior(series_key, d)
             if release is None:
