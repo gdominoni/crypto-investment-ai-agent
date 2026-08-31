@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 
 from anthropic import Anthropic
@@ -27,15 +28,15 @@ from dotenv import load_dotenv
 
 from candidates.atomic_json import write_json
 from candidates.definitions import TRIGGER_DESCRIPTIONS
-from candidates.methodology import explain_non_acceptance
+from candidates.methodology import explain_non_acceptance, format_prune_digest
 from candidates.run_battery import ASSETS_DIR, run_all
-from candidates.status_history import PRUNE_YEARS_THRESHOLD, mark_asked
+from candidates.status_history import PRUNE_YEARS_THRESHOLD, load_history, mark_asked
 from candidates.status_history import years_tracked as candidate_years_tracked
 from data_ingestion.market_data.binance_fetcher import COINS as MARKET_DATA_COINS
 from data_ingestion.market_data.binance_fetcher import update_all as update_market_data
 from execution.live_testing import check_n50_milestones
 from llm_pipeline.dynamic_candidates import registered_specs
-from llm_pipeline.haiku_sonnet_pipeline import escape_html, sonnet_prune_advice
+from llm_pipeline.haiku_sonnet_pipeline import escape_html
 from llm_pipeline.novel_condition_tester import condition_desc
 from telegram.bot import _send
 
@@ -166,37 +167,22 @@ def _run_weekly_revalidation(done: list[str] | None = None) -> None:
         _send(failed_msg)
 
     if meta["prune_candidates"]:
-        load_dotenv()
-        client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+        # ONE digest for everyone due, computed offline -- mirrors
+        # replay/engine.py::_check_prune_decisions exactly. Previously this asked
+        # Sonnet for a per-candidate opinion; measured over a 5.5-year replay that
+        # was 55% of every LLM call made, to produce advice formed from the very
+        # numbers already in the message. `prune_recommendation` derives the same
+        # call from them and can use what the opinion could not: whether there was
+        # POWER to detect an effect at all.
+        rows = {}
         for candidate in meta["prune_candidates"]:
             row = result[result["candidate"] == candidate]
-            if len(row) and row.iloc[0]["status"] == "error":
-                reason = "this week's run failed to process this candidate (see the failed-candidates notice above) -- its long-term status is unavailable this run"
-                summary = "no current data (processing error this run)"
-            elif len(row):
-                r = row.iloc[0]
-                reason = explain_non_acceptance(r.to_dict())
-                summary = (f"win_rate={r['win_rate']:.1%}, sortino={r['sortino']:.2f}, N={r['n']} "
-                           f"(reference TP/SL-structure stats, informational only, don't gate acceptance)"
-                           if r["status"] != "insufficient_data" else "not enough historical occurrences yet to compute reference stats")
-            else:
-                reason = "no current data"
-                summary = "no current data"
-            trigger_desc = _trigger_description(candidate)
-            advice = sonnet_prune_advice(
-                candidate, years_tracked=candidate_years_tracked(candidate) or PRUNE_YEARS_THRESHOLD,
-                recent_summary=summary, trigger_description=trigger_desc, client=client,
-            )
-            sent = _send(
-                f"<b>Keep-or-drop decision -- {escape_html(candidate)}</b>\n\n"
-                f"({escape_html(trigger_desc)})\n\n"
-                f"Tracked 2+ years, never reached 'accepted'.\n"
-                f"<b>Why:</b> {escape_html(reason)}.\n\n"
-                f"For reference: {escape_html(summary)}.\n\n"
-                f"Sonnet's opinion (advisory only, not a verified finding): {escape_html(advice)}",
-                reply_markup=PRUNE_KEYBOARD_TEMPLATE(candidate),
-            )
-            print(f"Prune decision requested for '{candidate}': {'sent' if sent else 'SEND FAILED'}")
+            rows[candidate] = row.iloc[0].to_dict() if len(row) else {}
+        first_tracked = {c: load_history().get(c, {}).get("first_tracked_at")
+                         for c in meta["prune_candidates"]}
+        sent = _send(format_prune_digest(rows, first_tracked, str(datetime.now(timezone.utc).date())))
+        print(f"Keep-or-drop digest for {len(rows)} candidate(s): {'sent' if sent else 'SEND FAILED'}")
+        for candidate in meta["prune_candidates"]:
             mark_asked(candidate)
     done.append("keep/drop decisions")
 

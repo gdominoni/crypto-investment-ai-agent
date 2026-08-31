@@ -25,13 +25,12 @@ from anthropic import Anthropic
 
 from candidates.data_loading import load_daily, load_funding, load_hourly
 from candidates.definitions import CANDIDATE_DIRECTIONS, TRIGGER_DESCRIPTIONS, compute_triggers
-from candidates.methodology import path_outcome
+from candidates.methodology import path_outcome, prune_recommendation
 from candidates.run_battery import COINS
 from candidates import status_history as sh
 from execution import hyperopt_runner
 from execution import live_test_state as state
 from llm_pipeline.dynamic_candidates import registered_specs
-from llm_pipeline.haiku_sonnet_pipeline import sonnet_prune_advice
 from llm_pipeline.novel_condition_tester import ConditionSpec, clause_signal_hourly
 from telegram.bot import _send, escape_html
 
@@ -356,10 +355,12 @@ def check_n50_milestones(status_summary: dict, client: Anthropic) -> None:
         else:
             criteria_str = "no current backtest data"
         trigger_desc = _trigger_description(candidate)
-        advice = sonnet_prune_advice(
-            candidate, years_tracked=sh.years_tracked(candidate) or 0.0,
-            recent_summary=criteria_str, trigger_description=trigger_desc, client=client,
-        )
+        # Mirrors replay/engine.py: the opinion here was formed from the numbers
+        # already in this message, with nothing added and no verification behind
+        # it. prune_recommendation derives the assessment from them directly and
+        # can use what the opinion could not -- whether there was POWER to detect
+        # an effect, which is what separates "no" from "we could not tell".
+        _verdict, advice = prune_recommendation(info)
         count_basis = (f"{live_n} real live occurrence(s) so far" if is_static else
                        f"{n_reached} recent occurrence(s) so far ({live_n} real live, the rest backtest -- "
                        f"static candidates count real live occurrences only; this one is Sonnet-proposed, so "
@@ -376,7 +377,7 @@ def check_n50_milestones(status_summary: dict, client: Anthropic) -> None:
             f"Re-evaluated fresh at every {sh.MILESTONE_N}-occurrence checkpoint, not a permanent verdict -- re-checked "
             f"again at {n_reached + sh.MILESTONE_N} either way, unless dropped below.\n\n"
             f"{escape_html(hyperopt_runner.format_result(candidate))}\n\n"
-            f"Sonnet's opinion (advisory only, not a verified finding): {escape_html(advice)}"
+            f"Assessment: {escape_html(advice)}"
         )
         _send(message, reply_markup=PRUNE_KEYBOARD_TEMPLATE(candidate))
         sh.mark_milestone_reported(candidate, n_reached, cleared)

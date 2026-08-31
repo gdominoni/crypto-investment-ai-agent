@@ -247,29 +247,6 @@ here. Return ONLY a JSON object: "assessment" (1-2 sentences), "recommended_acti
 ("no_action"/"propose_novel_test"), "novel_condition_spec" (null or the spec above). No prose, no \
 markdown fences."""
 
-PRUNE_SYSTEM_PROMPT = """A candidate has been tracked for years without ever reaching 'accepted' \
-status. The human is deciding whether to keep re-testing it weekly or drop it from the batch \
-entirely -- your job is only to suggest possible reasons for the underperformance, grounded ONLY in \
-the specific trigger definition and numbers you are given below. If (and only if) you are given a \
-dominant year the trades concentrated in, you may reason about genuinely known market conditions in \
-THAT specific real year -- never cite or imply a different year, or an unnamed "that period" / "this \
-window", since that is not evidence you actually have.
-
-Every candidate in this system, regardless of its entry trigger, uses the exact same execution \
-mechanism: a fixed, duration-bucketed anchor-based take-profit/stop-loss barrier fit by walk-forward \
-validation. There is no strategy-family diversity to speculate about (no candidate is more or less \
-"mean-reversion" or "trend-following" in how it exits) -- the only thing that varies between \
-candidates is the entry trigger itself, so any reasoning about why one underperforms should be about \
-that trigger's own selectivity, frequency, or fit to real market conditions, not about invented exit \
-logic.
-
-The human-facing message already labels your answer as an unverified qualitative opinion -- don't \
-repeat that disclaimer yourself, just give the reasoning directly. If you don't have enough given to \
-you to say anything concrete, say that plainly instead of filling the gap with plausible-sounding \
-speculation. Recommend "keep" or "drop", with your reasoning in 2-3 sentences. Plain text, no JSON, \
-no markdown fences."""
-
-
 def _strip_fences(text: str) -> str:
     text = text.strip()
     if text.startswith("```"):
@@ -312,7 +289,6 @@ def format_spec_clauses(spec: dict) -> str:
 #     SONNET_SYSTEM_PROMPT   2408   cached
 #     REPLAY_SYSTEM_PROMPT   1575   cached
 #     SHOCK_SYSTEM_PROMPT    1399   cached
-#     PRUNE_SYSTEM_PROMPT     529   too short
 #     MARKET_CHECK_PROMPT     316   too short
 #     HAIKU_SYSTEM_PROMPT     187   too short (and Haiku's floor is 2048)
 # The short ones are deliberately NOT marked: below the floor the breakpoint is
@@ -435,34 +411,6 @@ def sonnet_shock_response(shock: dict, client: Anthropic) -> dict:
     )
     _usage.record(response, "prod.shock", SONNET_MODEL)
     return json.loads(_strip_fences(extract_text(response)))
-
-
-def sonnet_prune_advice(candidate: str, years_tracked: float, recent_summary: str, trigger_description: str,
-                         client: Anthropic) -> str:
-    """A qualitative opinion only -- no verification machinery behind
-    it, deliberately: this informs a human's keep/drop decision, it
-    doesn't make the decision or fire any trade on its own, so the same
-    'never trust unverified LLM reasoning' discipline this project
-    applies to trading decisions doesn't need to apply here the same
-    way. It still needs real grounding to avoid inventing a plausible-
-    sounding story from nothing, though -- `trigger_description` is what
-    the entry condition actually tests (e.g. definitions.TRIGGER_DESCRIPTIONS
-    or a dynamic ConditionSpec's own indicator/op/threshold), without
-    which a bare label like "c1_long" gives the model nothing to reason
-    from except its own invented guess at the strategy's mechanics."""
-    user_content = (
-        f"CANDIDATE: {candidate}\n"
-        f"TRIGGER: {trigger_description}\n"
-        f"This system has been weekly-re-testing it for {years_tracked:.1f} years, never reached 'accepted'.\n"
-        f"Most recent result: {recent_summary}"
-    )
-    response = client.messages.create(
-        # 1000, not 600 -- same headroom reasoning as sonnet_strategist above.
-        model=SONNET_MODEL, max_tokens=1000, system=PRUNE_SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": user_content}],
-    )
-    _usage.record(response, "prod.prune_advice", SONNET_MODEL)
-    return extract_text(response)
 
 
 # Attached to every proposal message (Sonnet strategist alert or shock
