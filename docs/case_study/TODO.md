@@ -296,8 +296,53 @@ problem 2 worse, since longer windows mean fewer independent episodes from the
 same history. Recorded here so a future reader does not mistake the ceiling for
 an oversight.
 
-**What remains standing:** the volatility-shock trigger, the only one measured to
-select days that differ from ordinary days (p=0.000 at 1 day, 0.009 at 3).
+**What remains standing:** see 2e -- shock is not the only trigger that selects,
+and it is not the best one.
+
+---
+
+## 2e. Trigger candidates, measured -- daily range beats the shock trigger
+
+`forecast/trigger_value.py` scores candidate triggers with the same instrument
+as the incumbents, so "shock is the only one that works" is a measured claim
+rather than a conclusion reached by exhaustion.
+
+    candidate trigger              days     p@1d     p@3d     p@7d    p@14d
+    daily range > own p95           994   0.0000   0.0000   0.0039   0.1942
+    shock z>=2 (transition)         227   0.0000   0.0086   0.0919   0.3507
+    volume z>=2                     723   0.0011   0.0043   0.0517   0.2935
+    5d fall <= -10%                 680   0.0136   0.1745   0.8640   0.9656
+    5d rise >= +10%                 850   0.1987   0.0402   0.2779   0.2927
+    MACD crossing                  1263   0.3992   0.5635   0.7210   0.2850
+    stochastic exits <20           1047   0.5092   0.9202   0.7815   0.7746
+
+**TODO 2b's MACD proposal is answered: it selects nothing** (p=0.40 at 1 day,
+0.56 at 3). It was costed at +72% before anyone measured whether it picks days
+that differ from ordinary ones. Neither does the stochastic. That closes the
+"MACD needs stricter confirmation" thread -- confirmation cannot rescue a rule
+whose unconfirmed form has no signal at all.
+
+**Daily range against its own trailing p95 dominates the shock trigger**, and
+is not merely correlated with it. On the 836 days it catches that shock misses,
+movement is still elevated against quiet days:
+
+    daily range minus shock         836   0.0000   0.0006   0.0167
+    volume z>=2  minus shock        655   0.0035   0.0228   0.0714
+
+Shock fires 227 times, range 994, overlapping on 158 -- so range covers 70% of
+shock days and adds 836 more that qualify on their own merit.
+
+**The honest caveat.** Every trigger that selects here fires where volatility
+ALREADY happened, and volatility is strongly autocorrelated. Much of what these
+"predict" is clustering, a long-known property of the series, not a discovery.
+That is fine for a trigger -- its job is to spend the budget where something is
+happening and worth explaining -- but the trigger itself finds nothing. It only
+decides where to look.
+
+**Open decision, not yet taken.** Range at p95 costs ~4x the shock trigger in
+calls (994 vs 227 over 2019-2025). A stricter percentile (p97/p98) trades
+coverage for cost and has not been swept. Weigh against dropping the macro
+trigger, which fires 3,411 times and selects nothing.
 
 ---
 
