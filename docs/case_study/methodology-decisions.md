@@ -1615,3 +1615,51 @@ hypotheses that are merely rare rather than wrong. Lowering `MILESTONE_N` trades
 away the evidentiary bar the word "validated" rests on. Both are real trade-offs
 and neither should be made to tidy an inconsistency; what matters first is that
 the inconsistency is on the record.
+
+---
+
+## `MIN_HISTORICAL_OCCURRENCES = 35` does not do what its own reasoning claims
+
+**Measured**, by sampling conditions from the current grammar in bands of
+occurrence count and running the real test on each:
+
+    counted occurrences   ended insufficient_data   accepted
+                  35-60                       90%         0%
+                 60-100                       40%         0%
+                100-200                       10%         0%
+                   200+                        0%         0%
+
+**Nine out of ten conditions admitted at the floor produce no result at all.**
+The gate exists precisely to stop a walk-forward test being spent on a condition
+that cannot produce one, and at its own threshold it fails that job almost
+always.
+
+**Why the stated reasoning was optimistic.** The constant's comment sets 35 by a
+single conversion: out-of-sample is "roughly two thirds of all occurrences", so
+35 total should give ~23 OOS against `min_report_events = 20`. There are in fact
+TWO conversions — counted (coin, day) pairs become events, and events are then
+split into folds of which only the held-out ones count — and measured, the
+events actually reaching the test are around 50-60% of the counted occurrences
+before the fold split is applied at all. Compounded, 35 counted lands below the
+minimum rather than comfortably above it.
+
+**What is NOT established.** The counted-to-tested ratio varies widely across
+conditions (11% to 63% in the cases examined) and the driver was not isolated.
+An early hypothesis -- that `within_days` inflates the count, since one release
+makes several consecutive days true -- was tested directly and does not hold: the
+ratio stays near 50-60% at `within_days` of 0, 3, 7 and 14. The band table above
+is the finding; the mechanism behind its spread is open.
+
+**Two independent lines point at the same replacement value.** Raising the floor
+to roughly 120 occurrences would put the insufficient-data rate near 10% — and
+separately, 120 occurrences is the rate at which a candidate reaches
+`MILESTONE_N = 50` live occurrences in about three years rather than eleven. The
+testability floor and the validation milestone disagree today; ~120 is where they
+would agree.
+
+**Deliberately not changed here.** Raising the floor discards hypotheses that are
+merely rare rather than wrong, and statistical power is already this project's
+binding constraint — a stricter gate cuts the sample the whole system is starved
+of. That is a real trade-off and belongs to the project's director, not to a
+tidying commit. What belongs on the record now is that 35 is not defensible on
+the reasoning currently written next to it.
