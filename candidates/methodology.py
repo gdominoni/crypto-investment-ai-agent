@@ -113,6 +113,60 @@ class MethodologyConfig:
     min_report_events: int = 20  # classify_status requires n STRICTLY greater than this
 
 
+COMPRESSION_ZSCORE_THRESHOLD = 1.25
+
+
+def vol_compression_series(ohlc: pd.DataFrame, short_window: int = 20,
+                            baseline_window: int = 180) -> pd.Series:
+    """How COMPRESSED this coin's volatility is against its own recent norm --
+    the sign-flipped sibling of `shock_zscore_series`. High means quiet.
+
+    Built on the standard deviation of RETURNS, deliberately, not on Bollinger
+    bandwidth. Bandwidth is the standard deviation of PRICE, which widens during
+    a clean trend even when daily moves are small, so it is contaminated by
+    directionality -- the very thing this trigger exists to leave unexplained and
+    hand to the model. Measured on this project's data, bandwidth correlates
+    -0.516 with the Kaufman efficiency ratio while return volatility correlates
+    only -0.107: return volatility is the version that asks about magnitude
+    alone.
+
+    Backward-looking at every position, like `shock_zscore_series`, so
+    classifying a bar as compressed never uses a later bar.
+
+    WHY THIS IS THE TRIGGER (see docs/case_study/methodology-decisions.md). The
+    project looks for the causes of a TREND. A volatility shock is not a trend
+    -- measured, it is followed by churn: post-shock days produce a defined trend
+    8.8% of the time against an 11.8% baseline at 14 days, so the previous
+    trigger actively selected AGAINST what the system is looking for.
+    Compression is a precursor instead, and it is the right shape besides: it
+    says a directional move is brewing WITHOUT saying which way, leaving the
+    direction to be explained by macro context and market state, which is the
+    question the pipeline exists to ask.
+
+    The 1.25 threshold, measured (lift = trend rate after the trigger, over the
+    unconditional rate):
+
+        threshold   firings   14d lift   21d lift
+             0.50      6867      1.24x      1.44x
+             1.00      2764      1.41x      1.59x
+             1.25      1464      1.62x      1.72x
+             1.50       718      1.72x      1.56x
+             2.00       118      1.45x      0.88x
+
+    1.25 is the strictest threshold at which BOTH horizons agree and are strong.
+    Past 1.75 the sample thins and the two horizons start to contradict each
+    other -- at 2.5, 40% at 14 days and 0% at 21 on fifteen events, which is the
+    shape of noise rather than of a stronger effect. It also yields ~1,464
+    firings where 1.50 yields 718, and statistical power is what this project is
+    starved of.
+    """
+    returns = ohlc["close"].pct_change()
+    vol = returns.rolling(short_window, min_periods=short_window // 2).std()
+    mu = vol.rolling(baseline_window, min_periods=baseline_window // 3).mean()
+    sd = vol.rolling(baseline_window, min_periods=baseline_window // 3).std()
+    return -((vol - mu) / sd)
+
+
 def shock_zscore_series(ohlc: pd.DataFrame, short_window: int = 5, baseline_window: int = 252) -> pd.Series:
     """Rolling z-score of short-term realized volatility against the
     coin's own longer trailing distribution of that same short-term

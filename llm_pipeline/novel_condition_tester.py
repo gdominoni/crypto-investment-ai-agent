@@ -103,6 +103,9 @@ SUPPORTED_INDICATORS: dict[str, Callable[..., pd.Series]] = {
     # in yearly selection rate: 54.5% raw, 2.3% z-scored.
     "range_zscore_30d": lambda df, funding, scale=1, symbol=None: zscore(
         (df["high"] - df["low"]) / df["close"], 30 * scale),
+    # The trigger's own metric, exposed so the snapshot can SHOW it to the model
+    # as context. It is banned as a clause below -- see NON_PROPOSABLE_INDICATORS.
+    "vol_compression_zscore": lambda df, funding, scale=1, symbol=None: _vol_compression(df),
     "volume_zscore_30d": lambda df, funding, scale=1, symbol=None: zscore(df["volume"], 30 * scale),
     "funding_zscore_30d": lambda df, funding, scale=1, symbol=None: zscore(funding.reindex(df.index).ffill(), 30 * scale) if funding is not None else pd.Series(np.nan, index=df.index),
     "efficiency_ratio_20d": lambda df, funding, scale=1, symbol=None: trend_efficiency_ratio(df["close"], 20 * scale),
@@ -147,6 +150,7 @@ INDICATOR_PLAIN_NAMES: dict[str, str] = {
     "close_return_5d": "5-day price change",
     "daily_range_pct": "daily high-low range (% of price)",
     "range_zscore_30d": "30-day range z-score (how wide today's bar is vs recent bars)",
+    "vol_compression_zscore": "volatility compression (high = unusually quiet for this coin)",
     "volume_zscore_30d": "30-day volume z-score (how unusual today's volume is)",
     "funding_zscore_30d": "30-day funding-rate z-score",
     "efficiency_ratio_20d": "20-day trend efficiency ratio (0=choppy, 1=straight trend)",
@@ -307,7 +311,7 @@ class Clause:
 # before the daily close (see docs/case_study/methodology-decisions.md).
 DAILY_NATIVE_INDICATORS = frozenset({
     "shock_zscore", "rsi_14d", "atr_pct_14d", "daily_range_pct", "efficiency_ratio_20d",
-    "range_zscore_30d",
+    "range_zscore_30d", "vol_compression_zscore",
     # macro surprises are calendar-day events -- there is no intraday version
     "cpi_surprise", "rate_surprise", "jobless_claims_surprise",
 })
@@ -396,29 +400,42 @@ NEWS_EVENT_INDICATORS = frozenset({
 # built on it, and their recorded JSON results must stay reproducible -- deleting
 # the indicator would silently invalidate published measurements to tidy up a
 # grammar rule that belongs to the proposal path only.
-# `shock_zscore` is banned for a different and sharper reason: it is the
-# EXPLANANDUM. The replay asks Sonnet precisely because a shock occurred, so a
-# condition containing a shock restates the reason the question was asked.
+# `shock_zscore` and `vol_compression_zscore` are banned as OUTCOMES and TRIGGERS
+# respectively -- two different reasons, both worth stating exactly, because an
+# earlier version of this comment justified the shock ban on grounds that no
+# longer hold.
 #
-# The decisive form of the argument is about information, not aesthetics: since
-# the trigger IS a shock, a shock is present at every proposal by construction.
-# It is a constant of the sampling frame, not a variable -- so it can add nothing
-# discriminating when the hypothesis is formed, while still narrowing the
-# condition when it is later tested over all history. That is the worst of both.
+# THAT SUPERSEDED ARGUMENT, recorded so it is not re-derived: while the replay
+# triggered ON a shock, a shock was present at every proposal by construction --
+# a constant of the sampling frame rather than a variable. The trigger is now
+# volatility compression, and a compressed market by definition has no shock, so
+# that reasoning is simply false today. It is replaced, not merely reworded.
 #
-# Measured on 118 real proposals: 11 contained `shock_zscore`, and 9 of those 11
-# used `within_days=0` -- "a shock TODAY", the very day that prompted the
-# question. Only 2 used it as a genuine antecedent. The sequenced form is more
-# defensible, but it is 2 cases out of 118, and it is still the model proposing
-# the thing it was shown; a rule with an exception that rare is harder to reason
-# about than the rule.
+# `shock_zscore` stays banned on the argument that never depended on the trigger:
+# a violent price move is a price OUTCOME, not a market state. "The price moved
+# hard, then the price did something" is the tautology this project exists to
+# exclude, the same reason it was never in NEWS_EVENT_INDICATORS. Measured on 118
+# real proposals, 11 used it and 9 of those 9 used within_days=0.
+#
+# `vol_compression_zscore` is banned because it IS the trigger: the system asks
+# only at a compression exit, so the metric is fixed by construction at every
+# proposal. It is exposed in the snapshot as context -- the model should see how
+# quiet the market has been -- but it cannot discriminate inside a condition, and
+# a clause on it would narrow the tested set for no informational gain.
+#
+# Verified rather than assumed: with compression triggering, no OTHER whitelist
+# indicator becomes degenerate at proposal time. The largest shift in median
+# between trigger days and all days is atr_pct_14d at -0.36 sd, range_zscore_30d
+# at -0.25; every one keeps a full distribution and can still discriminate.
 #
 # `daily_range_pct` is banned as non-stationary, not as circular. See
 # `range_zscore_30d` above: a fixed threshold on the raw range is a filter on the
 # year. Neither it nor `atr_pct_14d` appeared in any of the 118 proposals, so
-# nothing is lost in practice. Both stay in SUPPORTED_INDICATORS because the
-# committed sweeps in `forecast/` are built on them and must stay reproducible.
-NON_PROPOSABLE_INDICATORS = frozenset({"is_macro_day", "shock_zscore", "daily_range_pct"})
+# nothing is lost in practice. All of these stay in SUPPORTED_INDICATORS because
+# the committed sweeps in `forecast/` are built on them and must stay reproducible.
+NON_PROPOSABLE_INDICATORS = frozenset({
+    "is_macro_day", "shock_zscore", "daily_range_pct", "vol_compression_zscore",
+})
 
 # The whitelist shown to the model, derived rather than written out by hand: an
 # indicator added to NON_PROPOSABLE_INDICATORS disappears from every prompt at
@@ -697,6 +714,13 @@ def _loosen(clause: "Clause", step: float) -> "Clause":
     new = clause.threshold - distance * step
     return Clause(indicator=clause.indicator, op=clause.op, threshold=round(new, 4),
                   within_days=clause.within_days)
+
+
+def _vol_compression(df: "pd.DataFrame") -> "pd.Series":
+    """Imported lazily: candidates.methodology imports from this module at load
+    time in some paths, and a module-level import here closes the cycle."""
+    from candidates.methodology import vol_compression_series
+    return vol_compression_series(df)
 
 
 def spec_to_dict(spec: "ConditionSpec") -> dict:

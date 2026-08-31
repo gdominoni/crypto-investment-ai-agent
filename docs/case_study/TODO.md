@@ -346,7 +346,11 @@ trigger, which fires 3,411 times and selects nothing.
 
 ---
 
-## 2f. The trigger should precede a TREND, not follow a shock -- MEASURED
+## 2f. The trigger should precede a TREND, not follow a shock -- MEASURED AND IMPLEMENTED
+
+> **Done 2026-08-31.** `_compression_exit` is now the replay's only trigger; macro
+> and shock triggers removed. 217 firings, ~$3.32 for the whole replay. Full
+> reasoning in methodology-decisions.md. What remains open is below.
 
 **The argument, from the project director, and it is correct.** Macro news and
 the volatility shock are both *the causes being sought* — using either as the
@@ -386,19 +390,18 @@ would be doing the pipeline's job for it, and would contaminate it.
 Bollinger squeeze). This is a confirmation on this data, not a discovery, and it
 should be presented that way.
 
-**Open, not yet decided:**
+**Still open after implementation:**
 
-  * Which rule. `bollinger tight 5d running` fires ~55 days/coin/year, `range
-    compressed p<0.10` ~41. Both are far more than shock's 5, so cost has to be
-    re-planned, not assumed.
-  * Whether shock stays as a SECOND trigger. It selects real magnitude even
-    though it anti-selects trend, and "what turns a shock into a trend" is a
-    legitimate question -- but it is a different one.
-  * The p-values are optimistic: 14-day forward windows overlap heavily and the
-    seven coins are correlated. The effect SIZES (15.1% vs 11.3%) are the part
-    to trust.
-  * `ConditionSpec.horizons` still stops at 21 days (see 2d). A trend thesis
-    needs that ceiling revisited, which worsens the overlap problem above.
+  * **Production still triggers on shocks and news headlines** (`shock_detector.py`,
+    `haiku_sonnet_pipeline.py`), while the replay now triggers on compression. The
+    clause-level bans are shared, but the DISCOVERY moment is not -- a train/serve
+    mismatch of exactly the kind flagged for GDELT in item 1. Decide deliberately:
+    align production, or state the divergence.
+  * The p-values behind the compression finding are optimistic: 14-day forward
+    windows overlap heavily and the seven coins are correlated. The effect SIZES
+    (16.1% vs 11.1%) are the part to trust.
+  * `ConditionSpec.horizons` still stops at 21 days (see 2d). A trend thesis needs
+    that ceiling revisited, which worsens the overlap problem above.
 
 ---
 

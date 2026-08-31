@@ -8,14 +8,15 @@ checked against the code.
 
 ## The short answer to three questions
 
-**Which triggers consult Sonnet?** Exactly two: a **real macro release** (CPI, Fed
-Funds Rate, Initial Jobless Claims) and a **volatility-shock transition** on one
-coin. Nothing else in the replay ever calls a model.
+**Which triggers consult Sonnet?** Exactly one: a **confirmed exit from a
+volatility-compression episode** on one coin. Macro releases and volatility
+shocks were both removed — a macro release is one of the causes being sought, a
+shock is the outcome, and each was measured not to select for what this project
+looks for. Nothing else in the replay ever calls a model.
 
 **Who decides?** Deterministic code, not a model. `replay/engine.py::advance()`
-walks the calendar and fires on dated facts — a release exists in the ALFRED
-vintage record for that day, or a coin's shock z-score crossed 2.0 having been
-below it yesterday. Sonnet is never asked *whether* to look; it is asked what it
+walks the calendar and fires on a dated fact — a coin's volatility compression
+ended five days ago and has not resumed since. Sonnet is never asked *whether* to look; it is asked what it
 makes of something the code already decided was worth looking at.
 
 **Is Haiku still used?** Not in the replay. `HAIKU_MODEL` appears only in
@@ -28,8 +29,8 @@ filter and it is never called. The replay's only model calls are
 
 ## One simulated day, in order
 
-Five things happen per day, in this sequence. The first three cost nothing and
-run unattended; only the last two involve a model or a human.
+Four things happen per day, in this sequence. The first three cost nothing and
+run unattended; only the last involves a model or a human.
 
 ### 1. Resolve anything due — no model
 
@@ -68,56 +69,60 @@ as-of data only, then:
 
 Neither function calls a model any more.
 
-### 4. Macro releases — **Sonnet trigger #1**
+### 4. The one trigger — a confirmed exit from volatility compression
 
-For each of the three series in `candidates.macro_vintage.MACRO_SERIES`:
+`_compression_exit` fires when a coin's `vol_compression_zscore` was at or above
+1.25 (unusually quiet for that coin), then dropped below it, and **did not go
+back above for five days**. Nothing else calls a model.
 
-| key | label |
-|---|---|
-| `cpi` | CPI |
-| `fed_funds_rate` | Fed Funds Rate |
-| `initial_jobless_claims` | Initial Jobless Claims |
+Both previous triggers were removed, on one principle and each with its own
+measurement (`forecast/trigger_value.py`):
 
-the day fires if `release_dates(series_key, d, d)` is non-empty — that is, if the
-series was **actually published on this date**, taken from ALFRED's
-`realtime_start` (the real publication date) rather than approximated. An earlier
-version assumed CPI lands on the 13th; only 21% of releases matched, with a mean
-error of 2.16 days, which puts the event on the wrong side of a price move often
-enough to matter.
+| removed trigger | why | measured |
+|---|---|---|
+| macro release | it is one of the **causes being sought** | indistinguishable from ordinary days at every horizon, all three series |
+| volatility shock | it is the **outcome**, and not a trend | *anti*-precursor: 8.8% trend rate vs an 11.8% baseline |
 
-Sonnet receives, via `judge_event`:
+Compression is a precursor instead (16.1% vs 11.1%) and is the right shape
+besides: it says a directional move is brewing **without saying which way**,
+leaving the direction to be explained by the macro context and the market state.
 
-- the release itself, with its change from the prior print
-  (`format_macro_event`);
-- an **indicator snapshot for every tracked coin** — a macro release belongs to no
-  single coin, so restricting it to one would be arbitrary;
-- real macro releases from the last 10 simulated days;
-- the current battery state and the replay's own history so far.
+**Why the exit and not the state.** Compression is a state, not an event —
+episodes run a median of 4 days and up to 38. Triggering on the state would ask
+the same question up to 38 times about the same market: a measured 6.7×
+duplication.
 
-All of it is time-sandboxed to `as_of`.
+**Why the five-day confirmation.** An exit followed by re-compression is a
+flicker inside the same lull, and is followed by a defined trend 15.2% of the
+time against 23.8% for confirmed exits.
 
-**Worked example.** On 12 March, CPI prints. The code knows this is a genuine
-release date. Sonnet sees the print, the change from the prior one, and that BTC's
-RSI is 28 while it is down 9% over five days. It returns a
-`propose_novel_test` with a specific spec: *cool CPI surprise arriving on an
-oversold market, long, 1/3/7/14/21-day horizons*. That proposal now goes through
-step 5.
+**The confirmation decides *whether* to ask, never *what* is shown.** The replay
+physically stands at point C, but everything handed to Sonnet — and `as_of` for
+the backtest — is dated to point B, the exit itself.
 
-### 5. Volatility shocks — **Sonnet trigger #2**
+Sonnet receives the episode as a three-phase story:
 
-For each coin, `_shock_transition` compares the shock z-score today against
-yesterday, both computed on strictly backward-looking windows. It fires **only on
-the transition into** shock regime — crossing `SHOCK_ZSCORE_THRESHOLD = 2.0`
-having been below it the day before. Without the transition check, a five-day
-shock would bill five near-identical Sonnet calls to say the same thing.
+- **Phase A** — when the compression began, and how quiet it got;
+- **Phase middle** — how long it lasted, how price drifted across it, and every
+  macro release published while it lasted, each as a **change from the prior
+  print** and a **surprise in standard deviations** of that series' usual move,
+  never as a bare level;
+- **Phase B** — the day it ended.
 
-A shock is already about one specific coin, so Sonnet gets that coin's snapshot
-plus its lead-up (`build_indicator_leadup`), which is the more targeted read.
+The exit day's own direction is reported but explicitly flagged as carrying no
+information: measured over 214 episodes, the direction of the first bar out of
+compression has no relationship to where price is two weeks later (ρ = −0.051,
+p = 0.46).
 
-**Worked example.** ETH's realised volatility crosses z=2.4 on 19 May, having sat
-at 1.6 on the 18th. The transition fires once. Sonnet sees ETH's snapshot and the
-days leading into it, plus any macro release in the previous 10 days — which is
-how "a shock that *follows* a CPI print" becomes expressible at all.
+**Worked example.** BTC compresses on 2 January 2022 and stays quiet for 19 days.
+Jobless claims deteriorate steadily through the squeeze — surprises of +0.8, then
++1.2, then +2.3 standard deviations. Compression ends on 21 January. Sonnet is
+asked on 26 January, sees everything as of the 21st, and must say whether that
+macro deterioration and the market state it landed in explain what follows.
+
+**Cost.** 217 triggers across the entire replay, about **$3.32** — against roughly
+1,200 calls and $18 before, of which 650 went to macro releases that selected
+nothing.
 
 ## What happens to a proposal (`_handle_assessment`)
 

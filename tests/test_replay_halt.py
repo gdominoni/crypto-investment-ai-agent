@@ -130,9 +130,18 @@ class TestConsecutiveFailureHalt:
         src = inspect.getsource(E.advance) if hasattr(E, "advance") else ""
         # the counter must be reset on the success path, not only incremented
         engine_src = __import__("pathlib").Path("replay/engine.py").read_text()
-        assert engine_src.count("consecutive_failures = 0") >= 3, (
-            "counter must reset after each success, or unrelated failures spread across "
-            "a long run would eventually halt a healthy replay"
+        # Structural, not a magic number: every path that can INCREMENT the
+        # counter must have a matching reset on its success path. Asserting a
+        # fixed count instead broke the moment the three triggers (macro, shock,
+        # compression) became one, for a reason that had nothing to do with what
+        # this test is guarding.
+        increments = engine_src.count("consecutive_failures += 1")
+        resets = engine_src.count("consecutive_failures = 0")
+        assert increments >= 1, "the guard has no increment at all"
+        assert resets >= increments + 1, (
+            f"{increments} increment path(s) but only {resets} reset(s) -- counter must "
+            "reset after each success (plus once at initialisation), or unrelated failures "
+            "spread across a long run would eventually halt a healthy replay"
         )
 
 
@@ -168,3 +177,65 @@ class TestUnattendedPruneDigest:
         import replay.orchestrator as O
         default = inspect.signature(O.run_to_completion).parameters["max_chunks"].default
         assert default >= 110 + 400
+
+
+class TestCompressionTrigger:
+    """The replay's only trigger: a confirmed exit from volatility compression."""
+
+    def _btc(self):
+        from candidates.data_loading import load_daily
+        return load_daily("BTCUSDT")
+
+    def test_it_fires_on_a_confirmed_exit_and_reports_the_whole_episode(self):
+        import pandas as pd
+
+        df = self._btc()
+        hits = [E._compression_exit(df, d) for d in df.index[df.index >= pd.Timestamp("2019-01-01")]]
+        hits = [h for h in hits if h]
+        assert len(hits) > 20, "a trigger this rare would starve the replay"
+        for h in hits:
+            # A must precede B must precede C, and C is exactly the confirmation lag.
+            assert h["a_date"] <= h["b_date"] < h["c_date"]
+            assert (h["c_date"] - h["b_date"]).days >= E.COMPRESSION_CONFIRM_DAYS
+            assert h["duration"] >= 1
+
+    def test_it_never_fires_when_compression_resumed_before_confirmation(self):
+        """The whole point of the confirmation window. An exit followed by
+        re-compression is a flicker inside the same lull, not a regime change --
+        measured, those are followed by a defined trend 15.2% of the time
+        against 23.8% for confirmed exits."""
+        import pandas as pd
+
+        from candidates.methodology import COMPRESSION_ZSCORE_THRESHOLD, vol_compression_series
+
+        df = self._btc()
+        z = vol_compression_series(df)
+        state = (z >= COMPRESSION_ZSCORE_THRESHOLD).fillna(False).astype(bool)
+        for d in df.index[df.index >= pd.Timestamp("2019-01-01")]:
+            hit = E._compression_exit(df, d)
+            if hit is None:
+                continue
+            b, c = hit["b_date"], hit["c_date"]
+            assert not state.loc[b:c].any(), f"fired at {d.date()} though compression resumed"
+
+    def test_the_data_shown_is_dated_to_B_not_to_the_confirmation(self):
+        """The confirmation window decides WHETHER to ask. It must not leak into
+        WHAT is shown, or the model would be reasoning from days that had not
+        happened when the hypothesis is supposed to begin."""
+        import inspect
+
+        src = inspect.getsource(E.advance)
+        assert 'as_of_b = episode["b_date"]' in src
+        assert "as_of=as_of_b" in src
+        assert "_handle_assessment(as_of_b," in src
+
+    def test_the_removed_triggers_are_really_gone(self):
+        """Macro releases are among the CAUSES being sought and shocks are the
+        OUTCOME; both were measured not to select for what this project looks
+        for. Leaving either wired in would silently restore the bias."""
+        import inspect
+
+        src = inspect.getsource(E.advance)
+        assert "MACRO_SERIES" not in src, "macro release trigger still wired in"
+        assert "_shock_transition" not in src, "shock trigger still wired in"
+        assert "_compression_exit" in src

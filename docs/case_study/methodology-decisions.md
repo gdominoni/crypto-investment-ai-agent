@@ -1464,3 +1464,91 @@ can actually use it: as a condition term.
 Neither `daily_range_pct` nor `atr_pct_14d` appeared in any of the 118 proposals,
 so banning the raw form costs nothing measurable. Both stay in
 `SUPPORTED_INDICATORS` so the committed sweeps in `forecast/` remain reproducible.
+
+---
+
+## The replay's only trigger is a confirmed exit from volatility compression
+
+**Decision.** Macro releases and volatility shocks are both removed as triggers.
+Sonnet is consulted at exactly one kind of moment: a period of unusually low
+volatility for a coin has just ended, and the exit has been confirmed.
+
+**Why both incumbents had to go, on one principle.** A trigger must be neither
+one of the causes being sought nor the outcome being explained. A macro release
+is a candidate cause — triggering on it conditions the search on the very thing
+under investigation. A volatility shock is an outcome. Each also failed its own
+measurement (`forecast/trigger_value.py`):
+
+    trigger                   days   p @1d   p @3d   p @7d
+    macro release (any)       3411   0.088   0.990   0.611     selects nothing
+    volatility shock z>=2      227   0.000   0.009   0.092     selects magnitude
+
+The shock trigger passes a test of MAGNITUDE. But this project looks for the
+causes of a **trend**, and a shock is not a trend. Scored against a defined trend
+— a move of at least one standard deviation whose path is also directional
+(forward efficiency ratio >= 0.5) — the shock trigger is an **anti-precursor**:
+
+    trigger                   trend after   baseline
+    shock z>=2 (14d)                 8.8%      11.8%
+    shock z>=2 (21d)                 4.0%       6.8%
+    compression (14d)               16.1%      11.1%
+
+Post-shock days trend *less* often than ordinary days, which is intuitive after
+the fact: a shock is followed by churn. The original measurement missed this
+because it asked only whether a trigger precedes a bigger move. Magnitude and
+directionality are different questions and only the second is the one being
+asked.
+
+**Why compression is the right shape, beyond the numbers.** It says a directional
+move is brewing **without saying which way**. The direction is then exactly what
+the macro context and market state have to explain — the question the pipeline
+exists to ask. A trigger that predicted direction would be doing the pipeline's
+job for it.
+
+**Threshold 1.25**, measured (lift = trend rate over the unconditional rate):
+
+    threshold   firings   14d lift   21d lift
+         1.00      2764      1.41x      1.59x
+         1.25      1464      1.62x      1.72x
+         1.50       718      1.72x      1.56x
+         2.00       118      1.45x      0.88x
+
+1.25 is the strictest level at which both horizons agree and are strong. Past
+1.75 the sample thins and they contradict each other — at 2.5, 40% at 14 days and
+0% at 21 on fifteen events, the shape of noise rather than of a stronger effect.
+
+**Compression is a STATE, so the trigger fires on the EXIT.** Episodes run a
+median of 4 days and up to 38; triggering on the state would ask the same
+question up to 38 times about the same market — a measured 6.7x duplication
+(1,463 compressed coin-days across 217 episodes). This was found only because the
+project's director asked for it directly, and a first attempt to measure it was
+wrong: `~` applied to an object-dtype Series does bitwise negation, so the
+transition mask silently collapsed onto the state and reported no duplication at
+all.
+
+**The exit is confirmed over 5 days.** An exit followed by re-compression is a
+flicker inside the same lull, not a regime change, and is followed by a defined
+trend less often — 15.2% against 23.8%, over a 5-day window.
+
+The window is deliberately short, and the reason is a trap worth recording. At 10
+days the comparison *inverts* (19.6% for flickers against 14.9% for confirmed
+exits), because a long window swallows the LATER genuine exit and credits its
+trend to the earlier flicker. A first pass measured at 14 days, concluded the
+filter discarded the best cases, and was wrong; the director rejected it on
+logical grounds — a market still in compression cannot be producing a trend —
+before the artefact was located.
+
+The 5 days are a **definition** of when two episodes are one, not a parameter
+fitted to maximise a statistic: 3 and 5 give near-identical numbers, which is what
+a definition should do and a tuned parameter would not. The difference is also
+not significant on its own (p=0.147 at n=214); it is the direction, the size, and
+the prior logic that carry it.
+
+**The confirmation decides whether to ask, never what is shown.** Everything
+handed to the model is dated to point B, the exit itself, five days before the
+replay's actual position — including `as_of` for the backtest. Sonnet never sees
+the confirmation window.
+
+**Cost.** 217 triggers across the whole replay, about **$3.32**, against roughly
+1,200 calls and $18 before — of which 650 went to macro releases that selected
+nothing.

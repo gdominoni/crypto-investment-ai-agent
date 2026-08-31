@@ -29,7 +29,7 @@ over the following days? Nothing here is a trading system -- no position is ever
 money is ever at risk, and there is no entry signal to find.
 
 That distinction decides what a good answer looks like. A chart setup -- oversold RSI, a \
-Bollinger touch, a volume spike, a volatility shock -- is NOT a hypothesis in this project, \
+Bollinger touch, a volume spike -- is NOT a hypothesis in this project, \
 however well it would work as a trade. Those readings are CONTEXT: they describe the state the \
 market happened to be in when the event landed. The event is the subject; the market state \
 merely says under what circumstances you think it matters. If your idea would still make sense \
@@ -40,13 +40,28 @@ strategist and the wrong one for this task. Start from the EVENT -- what was pub
 it moved from what was expected -- and only then ask which market conditions would make its \
 effect visible.
 
-You are working in a historical replay: \
-you are being asked to make the same real-time judgment call the live system would have made on a specific \
-past date, using ONLY what was actually public knowledge as of that date -- a real, dated macro data release \
-or a real, dated volatility shock, never a news headline (this replay deliberately doesn't use any invented \
-or curated content).
+WHEN YOU ARE ASKED, and why it matters for your answer. You are consulted at exactly one kind of \
+moment: a period of unusually LOW volatility for this coin has just ended. The market coiled, stayed \
+quiet for some days, and has now begun to move again.
 
-You will be given: (1) the event itself, (2) the replay's own candidate battery status as of this date \
+That moment is chosen because a compressed market is more likely than an ordinary one to be followed \
+by a sustained directional move -- but nothing about the compression says WHICH DIRECTION. That is \
+the question put to you. Do not try to explain why the market went quiet; the quiet is the setting, \
+not the subject. Ask instead: given what was published while it was coiling, and the state it coiled \
+into, is the resolution predictable?
+
+The exit day's own move is NOT evidence of direction. Measured on 214 of these episodes, the \
+direction of the first bar out of compression has no relationship to where price is two weeks later. \
+Do not extrapolate from it.
+
+You are working in a historical replay: you are being asked to make the same real-time judgment call \
+the live system would have made on a specific past date, using ONLY what was actually public \
+knowledge as of that date (this replay deliberately doesn't use any invented or curated content).
+
+You will be given: (1) the compression episode, told in three phases: PHASE A (when it began and how quiet it got), \
+PHASE MIDDLE (how long it lasted, how price drifted, and every macro release published while it \
+lasted -- each as a CHANGE from the prior print and as a SURPRISE in standard deviations of that \
+series' usual move, not as a bare level), and PHASE B (the day it ended), (2) the replay's own candidate battery status as of this date \
 (which candidates, if any, are 'accepted' as of TODAY in the simulation -- meaning they cleared the \
 historical/backtest bar; this is not a claim of a live track record), (3) a short summary of this \
 replay's trade history so far. Trades are never yours to open -- an unattended, purely mechanical scan \
@@ -186,6 +201,76 @@ def format_macro_event(name: str, release: dict) -> str:
     change_str = f", change from prior release: {change:+.3f}" if change is not None else " (first known release)"
     return (f"MACRO RELEASE: {name}, published {release['realtime_start'].date()}, "
             f"for period {release['period'].date()}: value={release['value']}{change_str}")
+
+
+def _macro_during(start: pd.Timestamp, end: pd.Timestamp) -> str:
+    """Every macro release published between two dates, as DELTA and SURPRISE
+    rather than as a level.
+
+    A level ("CPI = 3.1") is close to useless to reason from: it needs the whole
+    history to interpret. What moves a market is how a print compares with what
+    was already known -- the change from the prior release, and how large that
+    change is against how much this series usually moves. Both are already
+    computed elsewhere in this project (`latest_release_with_prior`,
+    `surprise_series`); this presents them together, per release, over a window.
+
+    The surprise here is measured against the SERIES' OWN recent behaviour, not
+    against an analyst consensus -- this project has no consensus data source,
+    and saying so plainly is better than letting "surprise" be read as the
+    market's standard meaning."""
+    from candidates.macro_vintage import (MACRO_SERIES, latest_release_with_prior,
+                                           release_dates, surprise_series)
+
+    lines = []
+    for key, label in MACRO_SERIES.items():
+        dates = release_dates(key, start, end, new_periods_only=True)
+        if len(dates) == 0:
+            continue
+        surprises = surprise_series(key, pd.DatetimeIndex(dates))
+        for d in dates:
+            rel = latest_release_with_prior(key, d)
+            if rel is None:
+                continue
+            delta = (rel["value"] - rel["prior_value"]) if rel.get("prior_value") is not None else None
+            z = surprises.get(d)
+            parts = [f"  {d.date()} {label}: {rel['value']:g}"]
+            if delta is not None:
+                parts.append(f"change vs prior {delta:+.3f}")
+            if z is not None and z == z:
+                parts.append(f"surprise {z:+.1f} sd vs this series' usual move")
+            lines.append(", ".join(parts))
+    return "\n".join(lines) if lines else "  (no macro releases in this window)"
+
+
+def format_compression_event(symbol: str, episode: dict) -> str:
+    """The trigger's event description: a volatility-compression episode that has
+    just ended, told as the story of how it formed.
+
+    Structured as three phases because the model is being asked to explain a
+    RESOLUTION, and a resolution has a run-up. What was published while the
+    market was coiling is the candidate cause; the state it coiled into is the
+    circumstance. Both are needed, and neither is visible from a single day's
+    snapshot.
+
+    Deliberately does NOT characterise the breakout direction beyond reporting
+    the day's move. Measured on 214 episodes, the direction of the exit bar has
+    no relationship to the direction 14 days later (rho = -0.051, p = 0.46), so
+    presenting it as a signal would invite the model to extrapolate from noise --
+    and the direction is precisely what it is being asked to reason about from
+    the macro and market evidence instead."""
+    a, b = episode["a_date"], episode["b_date"]
+    return (
+        f"VOLATILITY COMPRESSION RESOLVED: {symbol}\n"
+        f"PHASE A -- compression began {a.date()} "
+        f"(volatility {episode['z_at_a']:.2f} sd below this coin's own normal)\n"
+        f"PHASE MIDDLE -- it stayed compressed for {episode['duration']} day(s); "
+        f"price moved {episode['squeeze_return']:+.2%} across the squeeze.\n"
+        f"Macro published while the market was coiling:\n{_macro_during(a, b)}\n"
+        f"PHASE B -- compression ended {b.date()}; that day's move was "
+        f"{episode['b_return']:+.2%}. Whether this resolves into a sustained move, "
+        f"and in which direction, is what the evidence has to explain -- the exit "
+        f"bar's own direction carries no information about it."
+    )
 
 
 def format_shock_event(symbol: str, shock_z: float, direction: str) -> str:

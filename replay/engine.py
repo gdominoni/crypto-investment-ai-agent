@@ -32,14 +32,13 @@ from dotenv import load_dotenv
 
 from candidates.data_loading import load_daily, load_funding, load_hourly
 from candidates.definitions import CANDIDATE_DIRECTIONS, TRIGGER_DESCRIPTIONS, compute_triggers
-from candidates.macro_vintage import MACRO_SERIES
-from candidates.methodology import (explain_non_acceptance, format_prune_digest, path_outcome,
-                                     prune_recommendation, shock_zscore_series)
+from candidates.methodology import (COMPRESSION_ZSCORE_THRESHOLD, format_prune_digest,
+                                     path_outcome, prune_recommendation, vol_compression_series)
 from candidates.run_battery import COINS
 from execution import hyperopt_runner
 from llm_pipeline.haiku_sonnet_pipeline import escape_html, format_spec_clauses
 from llm_pipeline.novel_condition_tester import (
-    ConditionSpec, clause_from_dict, clause_signal_hourly, clause_to_dict, condition_desc, format_pattern_significance,
+    ConditionSpec, clause_signal_hourly, clause_to_dict, condition_desc, format_pattern_significance,
     MIN_HISTORICAL_OCCURRENCES, count_occurrences, relax_to_testable,
     spec_from_dict, spec_from_proposal, spec_to_dict,
     test_novel_condition,
@@ -47,11 +46,12 @@ from llm_pipeline.novel_condition_tester import (
 from replay import judgment, state
 from replay import status_history as sh
 from replay.battery import run_replay_battery
-from replay.time_sandbox import latest_release_with_prior, release_dates
 from telegram.bot import _send
 
 CHUNK_DAYS = 30
-SHOCK_ZSCORE_THRESHOLD = 2.0
+# The shock threshold used to live here, for the trigger. The trigger is gone
+# (see _compression_exit); `shock_zscore` survives only as a snapshot reading and
+# in the C1/C2/C6 static battery, both of which carry their own constant.
 
 
 def _normalize_coin(coin: str) -> str | None:
@@ -339,25 +339,64 @@ def _halt_replay(day, reason: str, events_this_chunk: int) -> dict:
             "current_date": str(resume_from), "events": events_this_chunk}
 
 
-def _shock_transition(ohlc_full: pd.DataFrame, day: pd.Timestamp) -> tuple[float, str] | None:
-    """Fires only on the transition INTO shock regime, not every day a
-    multi-day shock persists -- checks `day` and `day - 1` against the
-    same in-memory frame, sliced, never re-read from disk per call."""
-    today_slice = ohlc_full.loc[:day]
-    if len(today_slice) == 0 or today_slice.index[-1] != day:
+COMPRESSION_CONFIRM_DAYS = 5
+
+
+def _compression_exit(ohlc_full: pd.DataFrame, day: pd.Timestamp) -> dict | None:
+    """Fires on a CONFIRMED exit from a volatility-compression episode, and
+    returns the whole episode's shape so the model can be told how it formed.
+
+    `day` is point C -- the confirmation date, which is where the replay
+    physically stands. The exit itself (point B) is `COMPRESSION_CONFIRM_DAYS`
+    earlier, and everything handed to the model is dated to B: the confirmation
+    window only decides WHETHER to ask, never what is shown.
+
+    Why a confirmed exit rather than the compression state. Compression is a
+    STATE, not an event: episodes run a median of 4 days and up to 38, so
+    triggering on the state would ask the same question up to 38 times about the
+    same market -- a measured 6.7x duplication (1,463 compressed coin-days over
+    217 episodes).
+
+    Why the confirmation, measured. An exit followed by the market re-compressing
+    is not a regime change, it is a flicker inside the same lull, and it is
+    followed by a defined trend less often: over a 5-day window, 23.8% for
+    confirmed exits against 15.2% for those that revert. (Not significant at
+    n=214, p=0.147 -- the direction and the size are what support it, and the
+    5-day window is deliberately short: at 10 days the comparison inverts,
+    because a long window swallows the LATER genuine exit and credits it to the
+    flicker. That artefact produced exactly the wrong answer on a first pass.)
+
+    The window is a DEFINITION of when two episodes are one, not a parameter
+    fitted to maximise anything: 3 and 5 days give near-identical numbers, which
+    is what a definition should do and what a tuned parameter would not.
+    """
+    idx = ohlc_full.index
+    if day not in idx:
         return None
-    z_today = shock_zscore_series(today_slice).iloc[-1]
-    if pd.isna(z_today) or z_today < SHOCK_ZSCORE_THRESHOLD:
+    c_loc = idx.get_loc(day)
+    b_loc = c_loc - COMPRESSION_CONFIRM_DAYS
+    if b_loc <= 0:
         return None
-    yesterday = day - pd.Timedelta(days=1)
-    yesterday_slice = ohlc_full.loc[:yesterday]
-    if len(yesterday_slice):
-        z_yesterday = shock_zscore_series(yesterday_slice).iloc[-1]
-        if pd.notna(z_yesterday) and z_yesterday >= SHOCK_ZSCORE_THRESHOLD:
-            return None  # already in shock yesterday -- don't re-fire every day
-    latest_return = today_slice["close"].pct_change().iloc[-1]
-    direction = "crash" if latest_return < 0 else "surge"
-    return float(z_today), direction
+    z = vol_compression_series(ohlc_full.iloc[:c_loc + 1])
+    state = (z >= COMPRESSION_ZSCORE_THRESHOLD).fillna(False).to_numpy().astype(bool)
+    # B is an exit: compressed on the previous bar, not compressed on B itself.
+    if state[b_loc] or not state[b_loc - 1]:
+        return None
+    # Confirmed only if compression never resumed between B and C.
+    if state[b_loc:c_loc + 1].any():
+        return None
+    # Walk back to point A, the first bar of this compression episode.
+    a_loc = b_loc - 1
+    while a_loc > 0 and state[a_loc - 1]:
+        a_loc -= 1
+    close = ohlc_full["close"]
+    return {
+        "a_date": idx[a_loc], "b_date": idx[b_loc], "c_date": day,
+        "duration": b_loc - a_loc,
+        "z_at_a": float(z.iloc[a_loc]), "z_at_b": float(z.iloc[b_loc]),
+        "squeeze_return": float(close.iloc[b_loc] / close.iloc[a_loc] - 1.0),
+        "b_return": float(close.iloc[b_loc] / close.iloc[b_loc - 1] - 1.0),
+    }
 
 
 def _trigger_description(candidate: str) -> str:
@@ -696,45 +735,33 @@ def advance(chunk_days: int = CHUNK_DAYS) -> dict:
                           f"re-derived from accumulated history, replacing the previous value).")
             last_battery_refresh = d
 
-        for series_key, series_label in MACRO_SERIES.items():
-            # new_periods_only: a day carrying only revisions of already-published
-            # periods is not an information event -- see macro_vintage.release_dates.
-            if len(release_dates(series_key, d, d, new_periods_only=True)) == 0:
-                continue
-            release = latest_release_with_prior(series_key, d)
-            if release is None:
-                continue
-            event_desc = judgment.format_macro_event(series_label, release)
-            try:
-                assessment = judgment.judge_event(event_desc, client, as_of=d)
-            except Exception as e:
-                # A malformed model response for ONE event must not cost
-                # every other day already processed this chunk -- same
-                # reasoning as llm_pipeline/haiku_sonnet_pipeline.py::run_once().
-                # But a SYSTEMIC failure must stop everything: see
-                # _is_systemic_api_failure for what silently carrying on costs.
-                halt = _is_systemic_api_failure(e)
-                consecutive_failures += 1
-                if not halt and consecutive_failures >= CONSECUTIVE_FAILURE_HALT:
-                    halt = (f"{consecutive_failures} events failed in a row -- last error: {e}")
-                if halt:
-                    return _halt_replay(d, halt, events_this_chunk)
-                print(f"Failed to judge event on {d.date()} ({series_label}), skipping: {e}")
-                continue
-            consecutive_failures = 0
-            events_this_chunk += 1
-            if _handle_assessment(d, event_desc, assessment) == "STOP":
-                state.save_checkpoint(str(d.date()), status="waiting_for_human")
-                return {"stopped": "waiting_for_human", "current_date": str(d.date()), "events": events_this_chunk}
-
+        # THE ONLY TRIGGER. Macro releases and volatility shocks were both
+        # removed, on the same principle and each with its own measurement:
+        #
+        #   * a macro release is one of the CAUSES being sought, so triggering on
+        #     it conditions the search on the thing to be explained -- and
+        #     measured, release days are statistically indistinguishable from
+        #     ordinary days at every horizon and for all three series
+        #     (forecast/trigger_value.py);
+        #   * a volatility shock is the OUTCOME, not a trend, and it actively
+        #     selects against what this project looks for: post-shock days
+        #     produce a defined trend 8.8% of the time against an 11.8% baseline.
+        #
+        # Compression is a precursor instead (16.1% vs 11.1%), and it is the
+        # right shape besides: it says a directional move is brewing WITHOUT
+        # saying which way, leaving the direction to be explained by the macro
+        # context and market state -- the question this pipeline exists to ask.
         for coin in COINS:
-            transition = _shock_transition(ohlc_full[coin], d)
-            if transition is None:
+            episode = _compression_exit(ohlc_full[coin], d)
+            if episode is None:
                 continue
-            z, direction = transition
-            event_desc = judgment.format_shock_event(coin, z, direction)
+            event_desc = judgment.format_compression_event(coin, episode)
+            # `as_of` is point B, not today. The confirmation window decided
+            # WHETHER to ask; it must not leak into WHAT is shown, and the
+            # backtest must not see days the hypothesis is meant to precede.
+            as_of_b = episode["b_date"]
             try:
-                assessment = judgment.judge_event(event_desc, client, as_of=d, coin=coin)
+                assessment = judgment.judge_event(event_desc, client, as_of=as_of_b, coin=coin)
             except Exception as e:
                 halt = _is_systemic_api_failure(e)
                 consecutive_failures += 1
@@ -742,11 +769,11 @@ def advance(chunk_days: int = CHUNK_DAYS) -> dict:
                     halt = (f"{consecutive_failures} events failed in a row -- last error: {e}")
                 if halt:
                     return _halt_replay(d, halt, events_this_chunk)
-                print(f"Failed to judge event on {d.date()} ({coin} shock), skipping: {e}")
+                print(f"Failed to judge event on {d.date()} ({coin} compression), skipping: {e}")
                 continue
             consecutive_failures = 0
             events_this_chunk += 1
-            if _handle_assessment(d, event_desc, assessment, live_coin=coin) == "STOP":
+            if _handle_assessment(as_of_b, event_desc, assessment, live_coin=coin) == "STOP":
                 state.save_checkpoint(str(d.date()), status="waiting_for_human")
                 return {"stopped": "waiting_for_human", "current_date": str(d.date()), "events": events_this_chunk}
 
@@ -900,7 +927,19 @@ def resolve_pending_test() -> str | None:
     # test regardless of the verdict above -- testing starts the moment a
     # trigger is identified, not only once it's already accepted.
     if pending.get("live_coin") and status != "insufficient_data":
-        execution = _open_live_test(spec.label, pending["live_coin"], spec.direction, as_of)
+        # Dated to the proposal's own `as_of` (point B), which for a compression
+        # trigger is COMPRESSION_CONFIRM_DAYS before the replay's actual position.
+        # Backdating is deliberate: the outcome is read at the end of the horizon,
+        # never before, and the model never saw the confirmation window -- its
+        # context is dated to B. The one case where that would not hold is a
+        # horizon shorter than the confirmation window, since the whole outcome
+        # would already be history at the moment the test opens; those start at
+        # the confirmation date instead.
+        horizon = int(state.load_horizons().get(spec.label, PLACEHOLDER_HORIZON_DAYS))
+        open_at = as_of
+        if horizon <= COMPRESSION_CONFIRM_DAYS:
+            open_at = as_of + pd.Timedelta(days=COMPRESSION_CONFIRM_DAYS)
+        execution = _open_live_test(spec.label, pending["live_coin"], spec.direction, open_at)
         if execution.get("opened"):
             lines.append("")
             lines.append(f"<b>Live test opened -- {spec.direction.upper()} {escape_html(pending['live_coin'])}</b>\n\n"
