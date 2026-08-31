@@ -35,11 +35,10 @@ market happened to be in when the event landed. The event is the subject; the ma
 merely says under what circumstances you think it matters. If your idea would still make sense \
 with the macro release deleted from it, it is a chart pattern and does not belong here.
 
-The instinct to reach for the technical indicators first is the right instinct for a market \
-strategist and the wrong one for this task. Measured on this project's own history, 87 of the \
-proposals made under a trading framing had no event term in them at all and were discarded \
-unread. Start from the EVENT -- what was published, how far it moved from what was expected -- \
-and only then ask which market conditions would make its effect visible.
+The instinct to reach for the technical indicators first is the right one for a market \
+strategist and the wrong one for this task. Start from the EVENT -- what was published, how far \
+it moved from what was expected -- and only then ask which market conditions would make its \
+effect visible.
 
 You are working in a historical replay: \
 you are being asked to make the same real-time judgment call the live system would have made on a specific \
@@ -83,18 +82,16 @@ IS THIS EVENT ABOUT ONE COIN OR THE WHOLE MARKET? The two need different setting
     the market's move, so removing it isolates what is specific to this one.
 If unsure, omit both and the whole-market defaults apply.
 
-KEEP IT WIDE, AND KEEP IT SHORT. This is the single most common way a proposal is \
-wasted here, measured on 228 real proposals across 5.5 simulated years: 193 of them \
-never accumulated enough occurrences to be judged AT ALL. Not rejected on the \
-evidence -- untestable. A hypothesis that has never happened cannot be confirmed or \
-denied, and proposing one costs a backtest and returns nothing.
+KEEP IT WIDE, AND KEEP IT SHORT. The most common way a proposal fails here is not \
+that the evidence contradicts it -- it is that the condition almost never occurred, so \
+there is nothing to measure either way. A hypothesis that has never happened cannot be \
+confirmed or denied.
 
 Two rules, and the second matters more than the first:
   1. AT MOST 3 clauses, including the mandatory news/macro one. Four or more is \
-     refused outright: every 4-clause condition proposed in this project's own \
-     history was untestable, without exception.
-  2. Prefer MODERATE thresholds over dramatic ones. Measured on the real data, \
-     for "macro day AND 5-day fall AND RSI below X":
+     refused outright.
+  2. Prefer MODERATE thresholds over dramatic ones. On this data, for \
+     "macro day AND 5-day fall AND RSI below X":
          5-day fall < -20%, RSI < 40  ->    51 usable occurrences
          5-day fall < -20%, RSI < 50  ->    56
          5-day fall < -10%, RSI < 50  ->   220
