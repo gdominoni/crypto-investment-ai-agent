@@ -136,6 +136,79 @@ Do this **after** item 1, not before -- otherwise it gets paid for twice.
 
 ---
 
+## 2b. Outcome-triggered discovery (shock / MACD reversal / macro direction change)
+
+**The problem it solves.** Sonnet is currently asked to judge every macro
+release. Measured: **76% of those days are followed by no move larger than one
+standard deviation** -- three calls in four evaluate a day where nothing
+measurable happened. The alternative is to trigger on an OUTCOME and ask what
+preceded it.
+
+**Why this is legitimate and not circular.** You cannot trigger on "a pattern
+appeared" -- identifying the pattern is the goal. Triggering on a price outcome
+and searching backwards conditions the SEARCH on the outcome, but not the TEST:
+`pattern_significance` then runs over every occurrence of the proposed
+condition, including the ones that preceded nothing. The bias affects which
+hypotheses get proposed, which FDR already accounts for.
+
+**Costed, and it is not free** (calibrated at $0.0137/call):
+
+    ATTUALE  every macro release       713 calls    $9.77
+    ATTUALE  volatility shock          943         $12.92
+    ATTUALE  total                    1656         $22.69
+
+    NEW      volatility shock          943         $12.92
+    NEW      MACD reversal            1520         $20.82
+    NEW      macro reversal or |z|>=1   381          $5.22
+    NEW      total                    2844         $38.96
+
+**+72%.** MACD is the culprit at 169 crossings/year across 7 coins -- nearly one
+every other day per coin. It needs a stricter confirmation (histogram above a
+threshold, or crossing plus volume) before it is usable. Note the macro filter
+CUTS that branch from $9.77 to $5.22: restricting to real surprises works.
+
+**Open design problem, unresolved.** For backwards search Sonnet must be told
+something happened -- but telling it "price rose 15%" means the DIRECTION of the
+proposed condition is chosen knowing the outcome. The test stays honest (it runs
+on all occurrences) but the hypothesis is born contaminated. Showing that a
+reversal occurred without its sign, and letting the model propose both
+directions, is the obvious candidate fix and is untested.
+
+---
+
+## 2c. Macro REGIME indicators (persistent state, not change)
+
+**The gap.** Every macro indicator in the whitelist says "something changed".
+None says "something PERSISTS". A hypothesis like "inflation stays high,
+unemployment stays low, rates stay low, and futures go oversold" is currently
+inexpressible -- and not for want of data: `dff_rate`, `fed_funds_rate`,
+`industrial_production`, `unemployment_rate`, `us02y_yield`, `us10y_yield` are
+all downloaded and none is exposed as a testable indicator.
+
+**The criticality that decides feasibility, measured.** Regime variables are
+persistent by construction, so their occurrences clump into single periods and
+run straight into the 60% year-concentration gate:
+
+    regime at the median          dominant year 23%   passes
+    regime at the 75th pct        dominant year 46%   passes, barely
+    regime at the 90th pct        dominant year 90%   BLOCKED
+
+Inflation was high in 2021-2024 and almost nowhere else. **The intersection of
+three regimes is a single historical period**, which is the worst case: exactly
+the scenario that motivates the feature is the one the concentration check
+refuses. Only broad regimes are testable, or the year check needs the same
+declared-exemption treatment `coins` already has for single-coin hypotheses.
+
+**The strategic objection, which applies to both items above.** The grammar
+sweep found 0 of 296 with the current vocabulary. Adding regime indicators
+multiplies the expressible hypothesis space, and under Benjamini-Hochberg more
+hypotheses means a stricter threshold for every one of them. Statistical power
+is this project's binding constraint; widening the search worsens it. Test
+regimes offline in `forecast/grammar_sweep.py` FIRST -- if they produce nothing
+there, the question is answered for free and no replay is needed.
+
+---
+
 ## 3. Smaller, known, and deliberately left
 
 - ~~**`daily_range_pct` ignores `scale` entirely.**~~ DONE 2026-08-30 --
