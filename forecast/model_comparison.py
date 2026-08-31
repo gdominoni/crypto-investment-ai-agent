@@ -46,8 +46,12 @@ perfection.
 Cost: 2 Sonnet + 1 Haiku per event ~= $0.036. Nothing here is evidence about
 markets; historical data is used only as realistic input.
 
+SAMPLE SIZE IS COUNTED IN PAIRS, NOT EVENTS -- see `--pairs`. An event yields a
+comparable pair only when all three judgments produce a condition, and barely
+half of real calls do, so a fixed event count fixes the wrong quantity.
+
 Run:  python3 -m forecast.model_comparison --dry-run   # sample + cost, free
-      python3 -m forecast.model_comparison --n 25
+      python3 -m forecast.model_comparison --pairs 12 --max-spend 2.50
 """
 from __future__ import annotations
 
@@ -71,6 +75,10 @@ SEED = 20260831
 # Measured, not assumed: llm_pipeline/usage.py over 212 real judgment calls.
 SONNET_PER_CALL = 0.0153
 HAIKU_PER_CALL = SONNET_PER_CALL / 3
+# Share of judgment calls that yield a condition the validator accepts: 118
+# usable specs out of 212 real calls. The rest are no_action or refused, and
+# neither produces anything to compare.
+USABLE_SPEC_RATE = 118 / 212
 
 
 def _sample_events(n: int) -> list[dict]:
@@ -156,24 +164,43 @@ def _compare(a, b, as_of) -> dict:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--n", type=int, default=25, help="events (default 25)")
+    # The target is PAIRS, not events, because pairs are what carry the power and
+    # an event yields one only when all three judgments produce a condition.
+    # Measured propose-and-validate rate: 118 usable specs from 212 real calls
+    # (55.7%), so between 17% (if the three calls decide independently) and 56%
+    # (if they move together) of events yield a pair -- a factor of three that
+    # cannot be known before running. Fixing the event count fixes the wrong
+    # quantity: 25 events can land anywhere between 4 usable pairs and 14, and at
+    # 4 the one-sided Wilcoxon CANNOT return p < 0.05 at all (its smallest
+    # attainable p is 1/2^4 = 0.0625), so the run would be incapable of a result
+    # regardless of how different the models are.
+    #
+    # 12 pairs is the default because that is where power against a 0.20 overlap
+    # gap reaches 93%; 6 pairs gives 63%, 4 gives nothing.
+    ap.add_argument("--pairs", type=int, default=12, help="usable pairs to collect (default 12)")
+    ap.add_argument("--max-spend", type=float, default=2.50, help="USD cap (default 2.50)")
     ap.add_argument("--dry-run", action="store_true", help="sample and cost only")
     args = ap.parse_args()
 
     from llm_pipeline.haiku_sonnet_pipeline import HAIKU_MODEL, SONNET_MODEL
     from replay import judgment
 
-    events = _sample_events(args.n)
-    print(f"{len(events)} events ({sum(1 for e in events if e['kind']=='macro')} macro, "
-          f"{sum(1 for e in events if e['kind']=='shock')} shock), judged 3x each "
-          f"(Sonnet, Sonnet again, Haiku)")
+    per_event = 2 * SONNET_PER_CALL + HAIKU_PER_CALL
+    max_events = int(args.max_spend / per_event)
+    events = _sample_events(max_events)
+    print(f"target: {args.pairs} usable pairs, spending at most ${args.max_spend:.2f} "
+          f"({max_events} events available, ${per_event:.4f} each)")
 
     if args.dry_run:
-        cost = len(events) * (2 * SONNET_PER_CALL + HAIKU_PER_CALL)
-        print(f"\nEstimated cost: ${cost:.2f} "
-              f"(${len(events)*2*SONNET_PER_CALL:.2f} Sonnet x2 + "
-              f"${len(events)*HAIKU_PER_CALL:.2f} Haiku)")
-        print("The second Sonnet call is the control, not overhead: without it the")
+        print(f"\nMeasured usable-spec rate: {USABLE_SPEC_RATE:.1%} per call, so an event")
+        print(f"yields a pair with probability between {USABLE_SPEC_RATE**3:.0%} (independent) "
+              f"and {USABLE_SPEC_RATE:.0%} (correlated).")
+        lo = args.pairs / USABLE_SPEC_RATE
+        hi = args.pairs / USABLE_SPEC_RATE ** 3
+        print(f"Reaching {args.pairs} pairs therefore needs roughly {lo:.0f}-{hi:.0f} events: "
+              f"${lo*per_event:.2f}-${hi*per_event:.2f}.")
+        print(f"The ${args.max_spend:.2f} cap stops it either way, reporting how far it got.")
+        print("\nThe second Sonnet call is the control, not overhead: without it the")
         print("Haiku number has no ceiling to be read against.")
         print("\nSampling only -- no API calls made. Drop --dry-run to run it.")
         return 0
@@ -182,8 +209,23 @@ def main() -> int:
     client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     done = {r["key"]: r for r in json.loads(RESULTS_PATH.read_text())} if RESULTS_PATH.exists() else {}
 
+    def _pairs_so_far() -> int:
+        return sum(1 for r in done.values()
+                   if (r.get("ceiling") or {}).get("overlap") is not None
+                   and (r.get("haiku_vs_sonnet") or {}).get("overlap") is not None)
+
     t0 = time.time()
     for ev in events:
+        if _pairs_so_far() >= args.pairs:
+            print(f"\nReached {args.pairs} usable pairs after {len(done)} events "
+                  f"(~${len(done)*per_event:.2f}).")
+            break
+        if len(done) * per_event >= args.max_spend:
+            print(f"\nSPEND CAP: stopped at {len(done)} events (~${len(done)*per_event:.2f}) "
+                  f"with {_pairs_so_far()}/{args.pairs} usable pairs.")
+            print("Raise --max-spend, or read the same-action agreement, which is")
+            print("defined on every event and does not need pairs.")
+            break
         key = f"{ev['kind']}_{ev['as_of'].date()}_{ev.get('coin') or ev.get('series')}"
         if key in done:
             continue
@@ -209,7 +251,7 @@ def main() -> int:
         done[key] = row
         RESULTS_PATH.write_text(json.dumps(list(done.values()), indent=1))
         c, h = row["ceiling"]["overlap"], row["haiku_vs_sonnet"]["overlap"]
-        print(f"  {len(done)}/{len(events)}  {key:<38} "
+        print(f"  {len(done)}ev {_pairs_so_far()}/{args.pairs}pr  {key:<34} "
               f"S/S={'--' if c is None else f'{c:.2f}'}  "
               f"S/H={'--' if h is None else f'{h:.2f}'}  ({(time.time()-t0)/60:.1f}m)",
               flush=True)
