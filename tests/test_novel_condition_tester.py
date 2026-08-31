@@ -138,10 +138,13 @@ class TestIncrementalBaseline:
         from llm_pipeline.novel_condition_tester import reduced_clauses
         spec = ConditionSpec(
             label="x",
-            clauses=(Clause("cpi_surprise", ">=", 1.0), Clause("shock_zscore", ">=", 3.0),
-                     Clause("rsi_14d", "<", 30.0), Clause("volume_zscore_30d", ">", 1.0)),
+            # 3 clauses, the maximum: two event terms and one market-state term,
+            # so this still checks that BOTH event kinds are stripped and the
+            # state term survives.
+            clauses=(Clause("cpi_surprise", ">=", 1.0), Clause("shock_zscore", ">=", 2.0),
+                     Clause("rsi_14d", "<", 30.0)),
             direction="long")
-        assert {c.indicator for c in reduced_clauses(spec)} == {"rsi_14d", "volume_zscore_30d"}
+        assert {c.indicator for c in reduced_clauses(spec)} == {"rsi_14d"}
 
     def test_the_control_group_is_not_forced_through_the_necessary_condition_rule(self):
         """The control is BY CONSTRUCTION the version without an event
@@ -436,3 +439,33 @@ class TestConditionalConcentration:
         src = inspect.getsource(N.test_novel_condition)
         assert "single_coin = bool(spec.coins) and len(spec.coins) == 1" in src
         assert "dominant_group" not in src.split("single_coin =")[1].split("status =")[0] or True
+
+
+class TestClauseCountCap:
+    """Measured on 228 conditions Sonnet actually proposed over 5.5 simulated
+    years: every 4-and-5-clause condition was untestable -- never accumulating
+    enough occurrences to be judged at all, so it consumed a backtest and
+    returned `insufficient_data`."""
+
+    def _spec(self, n):
+        from llm_pipeline.novel_condition_tester import Clause, ConditionSpec
+        extra = [Clause("rsi_14d", "<=", 50.0), Clause("close_return_5d", "<=", -0.1),
+                 Clause("volume_zscore_30d", ">=", 1.0), Clause("bollinger_pctb_20d", "<=", 0.3)]
+        return ConditionSpec(label="t", direction="long",
+                             clauses=tuple([Clause("is_macro_day", ">=", 1.0)] + extra[:n - 1]))
+
+    def test_three_clauses_is_allowed(self):
+        assert len(self._spec(3).clauses) == 3
+
+    def test_four_is_refused_with_a_reason_that_says_what_to_do(self):
+        import pytest
+        with pytest.raises(ValueError) as e:
+            self._spec(4)
+        msg = str(e.value)
+        assert "maximum is 3" in msg
+        assert "WIDE" in msg, "the message must point at the real fix, not just the cap"
+
+    def test_the_cap_does_not_block_the_minimum_viable_hypothesis(self):
+        """One news term plus one market-state term -- the shape the prompts now
+        steer toward -- must still be constructible."""
+        assert len(self._spec(2).clauses) == 2

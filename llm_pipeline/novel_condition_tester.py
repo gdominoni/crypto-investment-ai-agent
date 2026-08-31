@@ -187,6 +187,7 @@ def build_indicator_snapshot(coin: str, as_of: pd.Timestamp | None = None) -> st
     return f"{coin} current indicator readings: " + ", ".join(parts)
 
 
+MAX_CLAUSES = 3  # see ConditionSpec.__post_init__ for the measurement behind this
 MAX_WITHIN_DAYS = 14  # a "sequence" longer than this stops being one event and becomes a regime
 
 
@@ -562,6 +563,26 @@ class ConditionSpec:
     def __post_init__(self):
         if len(self.clauses) == 0:
             raise ValueError("ConditionSpec needs at least one clause")
+        # Hard cap at 3, measured on 228 conditions Sonnet actually proposed
+        # across 5.5 simulated years:
+        #     clauses  proposed  testable
+        #        2        56        18%
+        #        3       141        18%
+        #        4        30         0%
+        #        5         1         0%
+        # Every 4-and-5-clause condition was untestable -- not rejected on the
+        # evidence, but never accumulating enough occurrences to be judged at
+        # all. The cap removes proposals that cannot produce a result rather
+        # than letting them consume a backtest and land as `insufficient_data`.
+        # Note 2 and 3 clauses are EQUALLY testable, so the cap alone is not the
+        # fix: threshold width matters far more, which is why the prompts now
+        # carry measured guidance on it.
+        if len(self.clauses) > MAX_CLAUSES:
+            raise ValueError(
+                f"ConditionSpec '{self.label}' has {len(self.clauses)} clauses; the maximum is "
+                f"{MAX_CLAUSES}. Every condition proposed with 4+ clauses in this project's own "
+                f"replay was too rare to test. Use at most {MAX_CLAUSES}: the required news/macro "
+                f"event, plus one or two market-state terms with WIDE thresholds.")
         if self.direction not in ("long", "short"):
             raise ValueError("direction must be 'long' or 'short'")
         if self.outcome not in ("raw", "market_relative"):

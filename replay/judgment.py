@@ -65,6 +65,32 @@ IS THIS EVENT ABOUT ONE COIN OR THE WHOLE MARKET? The two need different setting
     the market's move, so removing it isolates what is specific to this one.
 If unsure, omit both and the whole-market defaults apply.
 
+KEEP IT WIDE, AND KEEP IT SHORT. This is the single most common way a proposal is \
+wasted here, measured on 228 real proposals across 5.5 simulated years: 193 of them \
+never accumulated enough occurrences to be judged AT ALL. Not rejected on the \
+evidence -- untestable. A hypothesis that has never happened cannot be confirmed or \
+denied, and proposing one costs a backtest and returns nothing.
+
+Two rules, and the second matters more than the first:
+  1. AT MOST 3 clauses, including the mandatory news/macro one. Four or more is \
+     refused outright: every 4-clause condition proposed in this project's own \
+     history was untestable, without exception.
+  2. Prefer MODERATE thresholds over dramatic ones. Measured on the real data, \
+     for "macro day AND 5-day fall AND RSI below X":
+         5-day fall < -20%, RSI < 40  ->    51 usable occurrences
+         5-day fall < -20%, RSI < 50  ->    56
+         5-day fall < -10%, RSI < 50  ->   220
+         5-day fall <  -5%, RSI < 50  ->   508
+     Widening the RSI barely moved it. Relaxing the price move from -20% to -10% \
+     quadrupled it. A 20% five-day fall is a once-in-years event; asking for it \
+     alongside anything else produces a condition that essentially never fires.
+
+So: pick the ONE market-state term that carries your actual idea, set its threshold \
+where it fires often enough to measure (a normal bad week, not a historic crash), and \
+stop. If a second state term genuinely adds something, make it a LOOSE one -- a \
+condition that is true often. Two clauses that fire regularly beat four that describe \
+a single day in 2020 perfectly and never recur.
+
 "prior_weight" (optional, 0.25-4.0, default 1.0) is HOW PLAUSIBLE you think this hypothesis is \
 BEFORE it is tested, and it must be justified by the mechanism you can actually articulate -- not by \
 how much you would like it to be true. 1.0 is neutral. Use above 1.0 only when there is a specific \

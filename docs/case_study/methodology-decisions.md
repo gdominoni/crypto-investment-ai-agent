@@ -1099,3 +1099,62 @@ candidates use a rolling window of the most recent 50, backtest and live mixed,
 because Sonnet never sees the backtest before proposing -- and once 50 genuine
 live occurrences accumulate, backtest stops contributing and the rule collapses
 to the static one.
+
+---
+
+### 2026-08-31 — 228 proposals, none testable: capping clauses and widening thresholds
+
+**The finding, from the replay's own output rather than a simulation.** Over 5.5
+simulated years the replay auto-approved and tested **197 proposals** from Sonnet,
+registering 228 candidates in total. The outcome:
+
+    insufficient_data   193
+    watch                39
+    rejected              2
+    accepted              0
+
+Almost nothing was *rejected on the evidence*. It was **untestable**: the
+conditions never accumulated enough occurrences to be judged at all. A hypothesis
+that has essentially never happened cannot be confirmed or denied, and each one
+consumed a backtest to return nothing.
+
+**Where the rarity comes from, measured two ways.** First, by clause count:
+
+    clauses  proposed  testable
+       2        56        18%
+       3       141        18%
+       4        30         0%
+       5         1         0%
+
+Every 4-and-5-clause condition was hopeless. But 2 and 3 clauses are EQUALLY
+testable, so the count alone is not the cause. Second, by threshold width, on
+"macro day AND 5-day fall AND RSI below X" against the real data:
+
+    5-day fall < -20%, RSI < 40  ->    51 usable occurrences
+    5-day fall < -20%, RSI < 50  ->    56
+    5-day fall < -10%, RSI < 50  ->   220
+    5-day fall <  -5%, RSI < 50  ->   508
+    macro day AND RSI < 50 only  ->  1552
+
+Widening the RSI from 40 to 50 moved it by 10%. Relaxing the price move from
+-20% to -10% quadrupled it. **The binding constraint is the extremity of the
+thresholds, especially on price-move clauses** -- a 20% five-day fall is a
+once-in-years event, and asking for it alongside anything else produces a
+condition that essentially never fires. This is worth recording precisely
+because the intuitive fix (fewer clauses, slightly looser RSI) is the weaker
+half of the answer.
+
+**Two changes.** `MAX_CLAUSES = 3` is enforced in `ConditionSpec`, refusing
+proposals that provably cannot produce a result rather than letting them consume
+a backtest. And both system prompts now carry the measurement above, telling the
+model that the point is to choose the ONE market-state term carrying its actual
+idea and set its threshold where it fires often enough to measure -- "a normal
+bad week, not a historic crash". The cap is the backstop; the threshold guidance
+is the part expected to do the work.
+
+**Context for why the prompt guidance may not be enough on its own.** In the
+same run, **87 proposals were refused for having no news/macro clause at all**,
+despite that rule being stated explicitly in the prompt. Left to itself the
+model gravitates toward pure chart patterns, and toward dramatic thresholds. The
+hard checks exist because the instructions alone have a measured compliance
+problem.
