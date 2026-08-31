@@ -29,7 +29,7 @@ from candidates.macro_vintage import recent_releases_summary
 from data_ingestion.news_sentiment.cryptocompare_fetcher import fetch_cryptocompare_news
 from llm_pipeline.context_builder import build_context_summary, build_technical_snapshot
 from llm_pipeline.novel_condition_tester import (
-    INDICATOR_PLAIN_NAMES, OPERATOR_PLAIN, SUPPORTED_INDICATORS, ConditionSpec, build_indicator_leadup,
+    INDICATOR_PLAIN_NAMES, OPERATOR_PLAIN, ConditionSpec, build_indicator_leadup, proposable_indicators,
     build_indicator_snapshot, clause_from_dict,
 )
 from llm_pipeline.pending_tests import push_pending_test
@@ -85,13 +85,13 @@ involved. Your only two jobs are:
 1. If this headline suggests a genuinely new, untested pattern -- not covered by any existing \
 candidate and not already logged as rejected -- propose a novel-condition test (this DOES wait \
 for human approval, since it spends real compute testing something unproven), using ONLY one of \
-these whitelisted indicators (nothing else is buildable): {list(SUPPORTED_INDICATORS)}. Ground any \
+these whitelisted indicators (nothing else is buildable): {proposable_indicators()}. Ground any \
 compound hypothesis ONLY in evidence you were actually given -- never invent an indicator reading \
 or a release you weren't shown.
 2. Otherwise, if there's nothing new to propose, say so plainly.
 
 HARD REQUIREMENT -- every proposal MUST contain at least one of these event indicators: \
-is_macro_day, cpi_surprise, rate_surprise, jobless_claims_surprise. This is not a preference, it is \
+cpi_surprise, rate_surprise, jobless_claims_surprise. This is not a preference, it is \
 what this system exists to test: whether specific MARKET CONDITIONS combined with a REAL-WORLD EVENT \
 produce a repeatable pattern. A condition built only from price/volume/funding indicators is a chart \
 pattern -- it does not answer that question, and a spec without an event clause is REJECTED by code \
@@ -164,7 +164,7 @@ IMPORTANT -- conditions may be SEQUENCED, not just simultaneous. Each clause tak
 "was true at any point in the last K days". This is what lets you express an ORDERING rather than a \
 coincidence, and the two are genuinely different hypotheses:
   - crash FIRST, then the news:  shock_zscore >= 2 with within_days=3, AND today's condition
-  - news FIRST, then the move:   is_macro_day >= 1 with within_days=2, AND today's condition
+  - news FIRST, then the move:   cpi_surprise >= 1 with within_days=2, AND today's condition
   - both on the same day:        leave within_days at 0 on both
 You are shown a day-by-day LEAD-UP table (the last several days of key indicators, oldest first) \
 precisely so you can tell these apart. Read it before choosing: if the violent move is two rows \
@@ -231,7 +231,7 @@ indicator reading, a headline, or a release you weren't shown. Recommend one of:
 
 
 HARD REQUIREMENT -- every proposal MUST contain at least one of these event indicators: \
-is_macro_day, cpi_surprise, rate_surprise, jobless_claims_surprise. This is not a preference, it is \
+cpi_surprise, rate_surprise, jobless_claims_surprise. This is not a preference, it is \
 what this system exists to test: whether specific MARKET CONDITIONS combined with a REAL-WORLD EVENT \
 produce a repeatable pattern. A condition built only from price/volume/funding indicators is a chart \
 pattern -- it does not answer that question, and a spec without an event clause is REJECTED by code \

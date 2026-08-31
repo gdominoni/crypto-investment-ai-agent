@@ -17,7 +17,7 @@ from candidates.macro_vintage import recent_releases_summary
 from candidates.methodology import STATUS_PLAIN
 from candidates.run_battery import COINS
 from llm_pipeline.haiku_sonnet_pipeline import SONNET_MODEL, _strip_fences, cached_system, escape_html, extract_text, format_spec_clauses
-from llm_pipeline.novel_condition_tester import SUPPORTED_INDICATORS, build_indicator_leadup, build_indicator_snapshot
+from llm_pipeline.novel_condition_tester import build_indicator_leadup, build_indicator_snapshot, proposable_indicators
 from replay import state
 from replay import status_history as sh
 from replay.time_sandbox import daily_as_of
@@ -54,7 +54,7 @@ already opens a live test the moment an accepted candidate's own trigger conditi
 judgment involved. Your only job here is to decide whether this event suggests a genuinely new, \
 untested pattern -- especially a SPECIFIC combination of what you were shown (an indicator reading, a \
 recent macro release) rather than the event in isolation -- not covered by any existing candidate, \
-using ONLY these whitelisted indicators: {list(SUPPORTED_INDICATORS)}. Ground any compound hypothesis \
+using ONLY these whitelisted indicators: {proposable_indicators()}. Ground any compound hypothesis \
 ONLY in indicator readings/releases you were actually given -- never invent one. A single clause is \
 fine when nothing else in the given context looks relevant.
 
@@ -70,7 +70,7 @@ CONDITIONS MAY BE SEQUENCED, not just simultaneous. Each clause takes an optiona
 the last K days". This is what expresses an ORDERING rather than a coincidence, and the two are \
 genuinely different hypotheses:
   - crash FIRST, then the release:  shock_zscore >= 2 with within_days=3, AND today's condition
-  - release FIRST, then the move:   is_macro_day >= 1 with within_days=2, AND today's condition
+  - release FIRST, then the move:   cpi_surprise >= 1 with within_days=2, AND today's condition
 The lead-up table you are given exists precisely so you can tell these apart -- use it.
 
 IS THIS EVENT ABOUT ONE COIN OR THE WHOLE MARKET? The two need different settings:

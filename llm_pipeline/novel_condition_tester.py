@@ -358,6 +358,45 @@ NEWS_EVENT_INDICATORS = frozenset({
     "cpi_surprise", "rate_surprise", "jobless_claims_surprise",
 })
 
+# Indicators an LLM proposal may NOT use at all, as opposed to those that merely
+# fail to satisfy the necessary-condition rule on their own.
+#
+# `is_macro_day` is contentless. It says a publication was scheduled today and
+# never what the publication said -- a condition resting on it reads as "on a day
+# when something came out, whatever it was", which cannot distinguish a hawkish
+# shock from a print that landed exactly on consensus. Release dates are also
+# known months ahead, so it carries no information that arrives.
+#
+# Dropping it from NEWS_EVENT_INDICATORS alone left it usable as a secondary
+# clause, which is not worth the grammar: paired with a graded surprise it is
+# very nearly redundant (a CPI surprise IS a macro day), and paired with anything
+# else it re-admits through the back door the hypothesis it was removed to
+# exclude. It is not a weaker version of `cpi_surprise`; it is the version with
+# the content removed.
+#
+# Enforced in code rather than only in the prompt, on this project's standing
+# rule that a prompt is a request and code is a guarantee -- and because the two
+# had already drifted apart: the prompt listed `is_macro_day` as satisfying the
+# HARD REQUIREMENT while the code rejected exactly that, so the system was paying
+# for proposals its own instructions induced and its own validator refused. 21%
+# of 118 real proposals died that way.
+#
+# Deliberately NOT removed from SUPPORTED_INDICATORS. The committed sweeps in
+# `forecast/` (grammar_sweep, sentiment_power, coin_specific_test) contain arms
+# built on it, and their recorded JSON results must stay reproducible -- deleting
+# the indicator would silently invalidate published measurements to tidy up a
+# grammar rule that belongs to the proposal path only.
+NON_PROPOSABLE_INDICATORS = frozenset({"is_macro_day"})
+
+# The whitelist shown to the model, derived rather than written out by hand: an
+# indicator added to NON_PROPOSABLE_INDICATORS disappears from every prompt at
+# once. The hand-maintained version is how `is_macro_day` stayed advertised in
+# the HARD REQUIREMENT after the validator started rejecting it.
+def proposable_indicators() -> list[str]:
+    return [k for k in SUPPORTED_INDICATORS if k not in NON_PROPOSABLE_INDICATORS]
+
+
+
 # Words in a LABEL that assert a macro/news event is part of the hypothesis.
 # Checked against the actual clauses, because a name that describes a test
 # it doesn't perform is the same class of defect as every other one found
@@ -407,9 +446,15 @@ def spec_from_proposal(d: dict) -> "tuple[ConditionSpec | None, str | None]":
     crash risk in the replay, which saves the raw dict and halts before
     anything validates it."""
     try:
-        return spec_from_dict(d), None
+        spec = spec_from_dict(d)
     except (ValueError, KeyError, TypeError) as e:
         return None, str(e)
+    banned = sorted({c.indicator for c in spec.clauses} & NON_PROPOSABLE_INDICATORS)
+    if banned:
+        return None, (f"uses {', '.join(banned)}, which is not proposable: it records that a "
+                      f"release was scheduled, never what it said. Use the graded surprise "
+                      f"({', '.join(sorted(NEWS_EVENT_INDICATORS))}) instead.")
+    return spec, None
 
 
 # A condition must have occurred at least this many times across the coin

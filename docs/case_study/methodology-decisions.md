@@ -1347,3 +1347,50 @@ right trade: inventing a neutral for them is how the sign flip above got in.
 
 With the semantic bound applied, the recovery rate is unchanged at 17/17. The
 constraint cost nothing in this instance and removes the failure mode entirely.
+
+---
+
+## `is_macro_day` is removed from the proposal grammar entirely, not just demoted
+
+**Decision.** `is_macro_day` can no longer appear in an LLM-proposed condition at
+all. It was previously dropped from `NEWS_EVENT_INDICATORS`, which stopped it
+satisfying the necessary-condition rule *on its own* while leaving it usable as a
+secondary clause. That half-measure did not hold.
+
+**Why the demotion was not enough.** The objection to the indicator is that it is
+contentless: it records that a publication was scheduled, never what the
+publication said, so a condition built on it cannot distinguish a hawkish shock
+from a print that landed exactly on consensus. Release dates are also known months
+in advance, so nothing about it *arrives*. That objection does not weaken when the
+term is secondary. Paired with a graded surprise it is very nearly redundant — a
+CPI surprise **is** a macro day — and paired with anything else it re-admits the
+hypothesis the removal existed to exclude. Measured on the 118 candidates the
+replay had accumulated, 31 (26%) used it; six of those had it only as a secondary
+clause, which is precisely the back door the demotion left open.
+
+**The more expensive half of the same problem: the prompt still advertised it.**
+Both system prompts listed `is_macro_day` among the indicators satisfying the
+`HARD REQUIREMENT`, and gave it as the worked example for sequenced conditions
+("news FIRST, then the move"), while the validator rejected exactly that. The
+system was paying Sonnet to produce proposals its own instructions requested and
+its own code refused — the 21% of proposals failing for "no real news term" were
+being induced by the prompt, not merely permitted by it. A prompt naming an
+indicator the validator bans is not a wording defect; it is a billed one.
+
+**Fixed so it cannot recur.** The whitelist shown to the model is now *derived*
+from the proposable set (`proposable_indicators()`) rather than written out by
+hand, so an indicator added to `NON_PROPOSABLE_INDICATORS` disappears from every
+prompt at once. A test asserts no banned indicator appears in either system
+prompt — it caught a third occurrence during this change, a generated indicator
+list neither of the two hand-edited passages covered.
+
+The ban is enforced in `spec_from_proposal`, not only in the prompt, on this
+project's standing rule that a prompt is a request and code is a guarantee.
+
+**What was deliberately not changed.** `is_macro_day` remains in
+`SUPPORTED_INDICATORS`, and `candidates/definitions.py` still uses it internally
+for the C2 static candidate family (post-macro-release reaction), which is a
+different code path and a different question. The committed sweeps in `forecast/`
+contain arms built on it, and their recorded JSON results must stay reproducible.
+Deleting the indicator outright would silently invalidate published measurements
+in order to tidy a rule that belongs to the proposal path alone.

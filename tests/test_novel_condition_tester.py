@@ -565,3 +565,32 @@ def test_relaxation_respects_as_of():
     early = relax_to_testable(spec, coins, as_of=pd.Timestamp("2018-06-01"))
     if early is not None:
         assert count_occurrences(early[0], coins, as_of=pd.Timestamp("2018-06-01")) >= 35
+
+
+def test_is_macro_day_cannot_be_proposed_even_alongside_a_real_surprise():
+    """Removing it from NEWS_EVENT_INDICATORS only stopped it satisfying the
+    necessary condition ALONE -- it stayed usable as a secondary clause, which
+    re-admits the contentless term the removal existed to exclude. It is also
+    near-redundant next to a graded surprise: a CPI surprise IS a macro day."""
+    from llm_pipeline.novel_condition_tester import spec_from_proposal
+
+    spec, err = spec_from_proposal({"label": "x", "direction": "long", "clauses": [
+        {"indicator": "cpi_surprise", "op": ">=", "threshold": 1.0},
+        {"indicator": "is_macro_day", "op": ">=", "threshold": 1.0}]})
+    assert spec is None and "is_macro_day" in err
+
+
+def test_the_prompt_s_hard_requirement_matches_what_the_code_enforces():
+    """These drifted apart once: the prompt listed `is_macro_day` among the
+    indicators satisfying the HARD REQUIREMENT while the validator rejected
+    exactly that, so the system paid for proposals its own instructions asked
+    for and its own code refused. A prompt naming an indicator the validator
+    bans is not a wording problem, it is a billed one."""
+    from llm_pipeline import haiku_sonnet_pipeline as H
+    from llm_pipeline.novel_condition_tester import NON_PROPOSABLE_INDICATORS
+    from replay import judgment
+
+    sources = [H.SONNET_SYSTEM_PROMPT, judgment.REPLAY_SYSTEM_PROMPT]
+    for text in sources:
+        for banned in NON_PROPOSABLE_INDICATORS:
+            assert banned not in text, f"prompt still offers {banned}"

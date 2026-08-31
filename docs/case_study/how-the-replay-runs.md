@@ -125,7 +125,9 @@ A proposal is not sent to the human as-is. Three deterministic checks run first,
 in order, and each can end it:
 
 **1. Is it on-thesis?** `spec_from_proposal` rejects any spec with no news or
-macro event clause. This project tests market conditions **combined with a
+macro event clause, and separately rejects any spec using `is_macro_day` at all
+(`NON_PROPOSABLE_INDICATORS`) — a scheduled release date says nothing about what
+the release contained. This project tests market conditions **combined with a
 real-world event**; the event term is a necessary condition, not an option.
 `shock_zscore` is a market event, not news, and does not satisfy this alone. A
 proposal that is purely technical is refused here and never reaches the phone.
