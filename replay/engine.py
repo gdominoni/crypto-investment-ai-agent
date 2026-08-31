@@ -40,6 +40,7 @@ from execution import hyperopt_runner
 from llm_pipeline.haiku_sonnet_pipeline import escape_html, format_spec_clauses
 from llm_pipeline.novel_condition_tester import (
     ConditionSpec, clause_from_dict, clause_signal_hourly, clause_to_dict, condition_desc, format_pattern_significance,
+    MIN_HISTORICAL_OCCURRENCES, count_occurrences,
     spec_from_dict, spec_from_proposal,
     test_novel_condition,
 )
@@ -213,6 +214,17 @@ def _handle_assessment(as_of: pd.Timestamp, event_desc: str, assessment: dict, l
         _spec, _err = spec_from_proposal(s)
         if _spec is None:
             print(f"[{as_of.date()}] proposal '{s.get('label')}' rejected, not tested: {_err}")
+            return None
+        # Rarity, measured rather than approximated by a clause count. 0.25s of
+        # local computation and no API call, so the thing that actually decides
+        # whether a hypothesis can produce a result is checked directly. A
+        # condition below the floor would consume a walk-forward test and return
+        # `insufficient_data` -- where 193 of 234 candidates ended in a real run.
+        _n = count_occurrences(_spec, COINS, as_of=as_of)
+        if _n < MIN_HISTORICAL_OCCURRENCES:
+            print(f"[{as_of.date()}] proposal '{s.get('label')}' rejected, not tested: "
+                  f"occurred only {_n} time(s) in the whole history, below the "
+                  f"{MIN_HISTORICAL_OCCURRENCES} needed to measure anything. Thresholds too tight.")
             return None
         state.save_pending_test({"spec": s, "coins": COINS, "live_coin": live_coin, "as_of": str(as_of.date())})
         _send(judgment.format_telegram_message(as_of, event_desc, assessment), reply_markup=REPLAY_PROPOSAL_KEYBOARD)

@@ -39,7 +39,7 @@ def test_empty_clauses_is_rejected():
 def test_multi_clause_spec_is_anded_in_its_description():
     spec = ConditionSpec(
         label="x",
-        clauses=(Clause(indicator="rsi_14d", op="<", threshold=30.0), Clause(indicator="is_macro_day", op=">=", threshold=1.0)),
+        clauses=(Clause(indicator="rsi_14d", op="<", threshold=30.0), Clause(indicator="cpi_surprise", op=">=", threshold=1.0)),
         direction="long",
     )
     desc = condition_desc(spec)
@@ -89,7 +89,7 @@ class TestLaggedClauses:
         read identically while testing different hypotheses."""
         spec = ConditionSpec(
             label="x",
-            clauses=(Clause("is_macro_day", ">=", 1.0, within_days=3), Clause("rsi_14d", "<", 30.0)),
+            clauses=(Clause("cpi_surprise", ">=", 1.0, within_days=3), Clause("rsi_14d", "<", 30.0)),
             direction="long",
         )
         desc = condition_desc(spec)
@@ -162,7 +162,7 @@ class TestIncrementalBaseline:
         """Removing them would leave no condition at all -- and for an
         event-only spec, 'vs. an ordinary day' is the right test anyway."""
         from llm_pipeline.novel_condition_tester import reduced_clauses
-        spec = ConditionSpec(label="x", clauses=(Clause("is_macro_day", ">=", 1.0),), direction="long")
+        spec = ConditionSpec(label="x", clauses=(Clause("cpi_surprise", ">=", 1.0),), direction="long")
         assert reduced_clauses(spec) is None
 
     def test_the_two_baselines_answer_different_questions_and_say_which(self):
@@ -334,7 +334,7 @@ class TestCoinScopeAndOutcome:
 
     def _spec(self, **kw):
         from llm_pipeline.novel_condition_tester import Clause, ConditionSpec
-        return ConditionSpec(label="t", clauses=(Clause("is_macro_day", ">=", 1.0),),
+        return ConditionSpec(label="t", clauses=(Clause("cpi_surprise", ">=", 1.0),),
                              direction="long", **kw)
 
     def test_defaults_preserve_the_previous_behaviour(self):
@@ -366,7 +366,7 @@ class TestCoinScopeAndOutcome:
     def test_dicts_written_before_these_fields_existed_still_load(self):
         from llm_pipeline.novel_condition_tester import spec_from_dict
         s = spec_from_dict({"label": "legacy", "direction": "long",
-                            "clauses": [{"indicator": "is_macro_day", "op": ">=", "threshold": 1.0}]})
+                            "clauses": [{"indicator": "cpi_surprise", "op": ">=", "threshold": 1.0}]})
         assert s.coins is None and s.outcome == "raw"
 
 
@@ -441,31 +441,83 @@ class TestConditionalConcentration:
         assert "dominant_group" not in src.split("single_coin =")[1].split("status =")[0] or True
 
 
-class TestClauseCountCap:
-    """Measured on 228 conditions Sonnet actually proposed over 5.5 simulated
-    years: every 4-and-5-clause condition was untestable -- never accumulating
-    enough occurrences to be judged at all, so it consumed a backtest and
-    returned `insufficient_data`."""
+class TestRarityGateReplacesTheClauseCap:
+    """A cap on clause COUNT was an approximation of rarity, and a poor one:
+    measured on 228 real proposals, 2-clause and 3-clause conditions were
+    equally testable (18% each). A 4-clause condition with wide thresholds can
+    fire 300 times; a 2-clause one with extreme thresholds can fire 11. The cap
+    blocked the first and admitted the second."""
 
-    def _spec(self, n):
+    COINS = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "XRPUSDT", "DOGEUSDT", "ADAUSDT", "LTCUSDT"]
+
+    def test_clause_count_is_no_longer_capped(self):
         from llm_pipeline.novel_condition_tester import Clause, ConditionSpec
-        extra = [Clause("rsi_14d", "<=", 50.0), Clause("close_return_5d", "<=", -0.1),
-                 Clause("volume_zscore_30d", ">=", 1.0), Clause("bollinger_pctb_20d", "<=", 0.3)]
-        return ConditionSpec(label="t", direction="long",
-                             clauses=tuple([Clause("is_macro_day", ">=", 1.0)] + extra[:n - 1]))
+        spec = ConditionSpec(label="t", direction="long", clauses=(
+            Clause("cpi_surprise", ">=", 0.5), Clause("rsi_14d", "<=", 55.0),
+            Clause("close_return_5d", "<=", -0.03), Clause("volume_zscore_30d", ">=", 0.5)))
+        assert len(spec.clauses) == 4
 
-    def test_three_clauses_is_allowed(self):
-        assert len(self._spec(3).clauses) == 3
+    def test_a_wide_condition_clears_the_floor(self):
+        from llm_pipeline.novel_condition_tester import (MIN_HISTORICAL_OCCURRENCES, Clause,
+                                                          ConditionSpec, count_occurrences)
+        spec = ConditionSpec(label="t", direction="long", clauses=(
+            Clause("jobless_claims_surprise", ">=", 0.5), Clause("rsi_14d", "<=", 55.0)))
+        assert count_occurrences(spec, self.COINS) > MIN_HISTORICAL_OCCURRENCES
 
-    def test_four_is_refused_with_a_reason_that_says_what_to_do(self):
-        import pytest
-        with pytest.raises(ValueError) as e:
-            self._spec(4)
-        msg = str(e.value)
-        assert "maximum is 3" in msg
-        assert "WIDE" in msg, "the message must point at the real fix, not just the cap"
+    def test_extreme_thresholds_are_caught_however_few_the_clauses(self):
+        """Two clauses, and still nothing to measure -- the case the count-based
+        cap waved through."""
+        from llm_pipeline.novel_condition_tester import (MIN_HISTORICAL_OCCURRENCES, Clause,
+                                                          ConditionSpec, count_occurrences)
+        spec = ConditionSpec(label="t", direction="long", clauses=(
+            Clause("cpi_surprise", ">=", 2.0), Clause("close_return_5d", "<=", -0.25)))
+        assert count_occurrences(spec, self.COINS) < MIN_HISTORICAL_OCCURRENCES
 
-    def test_the_cap_does_not_block_the_minimum_viable_hypothesis(self):
-        """One news term plus one market-state term -- the shape the prompts now
-        steer toward -- must still be constructible."""
-        assert len(self._spec(2).clauses) == 2
+    def test_the_floor_matches_the_acceptance_gate(self):
+        """Out-of-sample is roughly two thirds of all occurrences (the first
+        three years are training), so the floor has to sit above
+        min_report_events or it would admit conditions the gate then rejects."""
+        from candidates.methodology import MethodologyConfig
+        from llm_pipeline.novel_condition_tester import MIN_HISTORICAL_OCCURRENCES
+        assert MIN_HISTORICAL_OCCURRENCES * 0.66 >= MethodologyConfig(horizons=(1,)).min_report_events
+
+
+class TestRarityGateRespectsTheTimeSandbox:
+    """The gate must count only what had happened by the simulated date. Counted
+    over the full history it would decide what to test using occurrences that
+    have not happened yet -- the leak replay/time_sandbox.py exists to prevent,
+    arriving through a gate meant to save money."""
+
+    COINS = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "XRPUSDT", "DOGEUSDT", "ADAUSDT", "LTCUSDT"]
+
+    def _spec(self):
+        from llm_pipeline.novel_condition_tester import Clause, ConditionSpec
+        return ConditionSpec(label="t", direction="long", clauses=(
+            Clause("jobless_claims_surprise", ">=", 0.5), Clause("rsi_14d", "<=", 55.0)))
+
+    def test_the_count_grows_with_the_cutoff(self):
+        import pandas as pd
+        from llm_pipeline.novel_condition_tester import count_occurrences
+        spec = self._spec()
+        counts = [count_occurrences(spec, self.COINS, as_of=pd.Timestamp(d))
+                  for d in ("2018-06-30", "2019-06-30", "2021-06-30")]
+        assert counts == sorted(counts) and counts[0] < counts[-1]
+
+    def test_an_early_cutoff_sees_far_fewer_than_the_full_history(self):
+        """The concrete case: 37 by mid-2018 against 617 today. Deciding in 2018
+        on the strength of 617 is reading the future."""
+        import pandas as pd
+        from llm_pipeline.novel_condition_tester import count_occurrences
+        spec = self._spec()
+        early = count_occurrences(spec, self.COINS, as_of=pd.Timestamp("2018-06-30"))
+        full = count_occurrences(spec, self.COINS)
+        assert early < full / 5
+
+    def test_the_replay_passes_its_simulated_date(self):
+        import inspect
+
+        import replay.engine as E
+        src = inspect.getsource(E._handle_assessment)
+        assert "count_occurrences(_spec, COINS, as_of=as_of)" in src, (
+            "the replay must pass its simulated date, or the gate reads the future"
+        )

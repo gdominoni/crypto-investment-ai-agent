@@ -187,7 +187,6 @@ def build_indicator_snapshot(coin: str, as_of: pd.Timestamp | None = None) -> st
     return f"{coin} current indicator readings: " + ", ".join(parts)
 
 
-MAX_CLAUSES = 3  # see ConditionSpec.__post_init__ for the measurement behind this
 MAX_WITHIN_DAYS = 14  # a "sequence" longer than this stops being one event and becomes a regime
 
 
@@ -339,8 +338,24 @@ EVENT_INDICATORS = frozenset({
 # was tested, graded and reported as if it answered the project's
 # question. News/sentiment indicators join this set once a historical
 # archive exists to backtest them against (see docs/case_study/TODO.md).
+# What counts as NEWS for the necessary-condition rule. `is_macro_day` is
+# deliberately NOT here, though it remains available as a context term.
+#
+# It is a CALENDAR fact, not an information event: it says "a publication was
+# scheduled today", never what the publication said, and release dates are known
+# months in advance. After jobless claims joined the calendar it fires on 18.9%
+# of days -- roughly one day in five -- so a condition resting on it alone reads
+# as "on a day when something came out, whatever it was". Measured on 118
+# proposals from a real replay, 21% used it as their only news term, which is a
+# fifth of the discovery budget spent on hypotheses that cannot answer this
+# project's question.
+#
+# The graded surprises carry the content: how far a print moved relative to how
+# far that series usually moves. Same reasoning that already excludes
+# shock_zscore -- a violent price move is a market event, not news; a scheduled
+# date is not news either. The news is what the number said.
 NEWS_EVENT_INDICATORS = frozenset({
-    "is_macro_day", "cpi_surprise", "rate_surprise", "jobless_claims_surprise",
+    "cpi_surprise", "rate_surprise", "jobless_claims_surprise",
 })
 
 # Words in a LABEL that assert a macro/news event is part of the hypothesis.
@@ -395,6 +410,67 @@ def spec_from_proposal(d: dict) -> "tuple[ConditionSpec | None, str | None]":
         return spec_from_dict(d), None
     except (ValueError, KeyError, TypeError) as e:
         return None, str(e)
+
+
+# A condition must have occurred at least this many times across the coin
+# universe to be worth testing. Below it there is nothing to measure either way,
+# and the backtest returns `insufficient_data` -- 193 of 234 candidates in a real
+# replay ended there.
+#
+# This REPLACED a cap on the number of clauses. That cap was an approximation of
+# rarity and a poor one: measured on 228 real proposals, 2-clause and 3-clause
+# conditions were equally testable (18% each) while every 4-clause one failed --
+# so the count correlates with rarity without determining it. A 4-clause
+# condition with wide thresholds can fire 300 times; a 2-clause one with extreme
+# thresholds can fire 11. The cap blocked the first and admitted the second,
+# which is backwards. Counting occurrences takes 0.25s and no API call, so the
+# thing that actually matters can simply be measured.
+# 35, not 30. Out-of-sample is roughly two thirds of all occurrences (the first
+# three years are training folds), so 30 total lands at ~20 OOS -- exactly ON
+# classify_status's min_report_events, where it would be admitted here and then
+# rejected there. 35 gives ~23 OOS and a little margin, since the two-thirds
+# ratio is itself approximate.
+MIN_HISTORICAL_OCCURRENCES = 35
+
+
+def count_occurrences(spec: "ConditionSpec", coins: list[str],
+                       as_of: "pd.Timestamp | None" = None) -> int:
+    """How many times this condition had fired as of `as_of`, across `coins`.
+
+    Cheap and exact: ~0.25s of local computation, no API call. Used to reject a
+    proposal that cannot produce a result BEFORE spending a walk-forward test on
+    it.
+
+    `as_of` IS NOT OPTIONAL IN THE REPLAY, and passing it is the whole
+    correctness of this function there. Counted over the full history, a
+    condition can look plentiful because of occurrences that have not happened
+    yet: `jobless_claims_surprise >= 0.5 AND rsi <= 55` has 617 occurrences today
+    and had 37 by mid-2018. Deciding in 2018 to test it on the strength of 617
+    would be reading the future to choose what to test -- exactly the leak
+    replay/time_sandbox.py exists to prevent, arriving through the back door of a
+    gate meant to save money.
+
+    Production passes None, which means "as of now", and there the full history
+    IS everything knowable.
+    """
+    from candidates.data_loading import load_daily, load_funding
+
+    total = 0
+    for coin in coins:
+        try:
+            daily, funding = load_daily(coin), load_funding(coin)
+        except Exception:
+            continue
+        if as_of is not None:
+            daily = daily.loc[:as_of]
+            funding = funding.loc[:as_of] if funding is not None else None
+        if spec.coins and coin not in spec.coins:
+            continue
+        sig = pd.Series(True, index=daily.index)
+        for clause in spec.clauses:
+            sig &= clause_signal(clause, daily, funding, symbol=coin)
+        total += int(sig.fillna(False).sum())
+    return total
 
 
 def spec_to_dict(spec: "ConditionSpec") -> dict:
@@ -563,26 +639,6 @@ class ConditionSpec:
     def __post_init__(self):
         if len(self.clauses) == 0:
             raise ValueError("ConditionSpec needs at least one clause")
-        # Hard cap at 3, measured on 228 conditions Sonnet actually proposed
-        # across 5.5 simulated years:
-        #     clauses  proposed  testable
-        #        2        56        18%
-        #        3       141        18%
-        #        4        30         0%
-        #        5         1         0%
-        # Every 4-and-5-clause condition was untestable -- not rejected on the
-        # evidence, but never accumulating enough occurrences to be judged at
-        # all. The cap removes proposals that cannot produce a result rather
-        # than letting them consume a backtest and land as `insufficient_data`.
-        # Note 2 and 3 clauses are EQUALLY testable, so the cap alone is not the
-        # fix: threshold width matters far more, which is why the prompts now
-        # carry measured guidance on it.
-        if len(self.clauses) > MAX_CLAUSES:
-            raise ValueError(
-                f"ConditionSpec '{self.label}' has {len(self.clauses)} clauses; the maximum is "
-                f"{MAX_CLAUSES}. Every condition proposed with 4+ clauses in this project's own "
-                f"replay was too rare to test. Use at most {MAX_CLAUSES}: the required news/macro "
-                f"event, plus one or two market-state terms with WIDE thresholds.")
         if self.direction not in ("long", "short"):
             raise ValueError("direction must be 'long' or 'short'")
         if self.outcome not in ("raw", "market_relative"):
