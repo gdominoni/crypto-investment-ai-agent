@@ -69,7 +69,7 @@ CONDITIONS MAY BE SEQUENCED, not just simultaneous. Each clause takes an optiona
 (0-14, default 0). 0 means "true on the day the condition fires"; K means "was true at any point in \
 the last K days". This is what expresses an ORDERING rather than a coincidence, and the two are \
 genuinely different hypotheses:
-  - crash FIRST, then the release:  shock_zscore >= 2 with within_days=3, AND today's condition
+  - crash FIRST, then the release:  close_return_5d <= -0.10 with within_days=3, AND today's condition
   - release FIRST, then the move:   cpi_surprise >= 1 with within_days=2, AND today's condition
 The lead-up table you are given exists precisely so you can tell these apart -- use it.
 

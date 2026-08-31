@@ -95,6 +95,14 @@ SUPPORTED_INDICATORS: dict[str, Callable[..., pd.Series]] = {
     # HOUR's range against a threshold calibrated on a DAY's (measured:
     # 0.008-0.194 daily vs 0.001-0.047 hourly, a 0.24x shift).
     "daily_range_pct": lambda df, funding, scale=1, symbol=None: (df["high"] - df["low"]) / df["close"],
+    # The same quantity measured against its OWN recent level, which is the only
+    # form a threshold can be set on. Raw range is badly non-stationary: crypto's
+    # volatility roughly halved over this project's window, so `daily_range_pct
+    # >= 0.05` selects 62% of days in 2021 and 16% in 2026 -- a filter on the
+    # calendar wearing the costume of a filter on market state. Measured spread
+    # in yearly selection rate: 54.5% raw, 2.3% z-scored.
+    "range_zscore_30d": lambda df, funding, scale=1, symbol=None: zscore(
+        (df["high"] - df["low"]) / df["close"], 30 * scale),
     "volume_zscore_30d": lambda df, funding, scale=1, symbol=None: zscore(df["volume"], 30 * scale),
     "funding_zscore_30d": lambda df, funding, scale=1, symbol=None: zscore(funding.reindex(df.index).ffill(), 30 * scale) if funding is not None else pd.Series(np.nan, index=df.index),
     "efficiency_ratio_20d": lambda df, funding, scale=1, symbol=None: trend_efficiency_ratio(df["close"], 20 * scale),
@@ -138,6 +146,7 @@ INDICATOR_PLAIN_NAMES: dict[str, str] = {
     "close_return_1d": "1-day price change",
     "close_return_5d": "5-day price change",
     "daily_range_pct": "daily high-low range (% of price)",
+    "range_zscore_30d": "30-day range z-score (how wide today's bar is vs recent bars)",
     "volume_zscore_30d": "30-day volume z-score (how unusual today's volume is)",
     "funding_zscore_30d": "30-day funding-rate z-score",
     "efficiency_ratio_20d": "20-day trend efficiency ratio (0=choppy, 1=straight trend)",
@@ -298,6 +307,7 @@ class Clause:
 # before the daily close (see docs/case_study/methodology-decisions.md).
 DAILY_NATIVE_INDICATORS = frozenset({
     "shock_zscore", "rsi_14d", "atr_pct_14d", "daily_range_pct", "efficiency_ratio_20d",
+    "range_zscore_30d",
     # macro surprises are calendar-day events -- there is no intraday version
     "cpi_surprise", "rate_surprise", "jobless_claims_surprise",
 })
@@ -386,7 +396,29 @@ NEWS_EVENT_INDICATORS = frozenset({
 # built on it, and their recorded JSON results must stay reproducible -- deleting
 # the indicator would silently invalidate published measurements to tidy up a
 # grammar rule that belongs to the proposal path only.
-NON_PROPOSABLE_INDICATORS = frozenset({"is_macro_day"})
+# `shock_zscore` is banned for a different and sharper reason: it is the
+# EXPLANANDUM. The replay asks Sonnet precisely because a shock occurred, so a
+# condition containing a shock restates the reason the question was asked.
+#
+# The decisive form of the argument is about information, not aesthetics: since
+# the trigger IS a shock, a shock is present at every proposal by construction.
+# It is a constant of the sampling frame, not a variable -- so it can add nothing
+# discriminating when the hypothesis is formed, while still narrowing the
+# condition when it is later tested over all history. That is the worst of both.
+#
+# Measured on 118 real proposals: 11 contained `shock_zscore`, and 9 of those 11
+# used `within_days=0` -- "a shock TODAY", the very day that prompted the
+# question. Only 2 used it as a genuine antecedent. The sequenced form is more
+# defensible, but it is 2 cases out of 118, and it is still the model proposing
+# the thing it was shown; a rule with an exception that rare is harder to reason
+# about than the rule.
+#
+# `daily_range_pct` is banned as non-stationary, not as circular. See
+# `range_zscore_30d` above: a fixed threshold on the raw range is a filter on the
+# year. Neither it nor `atr_pct_14d` appeared in any of the 118 proposals, so
+# nothing is lost in practice. Both stay in SUPPORTED_INDICATORS because the
+# committed sweeps in `forecast/` are built on them and must stay reproducible.
+NON_PROPOSABLE_INDICATORS = frozenset({"is_macro_day", "shock_zscore", "daily_range_pct"})
 
 # The whitelist shown to the model, derived rather than written out by hand: an
 # indicator added to NON_PROPOSABLE_INDICATORS disappears from every prompt at
@@ -565,6 +597,7 @@ RELAXATION_NEUTRAL: dict[str, float] = {
     "jobless_claims_surprise": 0.0,
     "shock_zscore": 0.0,
     "volume_zscore_30d": 0.0,
+    "range_zscore_30d": 0.0,
     "funding_zscore_30d": 0.0,
     "close_return_1d": 0.0,
     "close_return_3d": 0.0,

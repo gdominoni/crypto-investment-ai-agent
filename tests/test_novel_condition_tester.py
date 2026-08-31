@@ -628,3 +628,39 @@ def test_two_never_firing_conditions_do_not_count_as_agreeing():
     impossible = lambda i: ConditionSpec(label=f"n{i}", direction="long", clauses=(
         Clause("cpi_surprise", ">=", 50.0 + i), Clause("rsi_14d", "<=", 1.0)))
     assert math.isnan(behavioural_agreement(impossible(0), impossible(1), ["BTCUSDT"]))
+
+
+def test_the_shock_cannot_appear_in_a_condition_that_explains_it():
+    """The replay asks Sonnet BECAUSE a shock occurred, so a shock is present at
+    every proposal by construction. It is a constant of the sampling frame, not
+    a variable: it adds nothing discriminating when the hypothesis is formed,
+    while still narrowing the condition when it is later tested over all
+    history. Measured on 118 real proposals, 9 of the 11 that used it used
+    within_days=0 -- a shock on the very day that prompted the question."""
+    from llm_pipeline.novel_condition_tester import spec_from_proposal
+
+    for within in (0, 3):
+        spec, err = spec_from_proposal({"label": "x", "direction": "long", "clauses": [
+            {"indicator": "cpi_surprise", "op": ">=", "threshold": 1.0},
+            {"indicator": "shock_zscore", "op": ">=", "threshold": 2.0, "within_days": within}]})
+        assert spec is None and "shock_zscore" in err
+
+
+def test_range_is_proposable_only_in_its_stationary_form():
+    """Raw `daily_range_pct >= 0.05` selected 62% of days in 2021 and 16% in
+    2026 -- a filter on the calendar dressed as a filter on market state.
+    Measured spread in yearly selection rate: 54.5% raw vs 2.3% z-scored."""
+    from llm_pipeline.novel_condition_tester import (RELAXATION_NEUTRAL, SUPPORTED_INDICATORS,
+                                                     proposable_indicators, spec_from_proposal)
+
+    assert "range_zscore_30d" in proposable_indicators()
+    assert "daily_range_pct" in SUPPORTED_INDICATORS       # kept: forecast/ sweeps use it
+    assert "daily_range_pct" not in proposable_indicators()
+    # A new threshold-bearing indicator needs a neutral, or it silently opts out
+    # of the relaxation search that rescues too-rare conditions.
+    assert RELAXATION_NEUTRAL["range_zscore_30d"] == 0.0
+
+    spec, _ = spec_from_proposal({"label": "x", "direction": "long", "clauses": [
+        {"indicator": "cpi_surprise", "op": ">=", "threshold": 1.0},
+        {"indicator": "range_zscore_30d", "op": ">=", "threshold": 1.5}]})
+    assert spec is not None

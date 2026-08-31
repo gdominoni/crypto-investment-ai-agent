@@ -95,9 +95,13 @@ cpi_surprise, rate_surprise, jobless_claims_surprise. This is not a preference, 
 what this system exists to test: whether specific MARKET CONDITIONS combined with a REAL-WORLD EVENT \
 produce a repeatable pattern. A condition built only from price/volume/funding indicators is a chart \
 pattern -- it does not answer that question, and a spec without an event clause is REJECTED by code \
-before it is ever tested. shock_zscore does NOT satisfy this on its own: a violent price move is a \
-market event, not news, and "the price moved a lot, then the price did something" is the tautology \
-this rule exists to exclude. Use shock_zscore freely as an ADDITIONAL market-condition clause.
+before it is ever tested. A violent price move is a MARKET event, not news, and \
+"the price moved, then the price did something" is the tautology this rule exists to exclude.
+
+The volatility shock itself is NOT available as a clause. It is the thing your hypothesis has to \
+EXPLAIN, not part of the explanation -- you are being asked about this moment precisely because a \
+shock occurred, so every proposal already sits on one and naming it adds nothing. Describe what the \
+market looked like and what had been published; the shock is the outcome, not the setup.
 
 Your label must also describe what the clauses actually test. Do not name a condition "post-CPI ..." \
 unless a CPI/macro clause is genuinely in it -- that is checked in code too.
@@ -163,7 +167,7 @@ IMPORTANT -- conditions may be SEQUENCED, not just simultaneous. Each clause tak
 "within_days" (integer, 0-14, default 0). 0 means "true on the day the condition fires"; K means \
 "was true at any point in the last K days". This is what lets you express an ORDERING rather than a \
 coincidence, and the two are genuinely different hypotheses:
-  - crash FIRST, then the news:  shock_zscore >= 2 with within_days=3, AND today's condition
+  - crash FIRST, then the news:  close_return_5d <= -0.10 with within_days=3, AND today's condition
   - news FIRST, then the move:   cpi_surprise >= 1 with within_days=2, AND today's condition
   - both on the same day:        leave within_days at 0 on both
 You are shown a day-by-day LEAD-UP table (the last several days of key indicators, oldest first) \
@@ -215,14 +219,13 @@ indicator reading, a headline, or a release you weren't shown. Recommend one of:
 - "propose_novel_test": worth finding out if a SPECIFIC combination of what you were just given, \
   historically, shows a real reversal or continuation pattern -- e.g. you notice the shock \
   coincided with RSI already deeply oversold AND a hotter-than-prior inflation print in the last \
-  few days, so you propose testing exactly that combination, not the shock in isolation. A single \
-  clause (just "shock_zscore") is fine when nothing else in the given context looks relevant -- \
-  don't force a compound story where the evidence doesn't support one. Use ONLY indicators you were \
-  actually shown a reading for. Example: {{"label": "shock_reactive_<coin>", "clauses": \
-  [{{"indicator": "shock_zscore", "op": ">=", "threshold": 2.0, "within_days": 2}}, \
+  few days, so you propose testing exactly that combination, not the shock in isolation. Don't force a \
+  compound story where the evidence doesn't support one. Use ONLY indicators you were \
+  actually shown a reading for. Example: {{"label": "hot_cpi_into_oversold_<coin>", "clauses": \
+  [{{"indicator": "cpi_surprise", "op": ">=", "threshold": 1.0, "within_days": 2}}, \
   {{"indicator": "rsi_14d", "op": "<", "threshold": 30}}], "direction": "long" or "short"}} -- note \
   "within_days" (integer 0-14, default 0): 0 = true on the day the condition fires, K = true at any \
-  point in the last K days. Use it to express that the SHOCK CAME FIRST and something else followed, \
+  point in the last K days. Use it to express that the RELEASE CAME FIRST and something else followed, \
   which is a different hypothesis from both happening on the same day. The day-by-day LEAD-UP table \
   you are shown exists so you can tell which of the two you are actually looking at. If the human approves and it's \
   accepted, the resulting anchors are used for a LIVE trade on THIS occurrence, tagged separately \
@@ -235,9 +238,13 @@ cpi_surprise, rate_surprise, jobless_claims_surprise. This is not a preference, 
 what this system exists to test: whether specific MARKET CONDITIONS combined with a REAL-WORLD EVENT \
 produce a repeatable pattern. A condition built only from price/volume/funding indicators is a chart \
 pattern -- it does not answer that question, and a spec without an event clause is REJECTED by code \
-before it is ever tested. shock_zscore does NOT satisfy this on its own: a violent price move is a \
-market event, not news, and "the price moved a lot, then the price did something" is the tautology \
-this rule exists to exclude. Use shock_zscore freely as an ADDITIONAL market-condition clause.
+before it is ever tested. A violent price move is a MARKET event, not news, and \
+"the price moved, then the price did something" is the tautology this rule exists to exclude.
+
+The volatility shock itself is NOT available as a clause. It is the thing your hypothesis has to \
+EXPLAIN, not part of the explanation -- you are being asked about this moment precisely because a \
+shock occurred, so every proposal already sits on one and naming it adds nothing. Describe what the \
+market looked like and what had been published; the shock is the outcome, not the setup.
 
 Your label must also describe what the clauses actually test. Do not name a condition "post-CPI ..." \
 unless a CPI/macro clause is genuinely in it -- that is checked in code too.

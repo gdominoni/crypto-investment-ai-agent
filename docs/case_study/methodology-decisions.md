@@ -1394,3 +1394,73 @@ different code path and a different question. The committed sweeps in `forecast/
 contain arms built on it, and their recorded JSON results must stay reproducible.
 Deleting the indicator outright would silently invalidate published measurements
 in order to tidy a rule that belongs to the proposal path alone.
+
+---
+
+## The volatility shock is the explanandum, so it cannot be a clause
+
+**Decision.** `shock_zscore` is removed from the proposal grammar entirely
+(`NON_PROPOSABLE_INDICATORS`). It remains the trigger — the only one measured to
+select days that differ from ordinary days — but it can no longer appear inside a
+condition.
+
+**The argument, in its decisive form.** The replay asks Sonnet precisely because
+a shock occurred. A shock is therefore present at **every** proposal by
+construction: it is a constant of the sampling frame, not a variable. It can add
+nothing discriminating at the moment the hypothesis is formed, while still
+narrowing the condition when that condition is later tested across all history —
+the worst of both. The shock is the situation the condition is supposed to
+explain, not part of the explanation.
+
+The previous rule was weaker: `shock_zscore` was excluded from
+`NEWS_EVENT_INDICATORS`, so it could not satisfy the necessary condition alone,
+but the prompt then said "use shock_zscore freely as an ADDITIONAL
+market-condition clause". That reasoning treated it as a market state. It is not
+a state; it is an outcome.
+
+**Measured on 118 real proposals**, 11 contained `shock_zscore` and **9 of those
+11 used `within_days=0`** — a shock on the very day that prompted the question.
+Only 2 used it as a genuine antecedent ("a crash three days ago, then a
+release"). That sequenced form is more defensible, but at 2 cases in 118 an
+exception is harder to reason about than the rule, and it is still the model
+proposing back the thing it was shown.
+
+---
+
+## Raw `daily_range_pct` is not proposable; `range_zscore_30d` replaces it
+
+**The defect.** `daily_range_pct` is `(high - low) / close`, unnormalised. Crypto
+volatility roughly halved across this project's window, so a fixed threshold on
+it is a filter on the **calendar** wearing the costume of a filter on market
+state. Measured on BTC, `daily_range_pct >= 0.05` selects:
+
+    2021  62% of days        2023  17%        2026  16%
+
+**Why it matters beyond tidiness.** A condition whose threshold silently selects
+a period rather than a state runs straight into the 60% year-concentration gate,
+and does so for a reason that has nothing to do with the hypothesis being tested.
+
+**The forms compared**, by spread in yearly selection rate — a stationary form
+must select the same share of days every year:
+
+    raw >= 0.05                    54.5%   unusable
+    z-score 30d >= 1.5              2.3%
+    percentile rank 180d >= 0.95    3.0%
+    ratio to 30d mean >= 2          1.5%
+
+`range_zscore_30d` was chosen over the marginally flatter ratio for grammar
+consistency: `volume_zscore_30d` and `funding_zscore_30d` already exist, and a
+single idiom is easier for a model composing conditions than three.
+
+**Why this indicator at all.** The daily range measured *better than the shock
+trigger* as a trigger (`forecast/trigger_value.py`: p=0.0000 at 1 and 3 days,
+0.0039 at 7, against shock's 0.0000/0.0086/0.0919). It was not adopted as a
+trigger because the two describe different things — a shock says what has already
+happened, a wide range says the market is undecided, typically around an
+announcement — and the question the system asks is "what caused this", which
+needs the shock. The predictive content is real, so it belongs where the system
+can actually use it: as a condition term.
+
+Neither `daily_range_pct` nor `atr_pct_14d` appeared in any of the 118 proposals,
+so banning the raw form costs nothing measurable. Both stay in
+`SUPPORTED_INDICATORS` so the committed sweeps in `forecast/` remain reproducible.
