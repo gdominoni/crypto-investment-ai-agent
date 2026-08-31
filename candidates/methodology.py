@@ -1392,7 +1392,26 @@ def prune_recommendation(row: dict) -> tuple[str, str]:
     if status == "insufficient_data" or n <= MethodologyConfig(horizons=(1,)).min_report_events:
         return "keep", f"only {n} occurrence(s) so far -- never yet testable, not a negative result"
     if sig:
-        return "keep", "statistically significant; held back only by a robustness check"
+        # Name WHICH check is binding. "Held back by a robustness check" is not
+        # something a human can act on. The figure itself is on the stats line
+        # above, so this says which dimension without repeating the number --
+        # the same duplication that made the Telegram messages verbose.
+        def _num(v):
+            return v if isinstance(v, (int, float)) and v == v else None
+        coin, year = _num(row.get("max_coin_share")), _num(row.get("max_year_share"))
+        mm = _num(row.get("pattern_mfe_mae_ratio"))
+        if (coin is not None and coin > MAX_GROUP_SHARE) or (year is not None and year > MAX_GROUP_SHARE):
+            which = "one coin" if (coin or 0) >= (year or 0) else "one year"
+            # Concentration is a STATE, not a verdict. It is what the evidence
+            # looks like so far, and it dilutes on its own as occurrences arrive
+            # on other coins or in other years -- so the right action is to wait,
+            # not to discard. Saying only "too concentrated" reads as a fault and
+            # invites dropping a candidate whose evidence is simply still young.
+            return "keep", (f"statistically significant; the effect currently sits mostly in {which}, "
+                            f"which dilutes by itself as more occurrences accumulate -- worth waiting on")
+        if mm is not None and mm <= 1:
+            return "keep", "statistically significant, but price moves against the position as far as it moves for it"
+        return "keep", "statistically significant; held back by a robustness check"
 
     need = required_n_for_power(sd) if sd is not None else float("nan")
     if need == need and n >= need:
@@ -1457,9 +1476,22 @@ def format_prune_digest(rows: dict, first_tracked: dict, as_of: str) -> str:
             n = row.get("n")
             p = row.get("pattern_p_value")
             mm = row.get("pattern_mfe_mae_ratio")
+            def _num(v):
+                return v if isinstance(v, (int, float)) and v == v else None
+            coin, year = _num(row.get("max_coin_share")), _num(row.get("max_year_share"))
+            # Concentration is one of the acceptance gates, so a keep-or-drop
+            # decision needs to see it. Shown only when it exceeds the limit --
+            # a diversified 32% is not a fact the reader has to weigh, and
+            # printing it for everyone buries the cases that matter.
+            conc = []
+            if coin is not None and coin > MAX_GROUP_SHARE:
+                conc.append(f"coin {coin:.0%}" + (f" ({row['dominant_coin']})" if row.get("dominant_coin") else ""))
+            if year is not None and year > MAX_GROUP_SHARE:
+                conc.append(f"year {year:.0%}" + (f" ({_format_dominant_year(row.get('dominant_year'))})" if row.get("dominant_year") else ""))
             bits = [f"N={n}" if n is not None else None,
                     f"p={p:.3f}" if isinstance(p, (int, float)) and p == p else None,
-                    f"MFE/MAE={mm:.2f}" if isinstance(mm, (int, float)) and mm == mm else None]
+                    f"MFE/MAE={mm:.2f}" if isinstance(mm, (int, float)) and mm == mm else None,
+                    (f"concentrated: {', '.join(conc)} -- over the {MAX_GROUP_SHARE:.0%} limit") if conc else None]
             stats = "  ".join(b for b in bits if b)
             lines.append(f"<b>{code}</b>  {_escape_html(label)}")
             lines.append(f"    {stats}")
@@ -1470,7 +1502,8 @@ def format_prune_digest(rows: dict, first_tracked: dict, as_of: str) -> str:
     out += block("Recommended to DROP", drop,
                  "tested with enough power to find an effect of interest; none was there")
     out += block("Recommended to KEEP", keep,
-                 "still undetermined -- dropping these would discard a question never actually answered")
+                 "either still undetermined, or holding evidence that is simply young -- "
+                 "concentration in one coin or year dilutes on its own as occurrences accumulate")
     out += ["Reply with the codes to DROP, separated by spaces (e.g. <code>2019-0003 2020-0011</code>).",
             "Reply <code>none</code> to keep everything. Anything not named is kept."]
     return "\n".join(out)

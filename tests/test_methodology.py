@@ -692,3 +692,44 @@ class TestPruneDigest:
     def test_it_says_how_to_answer(self):
         t = self._text()
         assert "Reply with the codes" in t and "none" in t
+
+
+class TestConcentrationIsAStateNotAVerdict:
+    """Exceeding the 60% limit means the evidence is young, not that the
+    candidate is bad: concentration dilutes on its own as occurrences arrive on
+    other coins and in other years. It must never drive a drop."""
+
+    CONC = {"status": "watch", "n": 163, "pattern_significant": True, "pattern_oos_sd": 0.07,
+            "pattern_p_value": 0.04, "pattern_mfe_mae_ratio": 1.8,
+            "max_coin_share": 0.974, "dominant_coin": "XRPUSDT", "max_year_share": 0.31}
+
+    def test_a_concentrated_candidate_is_never_dropped(self):
+        from candidates.methodology import prune_recommendation
+        assert prune_recommendation(self.CONC)[0] == "keep"
+
+    def test_the_reason_says_to_wait_rather_than_naming_a_fault(self):
+        from candidates.methodology import prune_recommendation
+        why = prune_recommendation(self.CONC)[1]
+        assert "dilutes" in why and "waiting" in why
+
+    def test_the_number_appears_once_not_twice(self):
+        """The stats line carries the figure; the reason names the dimension.
+        Repeating it is the verbosity that made the old messages hard to scan."""
+        import re
+        from candidates.methodology import format_prune_digest
+        t = re.sub(r"<[^>]+>", "", format_prune_digest({"c": self.CONC}, {"c": "2019-01-01"}, "2021-01-01"))
+        assert t.count("97%") == 1
+
+    def test_concentration_is_shown_only_when_it_exceeds_the_limit(self):
+        """A diversified 32% is not something the reader has to weigh, and
+        printing it for everyone buries the cases that matter."""
+        import re
+        from candidates.methodology import format_prune_digest
+        fine = {**self.CONC, "max_coin_share": 0.32, "dominant_coin": "BTCUSDT"}
+        t = re.sub(r"<[^>]+>", "", format_prune_digest({"c": fine}, {"c": "2019-01-01"}, "2021-01-01"))
+        assert "concentrated:" not in t
+
+    def test_an_unfavourable_risk_path_is_named_specifically(self):
+        from candidates.methodology import prune_recommendation
+        row = {**self.CONC, "max_coin_share": 0.3, "pattern_mfe_mae_ratio": 0.7}
+        assert "against the position" in prune_recommendation(row)[1]
