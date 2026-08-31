@@ -32,8 +32,9 @@ from dotenv import load_dotenv
 
 from candidates.data_loading import load_daily, load_funding, load_hourly
 from candidates.definitions import CANDIDATE_DIRECTIONS, TRIGGER_DESCRIPTIONS, compute_triggers
-from candidates.methodology import (COMPRESSION_ZSCORE_THRESHOLD, format_prune_digest,
-                                     path_outcome, prune_recommendation, vol_compression_series)
+from candidates.methodology import (COMPRESSION_CONFIRM_DAYS, COMPRESSION_ZSCORE_THRESHOLD,
+                                     compression_exit, format_prune_digest, path_outcome,
+                                     prune_recommendation, vol_compression_series)
 from candidates.run_battery import COINS
 from execution import hyperopt_runner
 from llm_pipeline.haiku_sonnet_pipeline import escape_html, format_spec_clauses
@@ -339,64 +340,11 @@ def _halt_replay(day, reason: str, events_this_chunk: int) -> dict:
             "current_date": str(resume_from), "events": events_this_chunk}
 
 
-COMPRESSION_CONFIRM_DAYS = 5
-
-
-def _compression_exit(ohlc_full: pd.DataFrame, day: pd.Timestamp) -> dict | None:
-    """Fires on a CONFIRMED exit from a volatility-compression episode, and
-    returns the whole episode's shape so the model can be told how it formed.
-
-    `day` is point C -- the confirmation date, which is where the replay
-    physically stands. The exit itself (point B) is `COMPRESSION_CONFIRM_DAYS`
-    earlier, and everything handed to the model is dated to B: the confirmation
-    window only decides WHETHER to ask, never what is shown.
-
-    Why a confirmed exit rather than the compression state. Compression is a
-    STATE, not an event: episodes run a median of 4 days and up to 38, so
-    triggering on the state would ask the same question up to 38 times about the
-    same market -- a measured 6.7x duplication (1,463 compressed coin-days over
-    217 episodes).
-
-    Why the confirmation, measured. An exit followed by the market re-compressing
-    is not a regime change, it is a flicker inside the same lull, and it is
-    followed by a defined trend less often: over a 5-day window, 23.8% for
-    confirmed exits against 15.2% for those that revert. (Not significant at
-    n=214, p=0.147 -- the direction and the size are what support it, and the
-    5-day window is deliberately short: at 10 days the comparison inverts,
-    because a long window swallows the LATER genuine exit and credits it to the
-    flicker. That artefact produced exactly the wrong answer on a first pass.)
-
-    The window is a DEFINITION of when two episodes are one, not a parameter
-    fitted to maximise anything: 3 and 5 days give near-identical numbers, which
-    is what a definition should do and what a tuned parameter would not.
-    """
-    idx = ohlc_full.index
-    if day not in idx:
-        return None
-    c_loc = idx.get_loc(day)
-    b_loc = c_loc - COMPRESSION_CONFIRM_DAYS
-    if b_loc <= 0:
-        return None
-    z = vol_compression_series(ohlc_full.iloc[:c_loc + 1])
-    state = (z >= COMPRESSION_ZSCORE_THRESHOLD).fillna(False).to_numpy().astype(bool)
-    # B is an exit: compressed on the previous bar, not compressed on B itself.
-    if state[b_loc] or not state[b_loc - 1]:
-        return None
-    # Confirmed only if compression never resumed between B and C.
-    if state[b_loc:c_loc + 1].any():
-        return None
-    # Walk back to point A, the first bar of this compression episode.
-    a_loc = b_loc - 1
-    while a_loc > 0 and state[a_loc - 1]:
-        a_loc -= 1
-    close = ohlc_full["close"]
-    return {
-        "a_date": idx[a_loc], "b_date": idx[b_loc], "c_date": day,
-        "duration": b_loc - a_loc,
-        "z_at_a": float(z.iloc[a_loc]), "z_at_b": float(z.iloc[b_loc]),
-        "squeeze_return": float(close.iloc[b_loc] / close.iloc[a_loc] - 1.0),
-        "b_return": float(close.iloc[b_loc] / close.iloc[b_loc - 1] - 1.0),
-    }
+# Both the replay and the live daemon call the SAME episode definition, for the
+# reason shock_zscore_series was shared before it: a second, drifted copy of
+# "what counts as a compression exit" would mean the replay validates one thing
+# and production tracks another.
+_compression_exit = compression_exit
 
 
 def _trigger_description(candidate: str) -> str:

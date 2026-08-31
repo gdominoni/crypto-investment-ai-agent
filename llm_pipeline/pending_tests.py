@@ -5,7 +5,7 @@ actually act on.
 
 A FIFO queue, not a single slot: a single run of haiku_sonnet_pipeline.py
 can flag more than one proposal in one go (`run_once()` loops over every
-escalated headline, and `run_shock_scan()` runs right after it in the
+escalated headline, and `run_compression_scan()` runs right after it in the
 same process) -- a one-slot store would let a later proposal silently
 overwrite an earlier one the human hasn't answered yet.
 

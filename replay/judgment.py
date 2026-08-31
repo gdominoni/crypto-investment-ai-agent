@@ -481,7 +481,7 @@ def answer_market_question(question: str, client: Anthropic) -> str:
 def format_telegram_message(as_of, event_description: str, assessment: dict) -> str:
     """Deliberately formatted to look exactly like what the live pipeline
     itself would send (llm_pipeline/haiku_sonnet_pipeline.py::format_sonnet_message/
-    format_shock_message) -- no "this is a simulation" framing inside the
+    format_compression_message) -- no "this is a simulation" framing inside the
     message body. That disclosure belongs in the surrounding write-up
     this replay is presented in, not baked into every individual message
     the way a UI mockup doesn't stamp "MOCKUP" on every button. The date

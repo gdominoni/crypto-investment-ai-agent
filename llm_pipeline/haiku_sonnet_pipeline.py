@@ -33,7 +33,6 @@ from llm_pipeline.novel_condition_tester import (
     build_indicator_snapshot, clause_from_dict,
 )
 from llm_pipeline.pending_tests import push_pending_test
-from llm_pipeline.shock_detector import scan_for_shocks
 from llm_pipeline import usage as _usage
 
 HAIKU_MODEL = "claude-haiku-4-5"
@@ -58,7 +57,7 @@ over the following days? Nothing here is a trading system -- no position is ever
 money is ever at risk, and there is no entry signal to find.
 
 That distinction decides what a good answer looks like. A chart setup -- oversold RSI, a \
-Bollinger touch, a volume spike, a volatility shock -- is NOT a hypothesis in this project, \
+Bollinger touch, a volume spike -- is NOT a hypothesis in this project, \
 however well it would work as a trade. Those readings are CONTEXT: they describe the state the \
 market happened to be in when the event landed. The event is the subject; the market state \
 merely says under what circumstances you think it matters. If your idea would still make sense \
@@ -98,10 +97,11 @@ pattern -- it does not answer that question, and a spec without an event clause 
 before it is ever tested. A violent price move is a MARKET event, not news, and \
 "the price moved, then the price did something" is the tautology this rule exists to exclude.
 
-The volatility shock itself is NOT available as a clause. It is the thing your hypothesis has to \
-EXPLAIN, not part of the explanation -- you are being asked about this moment precisely because a \
-shock occurred, so every proposal already sits on one and naming it adds nothing. Describe what the \
-market looked like and what had been published; the shock is the outcome, not the setup.
+Neither the volatility shock nor the compression measure is available as a clause. A shock is a \
+price OUTCOME, not a market state -- "the price moved hard, then the price did something" is the \
+tautology this rule exists to exclude. The compression measure is the reason you are being asked \
+at all, so it is fixed at every proposal by construction and can distinguish nothing. Describe \
+what the market looked like and what had been published.
 
 Your label must also describe what the clauses actually test. Do not name a condition "post-CPI ..." \
 unless a CPI/macro clause is genuinely in it -- that is checked in code too.
@@ -182,7 +182,7 @@ market state without the event, which is a much weaker claim.
 
 No prose, no markdown fences, just the JSON object."""
 
-SHOCK_SYSTEM_PROMPT = f"""You are a quantitative researcher, not a trader. Your subject is a single question: \
+COMPRESSION_SYSTEM_PROMPT = f"""You are a quantitative researcher, not a trader. Your subject is a single question: \
 does a real-world macro or news EVENT produce a measurable, repeatable change in crypto prices \
 over the following days? Nothing here is a trading system -- no position is ever opened, no \
 money is ever at risk, and there is no entry signal to find.
@@ -204,22 +204,37 @@ short-term realized volatility has just spiked into roughly the top ~2% most ext
 that coin (this project's own Phase 1 methodology excludes exactly this population from the static \
 candidate battery's fitting, because a handful of crashes shouldn't distort barriers meant for \
 ordinary conditions). \
-This is deliberately the harder case a fixed rule set can't pre-classify -- you're being asked \
-whether this specific instance is worth reacting to at all, not whether shocks in general are \
-tradeable.
+WHEN YOU ARE ASKED, and why it matters for your answer. You are consulted at exactly one kind of \
+moment: a period of unusually LOW volatility for this coin has just ended, and the exit has held \
+for several days. The market coiled, stayed quiet, and has now begun to move again.
 
-You will be given the shock's real, computed severity (a z-score) and direction (crash/surge), \
-this coin's CURRENT real readings on every whitelisted indicator (technical: RSI, ATR%, Donchian \
-channel position, Bollinger %B, volume z-score, trend efficiency; financial: funding-rate z-score, \
-whether today is a macro-release day), any real macro releases from the last few days, and recent \
-real news headlines, plus real technical/portfolio state and the candidate battery's status. Ground \
+That moment is chosen because a compressed market is more likely than an ordinary one to be \
+followed by a sustained directional move -- but nothing about the compression says WHICH \
+DIRECTION. That is the question put to you. Do not try to explain why the market went quiet; the \
+quiet is the setting, not the subject. Ask instead: given what was published while it was coiling, \
+and the state it coiled into, is the resolution predictable?
+
+The exit day's own move is NOT evidence of direction. Measured on 214 of these episodes, the \
+direction of the first bar out of compression has no relationship to where price is two weeks \
+later. Do not extrapolate from it.
+
+You will be given the episode in three phases -- PHASE A (when it began and how quiet it got), \
+PHASE MIDDLE (how long it lasted, how price drifted, and every macro release published while it \
+lasted, each as a CHANGE from the prior print and a SURPRISE in standard deviations of that \
+series' usual move), and PHASE B (the day it ended) -- plus this coin's real indicator readings \
+AS OF THE EXIT, recent real news headlines, real technical/portfolio state, and the candidate \
+battery's status.
+
+Conditions may be built ONLY from these whitelisted indicators (nothing else is buildable): \
+{proposable_indicators()}. The list is derived from the code that validates your proposal, so an \
+indicator missing from it will be rejected before it is ever tested. Ground \
 your reasoning ONLY in these real numbers/headlines you were actually given -- never invent an \
 indicator reading, a headline, or a release you weren't shown. Recommend one of:
 - "no_action": noise, not worth a human's attention.
 - "propose_novel_test": worth finding out if a SPECIFIC combination of what you were just given, \
-  historically, shows a real reversal or continuation pattern -- e.g. you notice the shock \
-  coincided with RSI already deeply oversold AND a hotter-than-prior inflation print in the last \
-  few days, so you propose testing exactly that combination, not the shock in isolation. Don't force a \
+  historically, shows a real reversal or continuation pattern -- e.g. you notice the market coiled \
+  while inflation prints ran hotter each time AND it broke out with RSI already deeply oversold, so \
+  you propose testing exactly that combination. Don't force a \
   compound story where the evidence doesn't support one. Use ONLY indicators you were \
   actually shown a reading for. Example: {{"label": "hot_cpi_into_oversold_<coin>", "clauses": \
   [{{"indicator": "cpi_surprise", "op": ">=", "threshold": 1.0, "within_days": 2}}, \
@@ -228,9 +243,9 @@ indicator reading, a headline, or a release you weren't shown. Recommend one of:
   point in the last K days. Use it to express that the RELEASE CAME FIRST and something else followed, \
   which is a different hypothesis from both happening on the same day. The day-by-day LEAD-UP table \
   you are shown exists so you can tell which of the two you are actually looking at. If the human approves and it's \
-  accepted, the resulting anchors are used for a LIVE trade on THIS occurrence, tagged separately \
-  from routine trades so how the system actually performed reacting to real shocks, in real time, \
-  can be measured on its own.
+  accepted, the resulting condition is tracked going forward and this occurrence becomes its first \
+  live test, so how the system actually performed on a real resolution, in real time, can be \
+  measured on its own.
 
 
 HARD REQUIREMENT -- every proposal MUST contain at least one of these event indicators: \
@@ -295,7 +310,7 @@ def format_spec_clauses(spec: dict) -> str:
 # the API's own count_tokens rather than guessed:
 #     SONNET_SYSTEM_PROMPT   2408   cached
 #     REPLAY_SYSTEM_PROMPT   1575   cached
-#     SHOCK_SYSTEM_PROMPT    1399   cached
+#     COMPRESSION_SYSTEM_PROMPT  ~1500  cached
 #     MARKET_CHECK_PROMPT     316   too short
 #     HAIKU_SYSTEM_PROMPT     187   too short (and Haiku's floor is 2048)
 # The short ones are deliberately NOT marked: below the floor the breakpoint is
@@ -395,28 +410,34 @@ def _recent_headlines_summary(limit: int = 5) -> str:
     return "\n".join(f"- {a['headline']} ({a['published_at']})" for a in articles[:limit])
 
 
-def sonnet_shock_response(shock: dict, client: Anthropic) -> dict:
-    technical_snapshot = build_technical_snapshot(shock["symbol"], FREQTRADE_DB_PATH)
+def sonnet_compression_response(episode: dict, client: Anthropic) -> dict:
+    """The live counterpart of replay/judgment.py::judge_event for a confirmed
+    compression exit. Same three-phase framing, same question, so a hypothesis
+    discovered live and one discovered in the replay are answers to the same
+    prompt rather than to two that happen to look similar."""
+    from replay.judgment import format_compression_event
+
+    symbol = episode["symbol"]
+    technical_snapshot = build_technical_snapshot(symbol, FREQTRADE_DB_PATH)
     context_summary = build_context_summary()
-    indicator_snapshot = (build_indicator_snapshot(shock["symbol"]) + "\n\n"
-                          + build_indicator_leadup(shock["symbol"]))
-    macro_summary = recent_releases_summary()
-    headlines_summary = _recent_headlines_summary()
+    # Dated to the EXIT (point B), not to today. The confirmation window decided
+    # whether to ask; it must not leak into what the model is shown, exactly as
+    # in the replay.
+    b_date = episode["b_date"]
+    indicator_snapshot = (build_indicator_snapshot(symbol, as_of=b_date) + "\n\n"
+                          + build_indicator_leadup(symbol, as_of=b_date))
     user_content = (
-        f"SHOCK DETECTED: {shock['symbol']}, direction={shock['direction']}, "
-        f"shock_z={shock['shock_z']:.2f}, latest_return={shock.get('latest_return')}\n\n"
-        f"INDICATOR SNAPSHOT:\n{indicator_snapshot}\n\n"
-        f"RECENT MACRO RELEASES (last 10 days):\n{macro_summary}\n\n"
-        f"RECENT NEWS HEADLINES:\n{headlines_summary}\n\n"
+        f"{format_compression_event(symbol, episode)}\n\n"
+        f"INDICATOR SNAPSHOT (as of the exit):\n{indicator_snapshot}\n\n"
+        f"RECENT NEWS HEADLINES:\n{_recent_headlines_summary()}\n\n"
         f"TECHNICAL SNAPSHOT:\n{technical_snapshot}\n\n"
         f"CANDIDATE BATTERY CONTEXT:\n{context_summary}"
     )
     response = client.messages.create(
-        # 2000, not 700 -- see sonnet_strategist's comment above / replay/judgment.py.
-        model=SONNET_MODEL, max_tokens=2000, system=cached_system(SHOCK_SYSTEM_PROMPT),
+        model=SONNET_MODEL, max_tokens=2000, system=cached_system(COMPRESSION_SYSTEM_PROMPT),
         messages=[{"role": "user", "content": user_content}],
     )
-    _usage.record(response, "prod.shock", SONNET_MODEL)
+    _usage.record(response, "prod.compression", SONNET_MODEL)
     return json.loads(_strip_fences(extract_text(response)))
 
 
@@ -435,11 +456,12 @@ PROPOSAL_KEYBOARD_TEMPLATE = lambda pending_id: {
 }
 
 
-def format_shock_message(shock: dict, assessment: dict) -> str:
+def format_compression_message(episode: dict, assessment: dict) -> str:
     base = (
-        f"<b>{'━' * 4} SHOCK ALERT: {escape_html(shock['symbol'])} {'━' * 4}</b>\n\n"
-        f"<b>Direction:</b> {escape_html(shock['direction'])} (z={shock['shock_z']:.2f}, roughly the top ~2% most "
-        f"extreme volatility episodes for this coin -- excluded from routine conditions)\n\n"
+        f"<b>{'━' * 4} COMPRESSION RESOLVED: {escape_html(episode['symbol'])} {'━' * 4}</b>\n\n"
+        f"<b>Quiet since:</b> {episode['a_date'].date()} ({episode['duration']} day(s), "
+        f"volatility {episode['z_at_a']:.2f} sd below this coin's own normal)\n"
+        f"<b>Broke out:</b> {episode['b_date'].date()} ({episode['b_return']:+.2%} that day)\n\n"
         f"<b>Assessment:</b> {escape_html(assessment['assessment'])}"
     )
     if assessment["recommended_action"] == "propose_novel_test" and assessment.get("novel_condition_spec"):
@@ -448,29 +470,28 @@ def format_shock_message(shock: dict, assessment: dict) -> str:
             f"\n\n<b>This needs your input.</b>\n\n"
             f"<b>Proposed test: \"{escape_html(spec['label'])}\"</b>\n\n"
             f"({format_spec_clauses(spec)} → {escape_html(spec['direction'])})\n\n"
-            f"Test It runs a real walk-forward backtest of this coin's own historical shocks -- if it validates, "
-            f"the result also tracks THIS live occurrence (tagged shock_reactive), so we can measure how the "
-            f"system actually did reacting in real time. Don't Test It dismisses this proposal."
+            f"Test It runs a real walk-forward backtest of this condition before it's tracked as a live "
+            f"test (no real money is ever placed on it). Don't Test It dismisses this proposal."
         )
     else:
-        base += "\n\n<i>No action taken -- noise, not worth escalating further.</i>"
+        base += "\n\n<i>No action taken -- nothing here worth testing.</i>"
     return base
 
 
-def run_shock_scan(coins: list[str] | None = None) -> None:
-    """Refreshes local OHLCV data from Binance first -- `scan_for_shocks`
-    reads the last bar of what's on disk (`candidates/data_loading.py`),
-    so without this the "real-time" shock detector would be checking a
-    frozen snapshot instead of the market as it actually stands right
-    now. A fetch failure is logged, not fatal -- the scan still runs
-    against whatever data is already on disk."""
+def run_compression_scan(coins: list[str] | None = None) -> None:
+    """Refreshes local OHLCV from Binance first, then escalates each confirmed
+    compression exit that has not already been escalated.
+
+    Replaces `run_shock_scan`, and fixes a defect it carried: `scan_for_shocks`
+    tested the volatility STATE, so an hourly daemon re-escalated the same
+    multi-day shock every hour. `scan_for_compression_exits` keeps a ledger and
+    fires once per episode.
+    """
+    from llm_pipeline.compression_detector import mark_escalated, scan_for_compression_exits
+
     try:
-        # Imported lazily, inside the one function that uses it. At module level
-        # this pulled `ccxt` into everything downstream -- importing telegram/bot.py
-        # to test message chunking dragged in a whole exchange client, and CI failed
-        # on it. Same convention execution/hyperopt_runner.py already uses for
-        # Freqtrade: a heavy dependency needed by one call site should not become a
-        # hard dependency of every module that transitively imports it.
+        # Lazy, for the same reason as before: importing ccxt at module level made
+        # a heavy exchange client a hard dependency of everything downstream.
         from data_ingestion.market_data.binance_fetcher import update_all as update_market_data
 
         update_market_data(coins or SHOCK_SCAN_COINS)
@@ -480,82 +501,31 @@ def run_shock_scan(coins: list[str] | None = None) -> None:
     load_dotenv()
     client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     scan_coins = coins or SHOCK_SCAN_COINS
-    for shock in scan_for_shocks(scan_coins):
+    for episode in scan_for_compression_exits(scan_coins):
         try:
-            assessment = sonnet_shock_response(shock, client)
+            assessment = sonnet_compression_response(episode, client)
             reply_markup = None
             if assessment["recommended_action"] == "propose_novel_test" and assessment.get("novel_condition_spec"):
-                s = assessment["novel_condition_spec"]
-                spec = spec_from_dict(s)
-                pending_id = push_pending_test(spec, scan_coins, live_coin=shock["symbol"], signal_class="shock_reactive")
+                spec, err = spec_from_proposal(assessment["novel_condition_spec"])
+                if spec is None:
+                    print(f"Proposal rejected, not queued ({episode['symbol']}): {err}")
+                    mark_escalated(episode["symbol"], episode["b_date"])
+                    continue
+                pending_id = push_pending_test(spec, scan_coins, live_coin=episode["symbol"],
+                                                signal_class="compression_exit")
                 reply_markup = PROPOSAL_KEYBOARD_TEMPLATE(pending_id)
+            # Marked BEFORE the notification can fail: a send error must not leave
+            # the episode un-ledgered and re-escalating every hour afterwards.
+            mark_escalated(episode["symbol"], episode["b_date"])
             if assessment["recommended_action"] != "propose_novel_test":
-                # Nothing happened -- log it, do not notify. See replay/engine.py
-                # ::_handle_assessment for why silence is the right default here.
                 print(f"no_action: {assessment.get('assessment', '')[:120]}")
                 continue
-            message = format_shock_message(shock, assessment)
-            sent = send_telegram(message, reply_markup=reply_markup)
-            status = "notified" if sent else "notify FAILED, see error above"
-            print(f"Shock escalated + {status}: {shock['symbol']} {shock['direction']} z={shock['shock_z']:.2f}")
+            sent = send_telegram(format_compression_message(episode, assessment), reply_markup=reply_markup)
+            print(f"Compression escalated + {'notified' if sent else 'notify FAILED'}: "
+                  f"{episode['symbol']} exit {episode['b_date'].date()}")
         except Exception as e:
-            # One malformed Sonnet response for ONE shock must not cost every
-            # OTHER shock this scan found its own escalation -- same isolation
-            # discipline run_once() already applies per headline. Without this,
-            # a single truncated/malformed response silently killed the whole
-            # scan (observed live during a replay run, same root cause the
-            # max_tokens bump above addresses -- this is the second, independent
-            # layer of defense against it).
-            print(f"Failed to process shock '{shock.get('symbol', '?')}', skipping: {e}")
-
-
-def send_telegram(message: str, reply_markup: dict | None = None) -> bool:
-    load_dotenv()
-    token = os.environ["TELEGRAM_BOT_TOKEN"]
-    chat_id = os.environ["TELEGRAM_CHAT_ID"]
-    url = f"https://api.telegram.org/bot{token}/sendMessage"
-    payload = {"chat_id": chat_id, "text": message, "parse_mode": "HTML"}
-    if reply_markup is not None:
-        payload["reply_markup"] = json.dumps(reply_markup)
-    resp = requests.post(url, json=payload, timeout=15)
-    if not resp.ok:
-        print(f"Telegram send FAILED ({resp.status_code}): {resp.text[:300]}")
-        return False
-    return True
-
-
-def format_sonnet_message(item: dict, assessment: dict) -> str:
-    """The label shown for each `recommended_action` value is deliberately
-    NOT a uniform "Recommended action: X" line -- "no_action" (nothing to
-    do) reads as a plain statement; only "propose_novel_test" is
-    genuinely a decision pending on the human, so it's the only case
-    phrased as one."""
-    base = (
-        f"<b>Sonnet Strategist Alert</b>\n\n"
-        f"<b>Headline:</b> {escape_html(item['headline'])}\n"
-        f"<b>Asset:</b> {escape_html(item['asset'])} | <b>Magnitude:</b> {item['magnitude']}/5\n\n"
-        f"<b>Assessment:</b> {escape_html(assessment['assessment'])}"
-    )
-    action = assessment["recommended_action"]
-    if action == "propose_novel_test" and assessment.get("novel_condition_spec"):
-        spec = assessment["novel_condition_spec"]
-        base += (
-            f"\n\n<b>This needs your input.</b> This looks like a condition we haven't tested before.\n\n"
-            f"<b>Proposed test: \"{escape_html(spec['label'])}\"</b>\n\n"
-            f"({format_spec_clauses(spec)} → {escape_html(spec['direction'])})\n\n"
-            f"Test It runs a real walk-forward backtest of this condition before it's tracked as a live test "
-            f"(no real money is ever placed on it). Don't Test It dismisses this proposal."
-        )
-    else:
-        base += "\n\n<i>No action taken.</i>"
-    return base
-
-
-def _asset_to_coin(asset: str) -> str | None:
-    if not asset or asset.upper() in ("MARKET", ""):
-        return None  # a broad/unclear headline has no single coin to trade the live occurrence on
-    symbol = f"{asset.upper()}USDT"
-    return symbol if symbol in SHOCK_SCAN_COINS else None
+            # One malformed response must not cost the other coins their scan.
+            print(f"Failed to process compression exit '{episode.get('symbol', '?')}', skipping: {e}")
 
 
 def run_once() -> None:
@@ -599,6 +569,6 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"run_once() failed: {e}")
     try:
-        run_shock_scan()
+        run_compression_scan()
     except Exception as e:
-        print(f"run_shock_scan() failed: {e}")
+        print(f"run_compression_scan() failed: {e}")

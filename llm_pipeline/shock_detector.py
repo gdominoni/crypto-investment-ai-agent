@@ -1,7 +1,19 @@
-"""Real-time market-data shock detection -- the counterpart to Haiku's
-news-based magnitude scoring, and the trigger for this project's second
-stated goal: can the LLM layer recognize and react to a crash or a bull
-surge as it's actually happening, not just process routine headlines.
+"""Real-time shock classification. NO LONGER A TRIGGER -- retained as a
+reading.
+
+`scan_for_shocks` used to escalate straight to Sonnet on every hourly pass.
+That path was removed in favour of `compression_detector.py`, for two reasons
+measured in forecast/trigger_value.py: a shock is the OUTCOME this project
+looks for the causes of, and post-shock days are followed by a defined trend
+LESS often than ordinary days -- so it selected against the thing being sought.
+
+It also carried a defect worth recording: it tested the volatility STATE, not a
+transition, so a multi-day shock re-escalated the same market to Sonnet every
+hour the daemon ran. The replay had guarded against this with a transition
+check; production never did.
+
+What remains here is the classification itself, still used to label regimes and
+to exclude extreme events from the static battery's fitting.
 
 Reuses `candidates/methodology.py::shock_zscore_series` directly (the
 exact same statistical definition of 'shock' Phase 1's historical
