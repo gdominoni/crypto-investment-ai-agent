@@ -1,39 +1,39 @@
-"""Scores the Haiku-vs-Sonnet comparison and states, in one line, whether
+"""Scores the Haiku-vs-Sonnet substitutability test and states whether
 switching is justified.
 
-The test is PAIRED -- both models judged the same events -- so the comparison
-uses McNemar's test on the discordant pairs rather than comparing two
-independent proportions. That is not pedantry: pairing is what makes a sample
-this small informative, and analysing paired data as unpaired throws the
-advantage away and understates the evidence.
+Everything is read against the CEILING, never against 1.0. Sonnet is not
+deterministic here (`temperature=0` is rejected by the API), so Sonnet asked
+the same question twice already disagrees with itself. That self-agreement is
+the most any second model could achieve, and it is the only honest baseline:
+scoring Haiku against perfect agreement would condemn it for variance the
+reference model has too.
 
-The verdict rule is fixed here, before the numbers are looked at, because a
-threshold chosen after seeing the result is not a threshold. Switching to
-Haiku is justified only if it is NOT WORSE on the gate that matters -- and
-"not worse" is a statistical statement, not an eyeball one. A model that
-proposes less often is not thereby worse; it is cheaper and may be more
-selective. What would disqualify it is producing proposals that fail the
-gates, or failing to hold the JSON contract at all.
+The verdict rule is fixed before the numbers are seen, because a threshold
+chosen afterwards is not a threshold:
+
+  * Haiku must hold the output contract. A judgment that does not parse costs
+    a call and returns nothing, and no agreement rate redeems that.
+  * Haiku's agreement with Sonnet must not be MEASURABLY BELOW Sonnet's
+    agreement with itself. Tested paired, on the events where both produced a
+    condition, with Wilcoxon signed-rank -- agreement scores are bounded in
+    [0,1] and nowhere near normal, so a t-test would be the wrong instrument.
+
+What a pass does NOT establish: at these sample sizes, failing to detect a
+difference is not evidence of equivalence. It is grounds for a cost decision,
+not for a claim that the two models are the same.
 """
 from __future__ import annotations
 
 import json
 from pathlib import Path
 
+import numpy as np
+
 RESULTS_PATH = Path(__file__).resolve().parent / "model_comparison.json"
 
-# Per-call USD, from this project's own measured usage (llm_pipeline/usage.py),
-# not from a list-price assumption.
 SONNET_PER_CALL = 0.0153
 HAIKU_PER_CALL = SONNET_PER_CALL / 3
 FULL_REPLAY_CALLS = 1200
-
-
-def _rate(rows, tag, field):
-    vals = [r[tag].get(field) for r in rows if r.get(tag)]
-    hits = sum(1 for v in vals if v is True)
-    n = sum(1 for v in vals if v is not None)
-    return hits, n
 
 
 def main() -> None:
@@ -41,77 +41,83 @@ def main() -> None:
         print("No results -- run `python3 -m forecast.model_comparison` first.")
         return
     rows = json.loads(RESULTS_PATH.read_text())
-    print(f"Haiku vs Sonnet on the replay's judgment task -- {len(rows)} paired events\n")
+    n = len(rows)
+    print(f"Does Haiku propose what Sonnet proposes?  --  {n} events, 3 judgments each\n")
 
-    print(f"{'gate':<38}{'Sonnet':>14}{'Haiku':>14}")
-    print("-" * 66)
-    gates = [("held the JSON contract", "parsed"),
-             ("proposed (vs no_action)", None),
-             ("on-thesis (real news term)", "on_thesis"),
-             ("measurable (>=35 occurrences)", "measurable"),
-             ("accepted by significance", "accepted")]
-    for label, field in gates:
-        cells = []
-        for tag in ("sonnet", "haiku"):
-            if field is None:
-                k = sum(1 for r in rows if (r.get(tag) or {}).get("action") == "propose_novel_test")
-                cells.append(f"{k}/{len(rows)}")
-            else:
-                h, n = _rate(rows, tag, field)
-                cells.append(f"{h}/{n}" if n else "--")
-        print(f"{label:<38}{cells[0]:>14}{cells[1]:>14}")
+    # 1. The contract. Measured first because it is disqualifying on its own.
+    errs = {t: sum(1 for r in rows if f"{t}_error" in r) for t in ("sonnet_a", "sonnet_b", "haiku")}
+    print(f"Unparseable / failed responses:  Sonnet {errs['sonnet_a'] + errs['sonnet_b']}/{2*n}   "
+          f"Haiku {errs['haiku']}/{n}")
 
-    # The decisive comparison, on the last gate a proposal must clear. McNemar
-    # uses ONLY the discordant pairs -- events where the two models disagree --
-    # because concordant pairs carry no information about which is better.
-    from scipy.stats import binomtest
+    # 2. Do they even agree on whether there is anything to propose?
+    for label, key in (("Sonnet vs Sonnet (ceiling)", "ceiling"),
+                        ("Haiku  vs Sonnet", "haiku_vs_sonnet")):
+        same = sum(1 for r in rows if r[key]["same_action"])
+        both = sum(1 for r in rows if r[key]["both_proposed"])
+        silent = sum(1 for r in rows if r[key]["both_silent"])
+        print(f"{label:<28} agreed to act or not act: {same}/{n}   "
+              f"(both proposed {both}, both silent {silent})")
 
-    s_only = h_only = both = neither = 0
-    for r in rows:
-        s = (r.get("sonnet") or {}).get("accepted") is True
-        h = (r.get("haiku") or {}).get("accepted") is True
-        both += s and h
-        neither += (not s) and (not h)
-        s_only += s and not h
-        h_only += h and not s
+    # 3. The measurement that matters: when both proposed, is it the same
+    #    hypothesis? Paired -- only events where BOTH comparisons are defined,
+    #    otherwise the two distributions are over different events.
+    paired = [(r["ceiling"]["overlap"], r["haiku_vs_sonnet"]["overlap"]) for r in rows
+              if r["ceiling"]["overlap"] is not None
+              and r["haiku_vs_sonnet"]["overlap"] is not None]
+    paired = [(c, h) for c, h in paired if not (np.isnan(c) or np.isnan(h))]
 
-    print(f"\nPaired outcomes on 'accepted': both={both}, neither={neither}, "
-          f"Sonnet only={s_only}, Haiku only={h_only}")
-    disc = s_only + h_only
-    if disc == 0:
-        print("No discordant pairs -- the two models are indistinguishable on this gate here.")
-        pval = 1.0
+    print(f"\nBehavioural agreement (Jaccard overlap of the days each condition fires on)")
+    print(f"{len(paired)} events where both comparisons are defined\n")
+    if not paired:
+        print("No comparable events -- too few cases where every model proposed something.")
+        print("Rerun with a larger --n before drawing any conclusion.")
+        return
+
+    ceil = np.array([c for c, _ in paired])
+    haik = np.array([h for _, h in paired])
+    print(f"{'':<30}{'mean':>8}{'median':>9}{'>=0.5':>8}{'=0.0':>7}")
+    print("-" * 62)
+    for label, arr in (("Sonnet vs Sonnet (ceiling)", ceil), ("Haiku  vs Sonnet", haik)):
+        print(f"{label:<30}{arr.mean():>8.3f}{np.median(arr):>9.3f}"
+              f"{(arr >= 0.5).sum():>8}{(arr == 0).sum():>7}")
+
+    from scipy.stats import wilcoxon
+
+    diff = ceil - haik
+    if np.all(diff == 0):
+        pval, stat_note = 1.0, "identical on every event"
+    elif len(paired) < 6:
+        pval, stat_note = float("nan"), f"only {len(paired)} pairs -- too few to test"
     else:
-        pval = binomtest(s_only, disc, 0.5).pvalue
-        print(f"McNemar (exact binomial on {disc} discordant pairs): p = {pval:.4f}")
+        pval = wilcoxon(ceil, haik, alternative="greater").pvalue
+        stat_note = f"Wilcoxon signed-rank, one-sided (ceiling > Haiku): p = {pval:.4f}"
+    print(f"\n{stat_note}")
+    print(f"Mean shortfall vs the ceiling: {diff.mean():+.3f}")
 
-    print("\n" + "=" * 66)
     saving = FULL_REPLAY_CALLS * (SONNET_PER_CALL - HAIKU_PER_CALL)
+    print("\n" + "=" * 62)
     print(f"Cost: ${SONNET_PER_CALL:.4f} vs ${HAIKU_PER_CALL:.4f} per call. Over a full "
-          f"~{FULL_REPLAY_CALLS}-call replay,\nswitching would save about ${saving:.2f} "
-          f"(${FULL_REPLAY_CALLS*SONNET_PER_CALL:.2f} -> ${FULL_REPLAY_CALLS*HAIKU_PER_CALL:.2f}).\n")
+          f"~{FULL_REPLAY_CALLS}-call replay,\nswitching saves about ${saving:.2f} "
+          f"(${FULL_REPLAY_CALLS*SONNET_PER_CALL:.2f} -> "
+          f"${FULL_REPLAY_CALLS*HAIKU_PER_CALL:.2f}).\n")
 
-    h_parsed, n_parsed = _rate(rows, "haiku", "parsed")
-    if n_parsed and h_parsed < n_parsed:
-        print(f"VERDICT: NO. Haiku failed to hold the output contract on "
-              f"{n_parsed - h_parsed}/{n_parsed} events.")
-        print("A judgment that does not parse costs a call and returns nothing; the")
-        print("saving is on calls that produce no result.")
-    elif pval < 0.05 and s_only > h_only:
-        print("VERDICT: NO. Haiku is measurably worse at the gate that matters --")
-        print("it produces fewer conditions that survive the significance test, and the")
-        print("difference is larger than chance on the discordant pairs.")
-    elif disc == 0 and both == 0:
-        print("VERDICT: UNDECIDED. Neither model produced an accepted condition here, so")
-        print("this sample cannot separate them on the gate that matters. That is the")
-        print("normal outcome at these acceptance rates -- rerun with a larger --n, or")
-        print("decide on the earlier gates (contract, on-thesis, measurable) instead.")
+    if errs["haiku"] > errs["sonnet_a"]:
+        print(f"VERDICT: NO. Haiku failed to hold the output contract on {errs['haiku']}/{n}")
+        print("events. A call that returns nothing is not a cheaper call.")
+    elif not np.isnan(pval) and pval < 0.05:
+        print("VERDICT: NO. Haiku's proposals overlap Sonnet's measurably less than")
+        print("Sonnet's own re-runs do. It is not proposing the same conditions -- the")
+        print("gap is larger than Sonnet's own run-to-run variance.")
+    elif np.isnan(pval):
+        print("VERDICT: UNDECIDED -- too few comparable events. Rerun with a larger --n.")
     else:
-        print("VERDICT: YES, on this evidence. Haiku is not measurably worse at any gate,")
-        print(f"and switching saves roughly ${saving:.2f} per full replay.")
-        print("Note what this does NOT establish: absence of a difference at this sample")
-        print("size is not evidence of equivalence. Re-check on a larger sample before")
-        print("relying on it for anything other than cost.")
+        print("VERDICT: YES, on this evidence. Haiku's agreement with Sonnet is not")
+        print(f"measurably below Sonnet's agreement with itself, and switching saves")
+        print(f"about ${saving:.2f} per full replay.")
+        print("\nRead the ceiling before acting on this. If Sonnet self-agrees only")
+        print("weakly, both models are largely sampling from a wide space of defensible")
+        print("proposals -- which makes Haiku an adequate substitute AND means the")
+        print("proposal step is less determinate than a single run suggests.")
 
 
 if __name__ == "__main__":

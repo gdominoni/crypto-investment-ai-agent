@@ -498,9 +498,25 @@ def count_occurrences(spec: "ConditionSpec", coins: list[str],
     Production passes None, which means "as of now", and there the full history
     IS everything knowable.
     """
+    return len(occurrence_set(spec, coins, as_of))
+
+
+def occurrence_set(spec: "ConditionSpec", coins: list[str],
+                    as_of: "pd.Timestamp | None" = None) -> set:
+    """The exact (coin, day) pairs on which this condition fired, as of `as_of`.
+
+    Exists so two conditions can be compared by what they DO rather than by how
+    they are written. Two specs proposed by different models will never be
+    textually identical -- different thresholds, different clause order,
+    sometimes a different indicator expressing the same idea -- yet if they
+    select the same days they are the same hypothesis, and if they select
+    disjoint days they are not, whatever their labels say.
+
+    `count_occurrences` is now a length over this, so the two can never
+    disagree about what counts as an occurrence."""
     from candidates.data_loading import load_daily, load_funding
 
-    total = 0
+    fired = set()
     for coin in coins:
         try:
             daily, funding = load_daily(coin), load_funding(coin)
@@ -514,13 +530,26 @@ def count_occurrences(spec: "ConditionSpec", coins: list[str],
         sig = pd.Series(True, index=daily.index)
         for clause in spec.clauses:
             sig &= clause_signal(clause, daily, funding, symbol=coin)
-        total += int(sig.fillna(False).sum())
-    return total
+        sig = sig.fillna(False)
+        fired |= {(coin, ts) for ts in sig.index[sig.to_numpy().astype(bool)]}
+    return fired
 
 
-# How far a threshold may be loosened, in order, stopping at the first level that
-# clears MIN_HISTORICAL_OCCURRENCES. Small steps first so the tested hypothesis
-# stays as close as possible to the one that was proposed.
+def behavioural_agreement(a: "ConditionSpec", b: "ConditionSpec", coins: list[str],
+                           as_of: "pd.Timestamp | None" = None) -> float:
+    """Jaccard overlap of the days two conditions fire on: 1.0 identical
+    behaviour, 0.0 disjoint. NaN when neither ever fires, which is not
+    agreement -- two conditions that never happen are not the same hypothesis,
+    they are both untestable, and averaging that in as a 1.0 would flatter
+    whichever model proposes impossible conditions."""
+    sa = occurrence_set(a, coins, as_of)
+    sb = occurrence_set(b, coins, as_of)
+    union = sa | sb
+    if not union:
+        return float("nan")
+    return len(sa & sb) / len(union)
+
+
 # The value at which each indicator says NOTHING -- the anchor `_loosen` moves
 # thresholds toward and is forbidden to cross. RSI's midline, and consensus (a
 # zero surprise, a flat return, an average volume) for everything measured as a
@@ -544,6 +573,9 @@ RELAXATION_NEUTRAL: dict[str, float] = {
     "close_return_14d": 0.0,
 }
 
+# How far a threshold may be loosened, in order, stopping at the first level that
+# clears MIN_HISTORICAL_OCCURRENCES. Small steps first so the tested hypothesis
+# stays as close as possible to the one that was proposed.
 RELAXATION_STEPS = (0.10, 0.25, 0.50)
 
 

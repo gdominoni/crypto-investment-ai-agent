@@ -594,3 +594,37 @@ def test_the_prompt_s_hard_requirement_matches_what_the_code_enforces():
     for text in sources:
         for banned in NON_PROPOSABLE_INDICATORS:
             assert banned not in text, f"prompt still offers {banned}"
+
+
+def test_behavioural_agreement_compares_what_conditions_do_not_how_they_read():
+    """Two models never emit the same JSON, so substitutability has to be
+    measured on behaviour: do the two conditions fire on the same days."""
+    from llm_pipeline.novel_condition_tester import (Clause, ConditionSpec,
+                                                     behavioural_agreement, count_occurrences,
+                                                     occurrence_set)
+    coins = ["BTCUSDT", "ETHUSDT"]
+    mk = lambda t: ConditionSpec(label="x", direction="long", clauses=(
+        Clause("cpi_surprise", ">=", 0.5), Clause("rsi_14d", "<=", t)))
+
+    assert behavioural_agreement(mk(40), mk(40), coins) == 1.0
+    # Loosening one threshold keeps the same hypothesis partially, not wholly.
+    assert 0.0 < behavioural_agreement(mk(40), mk(45), coins) < 1.0
+    # A genuinely different hypothesis shares no days.
+    other = ConditionSpec(label="y", direction="long", clauses=(
+        Clause("rate_surprise", "<=", -0.5), Clause("rsi_14d", ">=", 70)))
+    assert behavioural_agreement(mk(40), other, coins) == 0.0
+
+    # count_occurrences must stay a length over the same set, or the rarity gate
+    # and the agreement measure would disagree about what an occurrence is.
+    assert count_occurrences(mk(40), coins) == len(occurrence_set(mk(40), coins))
+
+
+def test_two_never_firing_conditions_do_not_count_as_agreeing():
+    """Agreement on nothing is not agreement. Scoring it 1.0 would reward
+    whichever model proposes impossible conditions most often."""
+    import math
+
+    from llm_pipeline.novel_condition_tester import Clause, ConditionSpec, behavioural_agreement
+    impossible = lambda i: ConditionSpec(label=f"n{i}", direction="long", clauses=(
+        Clause("cpi_surprise", ">=", 50.0 + i), Clause("rsi_14d", "<=", 1.0)))
+    assert math.isnan(behavioural_agreement(impossible(0), impossible(1), ["BTCUSDT"]))
