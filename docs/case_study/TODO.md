@@ -126,6 +126,42 @@ expressible once sentiment is a term *separate* from price.
 
 ---
 
+## 1b. Haiku-vs-Sonnet substitutability -- BUILT, NOT YET RUN
+
+Deferred until the trigger rework settles: the comparison samples real trigger
+days, so re-running it before the triggers are final would measure the old
+system.
+
+`forecast/model_comparison.py` + `analyse_model_comparison.py` are written and
+tested. Sonnet is taken as the reference; the question is whether Haiku proposes
+the SAME conditions, at one third the price (measured $0.0153/call vs $0.0051,
+~$18 vs $6 over a full replay).
+
+Two design points worth not re-deriving:
+
+  * Agreement is measured BEHAVIOURALLY, not textually: `behavioural_agreement`
+    is the Jaccard overlap of the (coin, day) pairs two specs fire on. Two
+    models never emit the same JSON; matching text would score formatting.
+  * Every event is judged THREE times -- Sonnet twice, Haiku once. `temperature=0`
+    is rejected by the API, so Sonnet disagrees with ITSELF run to run, and that
+    self-agreement is the ceiling any second model could reach. Scoring Haiku
+    against 1.0 would condemn it for variance the reference model has too.
+
+Sample size is counted in PAIRS, not events: an event yields a comparable pair
+only when all three judgments produce a validated condition, and the measured
+rate is 55.7% per call (118 usable specs from 212 real calls). Simulated power
+against a 0.20 overlap gap: 4 pairs 0%, 6 pairs 63%, 12 pairs 93%. At 4 pairs
+the one-sided Wilcoxon cannot reach p<0.05 at all (smallest attainable p is
+1/2^4 = 0.0625).
+
+    python3 -m forecast.model_comparison --pairs 6 --max-spend 1.50   # ~$0.38-1.24
+
+**Worth having regardless of the Haiku verdict:** the ceiling itself. If Sonnet
+self-agrees only weakly, the proposal step is far less determinate than a single
+run suggests -- a fact about the methodology, not about model choice.
+
+---
+
 ## 2. Re-run the historical replay end to end
 
 State is at 2023-08-02 and was produced under the pre-audit methodology.
