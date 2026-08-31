@@ -1158,3 +1158,45 @@ despite that rule being stated explicitly in the prompt. Left to itself the
 model gravitates toward pure chart patterns, and toward dramatic thresholds. The
 hard checks exist because the instructions alone have a measured compliance
 problem.
+
+---
+
+### 2026-08-31 — The 87 off-thesis proposals were a framing bug, not a compliance bug
+
+**The diagnosis.** Every system prompt in this project opened with *"You are a
+market strategist for a crypto trading system."* Then, further down, it required
+a news/macro clause in every proposal. In the replay's own run, **87 proposals
+arrived with no event term at all** and were discarded unread.
+
+Reading that as the model ignoring instructions was the wrong diagnosis. A
+market strategist for a trading system looks for entry setups, and an entry
+setup is made of RSI, Bollinger position, volume and volatility. The model was
+doing precisely the job it had been given a title for. The requirement further
+down the prompt was fighting the role stated in its first sentence, and the role
+was winning.
+
+**The change.** All three prompts (production, shock, replay) now open with the
+research framing instead:
+
+> You are a quantitative researcher, not a trader. Your subject is a single
+> question: does a real-world macro or news EVENT produce a measurable,
+> repeatable change in crypto prices over the following days? Nothing here is a
+> trading system -- no position is ever opened, no money is ever at risk, and
+> there is no entry signal to find.
+
+with the operative test stated plainly: *if your idea would still make sense with
+the macro release deleted from it, it is a chart pattern and does not belong
+here.* The technical readings are named explicitly as CONTEXT -- the state the
+market was in when the event landed -- rather than as the subject.
+
+**Cost.** This does not reduce spend per call: a rejected proposal costs the same
+as an accepted one, because the call is already paid for by the time the spec is
+validated. What it should improve is YIELD -- 87 of ~197 proposals in the last
+run produced nothing usable, so nearly half the discovery budget bought
+discarded output.
+
+**Stated as a prediction, not a result.** The reasoning is sound and the change
+is nearly free, but its effect is unmeasured: it needs a replay run under the new
+framing to compare off-thesis proposal rates. The prior run's 87/197 is the
+baseline to beat. Recorded now so the comparison is honest later rather than
+reconstructed to fit whatever happens.
