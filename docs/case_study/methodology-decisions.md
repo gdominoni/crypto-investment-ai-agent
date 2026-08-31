@@ -944,10 +944,19 @@ argument, the API refused it, so the pin bought nothing and the calls failed
 anyway.
 
 `_is_systemic_api_failure` did not catch it, because it looks for credit and
-billing wording and this said neither. So the run did exactly what the fix was
-meant to prevent: skipped every event, advanced, and checkpointed normally,
-reaching 2018-04-06 with **zero** candidates -- seven simulated months of
-nothing -- before it was killed by hand.
+billing wording and this message carried neither. The run therefore did exactly
+what the halt logic exists to prevent: skipped every event, advanced, and
+checkpointed normally, reaching 2018-04-06 with **zero** candidates before being
+stopped.
+
+Worth being precise about the cost, since it bears on how the guard is designed:
+**this consumed no credit at all.** The API rejected each request with a 400
+before any inference ran, and rejected requests are not billed -- which is also
+why `llm_pipeline/usage.py` recorded nothing for them, reading as it does from
+`response.usage`. That is precisely what makes the silent-empty-run dangerous
+rather than merely expensive: the bill gives no signal. A run that fails this way
+looks complete, costs nothing, and contains nothing, and the only thing that can
+catch it is the code itself.
 
 Two changes followed. `temperature=0` is removed from all seven call sites, so
 the code now runs on both 0.x and 1.x SDKs (verified against the live API on
@@ -1092,8 +1101,9 @@ registering 228 candidates in total. The outcome:
 
 Almost nothing was *rejected on the evidence*. It was **untestable**: the
 conditions never accumulated enough occurrences to be judged at all. A hypothesis
-that has essentially never happened cannot be confirmed or denied, and each one
-consumed a backtest to return nothing.
+that has essentially never happened cannot be confirmed or denied either way.
+Establishing that ratio -- and locating where in the funnel it arises -- is what
+this run was for, and it is the input to both changes below.
 
 **Where the rarity comes from, measured two ways.** First, by clause count:
 
@@ -1185,18 +1195,23 @@ a chart pattern and does not belong here.* Technical readings are named as
 CONTEXT for the event rather than as the subject. The second loss is addressed
 separately by the clause cap and the threshold guidance.
 
-**What this does and does not buy.** Spend per call is unchanged: a discarded
-proposal costs exactly what a good one does, since the call is paid for before
-the spec is validated. What changes is yield. As arithmetic on the funnel above,
-clearly a projection rather than a measurement:
+**Where the optimisation actually lands.** Spend per call is fixed at $0.0114
+and no prompt change moves it: the call is complete before the spec is validated,
+so every proposal costs the same whatever it contains. The lever is therefore
+YIELD, not price -- how many judgeable hypotheses a fixed budget produces. As
+arithmetic on the funnel above, a projection rather than a measurement:
 
     off-thesis rate falls to 20%   ->  1.15x testable hypotheses  ->  $0.29 each
     off-thesis rate falls to 10%   ->  1.30x testable hypotheses  ->  $0.26 each
 
-**Left as a prediction on purpose.** The 31% off-thesis rate under a trading
-framing is the measured baseline; the rate under the research framing is not yet
-known and requires a run to establish. Recorded before that run so the comparison
-is honest afterwards rather than reconstructed to fit whatever it produces.
+**Left as a prediction on purpose.** 31% is the measured off-thesis rate under a
+market-strategist framing; the rate under a research framing is not yet known and
+requires a run to establish. Recorded before that run so the comparison is honest
+afterwards rather than reconstructed to fit whatever it produces. Note that the
+same $13.75 that established this baseline also produced 5.5 years of replay
+history, 234 registered candidates and the clause-count and threshold-width
+measurements below -- the funnel is one output of that run among several, not its
+purpose.
 
 **A separate note on what belongs in a prompt.** Numbers like the funnel above do
 not belong in the system prompt itself. The model has no memory of the proposals
