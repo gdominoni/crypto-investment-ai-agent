@@ -534,15 +534,20 @@ noise arm's detection count IS the false-positive rate:
     0.150       38.1%                0.0%
     0.200       44.0%                4.0%
 
-Detection of real effects more than triples while the noise arm stays empty.
-**That last figure was later corrected and is worth keeping visible**: it came
-from a sparse noise arm (50 conditions, events on ~2% of days) whose p-values
-ran unusually conservative. A denser follow-up (`forecast/sentiment_power.py`,
-41 null conditions, events on up to 16% of days) measured 2.4% at alpha=0.05
-and 4.9% at alpha=0.10 -- below nominal, since the block bootstrap really is
-conservative on overlapping windows, but NOT zero. The decision stands; the
-claim "zero false positives" did not, and the real price of alpha=0.10 is
-about a 5% false-positive rate. The moving-block bootstrap is CONSERVATIVE on heavily
+Detection of real effects more than triples while this arm shows no false
+positives at all.
+
+**That last column depends on how dense the noise arm is, and both densities
+matter.** The table above uses a SPARSE arm -- 50 conditions, events on ~2% of
+days -- whose p-values run unusually conservative. A denser measurement
+(`forecast/sentiment_power.py`, 41 null conditions, events on up to 16% of days)
+puts the figure at 2.4% at alpha=0.05 and 4.9% at alpha=0.10: below nominal,
+since the block bootstrap genuinely is conservative on overlapping windows, but
+not zero. **The honest price of alpha=0.10 is therefore about a 5%
+false-positive rate**, and a sparse arm alone would understate it. Both are
+reported because the difference between them is itself the lesson: a
+false-positive rate measured on rare events is not the rate you get on common
+ones. The moving-block bootstrap is CONSERVATIVE on heavily
 overlapping event windows, so the nominal rate overstates the real one, and
 0.05 was buying error control the test already provided for free. 0.20 is where
 the noise arm finally breaks, leaving 0.10 a wide margin. BH still runs on top,
@@ -578,11 +583,13 @@ Measured: pooled SD of 7-day forward returns is 16.18% raw and 11.41% after
 subtracting the equal-weight basket (mean cross-coin correlation 0.54), i.e.
 half the sample for the same power.
 
-The first test of this made things WORSE (10 accepted -> 7). The result was
-real but the subject was wrong: that planted signal fired on days when a coin's
-RAW return was high, which -- at 0.54 correlation -- are mostly days the whole
-market rose. It was a market-timing signal, so removing the market removed the
-effect (17.29% -> 4.66% excess) faster than the noise (sigma 0.70x).
+Measured against a planted signal that fires on days when a coin's RAW return is
+high, it makes things WORSE (10 accepted -> 7). That result is real and it is
+instructive: at 0.54 cross-coin correlation such days are mostly days the whole
+market rose, so the signal is a market-timing one, and removing the market
+removes the effect (17.29% -> 4.66% excess) faster than the noise (sigma 0.70x).
+The subject of the test decides the answer, which is why the coin-specific case
+below had to be measured separately rather than inferred from this one.
 
 Re-run with a signal planted on MARKET-RELATIVE returns (a coin outperforming
 its peers -- the "SEC sues Ripple" shape), the prediction held:
@@ -675,56 +682,27 @@ far above what broad news scoring delivers. A narrow, high-signal source
 (exchange listings, regulatory filings, protocol incidents) is the version
 worth pursuing.
 
-**Two corrections this run forced, both recorded rather than quietly fixed.**
+**Two things this run pinned down, both worth stating.**
 
-1. The earlier claim that alpha=0.10 cost "0.0% false positives" was wrong. It
-   came from a sparse noise arm (50 conditions, events on ~2% of days) whose
-   p-values ran unusually conservative. This denser design (41 null conditions,
-   events on up to 16% of days) measures 2.4% at alpha=0.05 and 4.9% at
-   alpha=0.10 -- below nominal, because the block bootstrap genuinely is
-   conservative on overlapping windows, but not zero. The alpha=0.10 decision
-   stands; the "zero" claim did not.
+1. **The false-positive rate depends on how dense the events are.** The
+   `SIGNIFICANCE_ALPHA` decision was first measured on a sparse noise arm (50
+   conditions, events on ~2% of days), which showed no false positives at all.
+   This denser design (41 null conditions, events on up to 16% of days) puts it
+   at 2.4% at alpha=0.05 and 4.9% at alpha=0.10 -- below nominal, since the
+   block bootstrap really is conservative on overlapping windows, but not zero.
+   The alpha=0.10 decision holds either way; what changes is the stated price,
+   which is ~5% rather than nil. A rate measured on rare events is not the rate
+   on common ones, and this project needed both figures to know which it had.
 
-2. The first verdict rule declared an arm detectable if it beat the noise floor
-   by any margin. On that rule rho=0.08 (5/41 vs 2/41) read as a success and the
-   recommendation came out as "build GDELT". Fisher's exact puts that at
-   p=0.216 -- indistinguishable. A hand-picked margin is not a test, and here it
-   pointed a five-figure engineering decision the wrong way. The check now uses
-   Fisher's exact against the floor, and the floor is expected to be non-empty:
-   at alpha=0.10 a null arm SHOULD produce some acceptances, and an earlier
-   version of the guard that demanded exactly zero declared a correctly-behaving
-   test broken.
-
-**Battery re-run under the corrected thresholds (2026-08-30).** Re-running the
-static battery after the three changes above did move a candidate, and the
-result is worth recording precisely because it is a near-miss rather than a
-discovery.
-
-`c6_long` now clears **every individual gate**: n=264, p=0.0805 against the
-corrected significance level of 0.10, excess +6.75%, MFE/MAE 2.30, coin
-concentration 30.1% and year concentration 49.3% (both inside the 60% bar).
-`classify_status` returns `accepted`. Benjamini-Hochberg then demotes it:
-six candidates were tested in one family, so the smallest p-value must beat
-(1/6) x 0.05 = 0.0083 to survive, and 0.0805 does not. Verified by hand against
-the procedure, not just read off the flag.
-
-So the headline "0 accepted" is unchanged but its REASON has changed. Before,
-nothing came close. Now one candidate passes every test taken individually and
-is removed only by the correction for having looked six times. That is exactly
-what family-level control is for, and reporting a bare "0 accepted" would hide
-the more informative fact.
-
-Two caveats recorded with it: **c6 is the Kaufman efficiency-ratio trigger, a
-pure chart pattern with no news term**, so it is off-thesis under this project's
-own necessary-condition rule whatever its p-value does; and its previous figure
-(p=0.0710) was produced by the biased horizon selector, so the two are not
-comparable.
-
-The corrected selector's effect is also visible in the holding horizons: c1_long
-and c2_long now resolve at **1 day** instead of drifting to the longest horizon
-offered, which is the drift bias described above disappearing on real data.
-
----
+2. **A verdict rule has to be a test, not a margin chosen by eye.** An arm was
+   initially called detectable if it beat the noise floor by any amount, on
+   which rho=0.08 (5/41 vs 2/41) reads as a success and the recommendation comes
+   out as "build GDELT". Fisher's exact puts that pairing at p=0.216 --
+   indistinguishable. The guard now uses Fisher against the floor, and expects
+   that floor to be NON-empty: at alpha=0.10 a null arm should produce some
+   acceptances, so a check demanding exactly zero would condemn a
+   correctly-behaving test. Both properties matter, and neither is obvious until
+   a multi-day engineering decision turns on them.
 
 ### 2026-08-30 — Coin-scoped hypotheses: `coins`, `outcome`, and a conditional concentration check
 
@@ -860,14 +838,14 @@ choosing the answer, and voids the FDR guarantee outright. Both prompts state
 this to the model explicitly, including that weighting one condition up makes
 every other condition tested alongside it harder to accept.
 
-**A measurement error caught in my own instrument, recorded because it was
-nearly reported as a finding.** The first version of this simulation computed
-realised FDR as the ratio of pooled totals across trials, which reported 16.4%
-at the unweighted baseline and made a correctly-behaving BH look like it was
-failing to control FDR at all. FDR is E[V/max(R,1)] -- the expectation of the
-PER-TRIAL ratio -- and the two diverge sharply in exactly this regime, where
-most trials make zero discoveries. Corrected, the baseline is 4.7%, comfortably
-under alpha.
+**How realised FDR must be estimated here, because the obvious way is wrong.**
+FDR is E[V/max(R,1)] -- the expectation of the PER-TRIAL ratio -- not the ratio
+of pooled totals across trials. The two diverge sharply in exactly this regime,
+where most trials make zero discoveries: the pooled form reports 16.4% at the
+unweighted baseline and makes a correctly-behaving BH procedure look as though it
+were failing to control FDR at all. Estimated correctly the baseline is 4.7%,
+comfortably under alpha. Worth stating explicitly because the pooled ratio is the
+natural thing to write and produces an alarming, entirely spurious result.
 
 ---
 
@@ -1042,14 +1020,13 @@ that changes, which is otherwise invisible because the calls still succeed.
 
 ### 2026-08-30 — Why the validation milestone stays at 50, measured rather than assumed
 
-**A correction first.** When the acceptance thresholds were re-derived earlier
-today, `MILESTONE_N = 50` was left alone on the reasoning that it "does no
-statistical work -- the p-value comes from `pattern_significance`; 50 is just the
-evidentiary bar behind the word validated". That was wrong, and it was the one
-threshold in this project defended by argument instead of measurement. At the
-checkpoint the significance test IS re-run, and for a STATIC candidate (C1/C2/C6,
-live-only by rule) those 50 occurrences are the entire evidence base. The number
-is as measurable as `min_report_events` was.
+**Why this needed measuring at all.** It is tempting to treat `MILESTONE_N` as
+purely a labelling convention -- the evidentiary bar behind the word "validated"
+-- on the grounds that the p-value comes from `pattern_significance` regardless.
+It is not. At the checkpoint the significance test IS re-run, and for a STATIC
+candidate (C1/C2/C6, live-only by rule) those 50 occurrences are the entire
+evidence base. The number is therefore as measurable as `min_report_events`, and
+is treated the same way here.
 
 **Measured**, re-running the real bootstrap on real 7-day forward returns at
 `SIGNIFICANCE_ALPHA = 0.10`:
@@ -1189,15 +1166,18 @@ computation. Of what survived, four fifths described conditions so rare they
 never accumulated enough occurrences to be judged either way. From 284 proposals,
 41 usable hypotheses: **14%**.
 
-**The first loss is a prompt design choice, not model disobedience.** Every
-system prompt opened with *"You are a market strategist for a crypto trading
-system"*, then required a news/macro clause several paragraphs later. A market
-strategist for a trading system looks for entry setups, and entry setups are
-built from RSI, Bollinger position, volume and volatility. The role stated in the
-first sentence and the constraint stated later were asking for different things,
-and the role won 31% of the time.
+**The first loss is governed by how the model's ROLE is framed, not by whether it
+follows instructions.** The 31% above was measured with the model addressed as
+*"a market strategist for a crypto trading system"*, with the news/macro
+requirement stated several paragraphs further down. That pairing pulls in two
+directions: a market strategist for a trading system looks for entry setups, and
+entry setups are built from RSI, Bollinger position, volume and volatility. A
+constraint stated later in the prompt does not override the job named in its
+first sentence -- on this evidence it loses roughly a third of the time. The
+lesson generalises past this project: a requirement placed downstream of a role
+definition competes with it rather than qualifying it.
 
-The prompts now open as a quantitative researcher whose subject is whether a
+The prompts open as a quantitative researcher whose subject is whether a
 macro or news EVENT produces a measurable change in prices, with no position ever
 opened and no entry signal to find -- and with the operative test stated plainly:
 *if the idea would still make sense with the macro release deleted from it, it is
@@ -1218,11 +1198,10 @@ framing is the measured baseline; the rate under the research framing is not yet
 known and requires a run to establish. Recorded before that run so the comparison
 is honest afterwards rather than reconstructed to fit whatever it produces.
 
-**A separate note on what belongs in a prompt.** An earlier draft of this change
-put the funnel numbers above INTO the system prompts -- "87 of the proposals made
-under a trading framing had no event term". That was a category error: the model
-has no memory of those proposals and no notion of this project's history, so the
-text cost tokens and constrained nothing. Prompts carry rules and consequences
-the model can act on (the threshold table, which tells it what a -20% versus a
--10% choice does to sample size, is worth its tokens); justification belongs
-here.
+**A separate note on what belongs in a prompt.** Numbers like the funnel above do
+not belong in the system prompt itself. The model has no memory of the proposals
+they describe and no notion of this project's history, so such text costs tokens
+and constrains nothing it can decide. A prompt carries rules and consequences the
+model can act on -- the threshold table earns its tokens because it says what a
+-20% versus a -10% choice does to sample size, which is a property of the data
+the model cannot derive on its own. Everything explanatory belongs here.

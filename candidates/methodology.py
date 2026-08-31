@@ -54,14 +54,14 @@ import pandas as pd
 #     0.150       38.1%               0.0%
 #     0.200       44.0%               4.0%
 #
-# That 0.0% was measured on a SPARSE noise arm (50 conditions, events on ~2%
-# of days) whose p-values ran unusually conservative, and it overstated the
-# case. A denser follow-up (forecast/sentiment_power.py, events on up to 16%
-# of days, 41 null conditions) puts the real figure at 2.4% at alpha=0.05 and
-# 4.9% at alpha=0.10 -- still BELOW nominal, because the moving-block
-# bootstrap is genuinely conservative on heavily-overlapping event windows,
-# but not zero. So the honest statement is: alpha=0.10 costs roughly a 5% real
-# false-positive rate, not 0%, and buys back the detection above. Benjamini-Hochberg still runs on top of this at FDR_ALPHA, and
+# Those 0.0% figures come from a SPARSE noise arm (50 conditions, events on
+# ~2% of days), whose p-values run unusually conservative. Measured on a
+# DENSER arm (forecast/sentiment_power.py, 41 null conditions, events on up to
+# 16% of days) the rate is 2.4% at alpha=0.05 and 4.9% at alpha=0.10 -- still
+# below nominal, because the moving-block bootstrap is genuinely conservative
+# on heavily-overlapping event windows, but not zero. The honest price of
+# alpha=0.10 is therefore ~5%, and it buys back the detection above. A
+# false-positive rate measured on rare events is not the rate on common ones. Benjamini-Hochberg still runs on top of this at FDR_ALPHA, and
 # nothing here is ever traded -- a false positive costs an observational live
 # test, a false negative costs a finding forever.
 SIGNIFICANCE_ALPHA = 0.10
