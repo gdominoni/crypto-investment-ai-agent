@@ -245,6 +245,62 @@ there, the question is answered for free and no replay is needed.
 
 ---
 
+## 2d. Macro direction-change trigger -- MEASURED AND NOT RECOMMENDED
+
+> **Result, 2026-08-31: the data cannot support this, and what it does show
+> does not favour it.**
+
+**The proposal.** Trigger Sonnet not on every macro release, nor on the size of
+a surprise, but when a macro series CHANGES DIRECTION -- inflation stops falling
+and starts rising -- and analyse the medium/long-term trend that follows,
+whether or not a shock accompanies it. Directionally a good instinct: a regime
+turn is a real economic event in a way that a scheduled publication is not.
+
+**Why the earlier trigger measurement did not answer it.** `trigger_value.py`
+tested horizons of 1-14 days. A medium/long-term thesis is not measurable there,
+so that null says nothing about this proposal. Re-measured at 21-180 days, with
+direction defined as a sign flip in each series' ~3-month trend of first prints:
+
+    inversion of        coin-days   p@21   p@30   p@60   p@90  p@120  p@180
+    CPI + Fed Funds           102     --     --     --     --     --     --
+    Jobless Claims            503  0.375  0.466  0.229  0.052  0.070  0.851
+    all series                605  0.319  0.326  0.139  0.051  0.061  0.707
+
+**Three problems, jointly fatal.**
+
+1. **The series that matter almost never turn.** CPI changed direction **4 times
+   in seven years**; Fed Funds 11. Fifteen events together -- too few to test at
+   all (the `--`). Every bit of the 0.051 comes from **jobless claims**, the
+   noisy weekly series, not from the macro regime turns the proposal is about.
+
+2. **The observations are not independent, and correcting for it is brutal.**
+   At a 90-day horizon the 88 event dates collapse to **23 non-overlapping
+   episodes**; at 180 days, to 12. The test treats 605 coin-days as independent,
+   and the seven coins are strongly correlated with each other on top of that.
+   A p of 0.051 computed on a sample that size is not a p of 0.051.
+
+3. **The gradient collapses.** 0.051 at 90 days, 0.707 at 180. An isolated peak
+   across six horizons tested is the shape of noise, not of an effect.
+
+**The underlying reason is not fixable by engineering.** Macro regimes turn a
+handful of times per decade. This is the same wall item 2c already measured for
+regime INDICATORS -- "the intersection of three regimes is a single historical
+period". No better trigger design gets around a sample size set by economic
+history; it would take decades more data, or different markets.
+
+**A separate, real finding surfaced by this.** `ConditionSpec.horizons` defaults
+to `(1, 3, 7, 14, 21)` -- **nothing beyond 21 days can be tested at all**. Even
+had the trigger worked, the medium/long-term hypothesis it exists to serve is
+currently inexpressible downstream. Extending the horizons is possible but makes
+problem 2 worse, since longer windows mean fewer independent episodes from the
+same history. Recorded here so a future reader does not mistake the ceiling for
+an oversight.
+
+**What remains standing:** the volatility-shock trigger, the only one measured to
+select days that differ from ordinary days (p=0.000 at 1 day, 0.009 at 3).
+
+---
+
 ## 3. Smaller, known, and deliberately left
 
 - ~~**`daily_range_pct` ignores `scale` entirely.**~~ DONE 2026-08-30 --
