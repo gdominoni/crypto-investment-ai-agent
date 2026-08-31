@@ -1552,3 +1552,66 @@ the confirmation window.
 **Cost.** 217 triggers across the whole replay, about **$3.32**, against roughly
 1,200 calls and $18 before — of which 650 went to macro releases that selected
 nothing.
+
+---
+
+## The sequenced form is not a refinement — it is the only reliably testable one
+
+**Measured** over 324 two-clause conditions drawn from the current grammar (a
+macro-surprise clause plus one market clause, thresholds spanning the range a
+model would plausibly propose), varying only the `within_days` on the news term:
+
+    within_days   testable as proposed   rescued by relaxation   lost   median occurrences
+              0                    24%                     58%    18%                  14
+              3                    67%                     33%     0%                  62
+              7                    84%                     16%     0%                 127
+
+**What this settles.** A same-day conjunction — "a CPI surprise AND an oversold
+market, both today" — is the natural way to phrase a hypothesis and is mostly
+untestable: its median is 14 occurrences against a floor of 35, and 18% cannot
+be rescued at all. The same hypothesis phrased as a sequence — "a CPI surprise
+within the last week, and an oversold market today" — has a median of 127 and
+nothing is lost.
+
+That is not a small difference in convenience. `within_days` decides whether a
+hypothesis can produce a result, and the prompts describe it as a way to express
+ORDERING, which is true but undersells it. Both prompts already carry a worked
+sequenced example; this measurement is the reason it belongs there.
+
+**It also explains the relaxation mechanism's value differently than expected.**
+At `within_days=0` the relaxation rescues 58% of the grammar — it is carrying the
+whole design. At `within_days=7` it rescues 16%, because little needs rescuing.
+The relaxation is a safety net for badly-scoped proposals, not a substitute for
+scoping them well.
+
+---
+
+## The testability floor and the validation milestone are not consistent with each other
+
+**The arithmetic, which nobody had done.** `MIN_HISTORICAL_OCCURRENCES = 35`
+decides what may be TESTED. `MILESTONE_N = 50` resolved live occurrences decides
+what may be called VALIDATED. Over this project's ~8-year, 7-coin history:
+
+    historical occurrences   rate       years to validate
+                        35   4.4/yr                  11.4
+                        80  10.0/yr                   5.0
+                       120  15.0/yr                   3.3
+                       200  25.0/yr                   2.0
+
+A condition admitted exactly at the floor would need **11 years** of live testing
+to reach its first validation milestone — longer than the history it was found
+on. The system can test conditions it can never validate.
+
+**The one mitigation, and its limit.** `_effective_milestone_count` lets a
+DYNAMIC candidate fill its first window with backtest occurrences topped up by
+live ones, so the first checkpoint arrives much sooner. That is deliberate and
+documented. But it applies to the FIRST checkpoint only: every subsequent
+multiple of 50 is live-only, so the 11-year figure is what governs a candidate's
+second and later verdicts.
+
+**Not yet resolved**, and recorded rather than quietly patched. Raising the floor
+to ~120 would put validation within about three years, at the cost of discarding
+hypotheses that are merely rare rather than wrong. Lowering `MILESTONE_N` trades
+away the evidentiary bar the word "validated" rests on. Both are real trade-offs
+and neither should be made to tidy an inconsistency; what matters first is that
+the inconsistency is on the record.
