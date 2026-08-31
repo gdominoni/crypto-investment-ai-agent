@@ -346,6 +346,62 @@ trigger, which fires 3,411 times and selects nothing.
 
 ---
 
+## 2f. The trigger should precede a TREND, not follow a shock -- MEASURED
+
+**The argument, from the project director, and it is correct.** Macro news and
+the volatility shock are both *the causes being sought* — using either as the
+trigger looks for causes by conditioning on the thing to be explained. Removing
+them narrows the field, and raises the question they were hiding: **a shock is
+not a trend**, and what this project looks for the causes of is a trend.
+
+**Measured, and it overturns the incumbent trigger.** Defining a trend as a move
+of at least one standard deviation whose path is also directional (forward
+efficiency ratio >= 0.5 — |net change| over the sum of absolute daily steps):
+
+    trigger                        days   trend after    base        p     (14d)
+    shock z>=2 (incumbent)          227          8.8%   11.8%   0.9160
+    range compressed p<0.10        2032         15.1%   11.3%   0.0000
+    bollinger tight p<0.10         2218         16.1%   11.1%   0.0000
+    bollinger tight 5d running     2706         15.8%   11.0%   0.0000
+    choppy market eff20<0.2        8468         13.2%   10.4%   0.0000
+
+Holds at 21 days (tight-5d: 9.3% vs 6.3%). **The shock trigger is not merely
+neutral for trends -- it is an ANTI-precursor**: post-shock days trend *less*
+often than ordinary days, at every efficiency threshold above 0.3 and at every
+horizon beyond 7 days. Which is intuitive after the fact: a shock is followed by
+churn, not by an orderly move.
+
+**Why the earlier measurement missed this.** `trigger_value.py` originally asked
+only whether a trigger precedes a bigger MOVE. Shock passes that (p=0.000 at 1
+day) and fails this. Magnitude and directionality are different questions, and
+only the second is the one this project is asking.
+
+**What makes the compression family the right shape** — beyond the numbers. It
+says a directional move is brewing WITHOUT saying which way. The direction is
+then exactly what the macro context and market state have to explain, which is
+the question the pipeline exists to ask. A trigger that predicted direction
+would be doing the pipeline's job for it, and would contaminate it.
+
+**Honest framing.** Volatility compression preceding expansion is long known (the
+Bollinger squeeze). This is a confirmation on this data, not a discovery, and it
+should be presented that way.
+
+**Open, not yet decided:**
+
+  * Which rule. `bollinger tight 5d running` fires ~55 days/coin/year, `range
+    compressed p<0.10` ~41. Both are far more than shock's 5, so cost has to be
+    re-planned, not assumed.
+  * Whether shock stays as a SECOND trigger. It selects real magnitude even
+    though it anti-selects trend, and "what turns a shock into a trend" is a
+    legitimate question -- but it is a different one.
+  * The p-values are optimistic: 14-day forward windows overlap heavily and the
+    seven coins are correlated. The effect SIZES (15.1% vs 11.3%) are the part
+    to trust.
+  * `ConditionSpec.horizons` still stops at 21 days (see 2d). A trend thesis
+    needs that ceiling revisited, which worsens the overlap problem above.
+
+---
+
 ## 3. Smaller, known, and deliberately left
 
 - ~~**`daily_range_pct` ignores `scale` entirely.**~~ DONE 2026-08-30 --

@@ -41,6 +41,17 @@ the trigger's job is to spend the budget on days where something is happening
 and worth explaining. It does mean the trigger itself finds nothing; it only
 decides where to look.
 
+A SECOND, DIFFERENT QUESTION -- and the one that matters more. Everything above
+asks whether a trigger precedes a bigger MOVE. This project is looking for the
+causes of a TREND, and a shock is not a trend: it is a violent move followed
+mostly by churn. `_trend_precursors` therefore asks whether a trigger precedes a
+DEFINED TREND -- a move of at least one standard deviation whose path is also
+directional, scored by the forward efficiency ratio (|net change| divided by the
+sum of the absolute daily steps: 0 is chaos, 1 is a straight line).
+
+The two questions give opposite answers for the incumbent trigger, which is why
+asking only the first one was not enough.
+
 Run:  python3 -m forecast.trigger_value
 """
 from __future__ import annotations
@@ -107,6 +118,59 @@ def _candidate_triggers(df: pd.DataFrame) -> dict:
     out["5d fall <= -10%"] = (r5 <= -0.10) & (r5.shift(1) > -0.10)
     out["5d rise >= +10%"] = (r5 >= 0.10) & (r5.shift(1) < 0.10)
     return out
+
+
+def _forward_efficiency(close: pd.Series, horizon: int) -> pd.Series:
+    """How DIRECTIONAL the next `horizon` days are: |net change| over the sum of
+    the absolute daily steps. 1.0 is a straight line, 0 is a round trip.
+
+    This is the same instrument as `definitions.trend_efficiency_ratio`, pointed
+    forwards instead of backwards. It exists because forward RETURN alone cannot
+    tell a trend from a spike: +5% at 7 days scores identically whether it came
+    from a steady climb, from +15% on day one bleeding back, or from oscillating
+    +/-20% and landing at +5%. Those are different phenomena and only one of them
+    is what this project is looking for."""
+    net = (close.shift(-horizon) - close).abs()
+    steps = close.diff().abs()
+    total = steps[::-1].rolling(horizon).sum()[::-1].shift(-1)
+    return net / total
+
+
+def _is_trend(df: pd.DataFrame, horizon: int, min_efficiency: float = 0.5) -> pd.Series:
+    """A trend is a move that is both LARGE and DIRECTIONAL. Either alone is not
+    one: a big chaotic swing is not a trend, and a tidy 0.2% drift is not either."""
+    r = df["close"].shift(-horizon) / df["close"] - 1.0
+    sd = r.rolling(VOL_WINDOW, min_periods=VOL_WINDOW // 3).std().shift(1)
+    return ((r / sd).abs() >= 1.0) & (_forward_efficiency(df["close"], horizon) >= min_efficiency)
+
+
+def _trend_precursors(df: pd.DataFrame) -> dict:
+    """Triggers that might precede a trend, as opposed to following a move.
+
+    The compression family is here because of what the incumbent trigger turned
+    out NOT to do. Volatility compression preceding expansion is a long-known
+    property of financial series (the Bollinger squeeze), so a positive result
+    here is a confirmation, not a discovery -- but it is the right shape for this
+    system: it says a directional move is brewing WITHOUT saying which way, which
+    leaves the direction to be explained by the macro context and market state.
+    That is exactly the question the pipeline exists to ask."""
+    from candidates.definitions import trend_efficiency_ratio
+    from candidates.methodology import shock_zscore_series
+
+    close, high, low = df["close"], df["high"], df["low"]
+    rng = (high - low) / close
+    bb_width = (close.rolling(20).std() * 4) / close.rolling(20).mean()
+    rank = lambda x: x.rolling(VOL_WINDOW, min_periods=60).rank(pct=True)
+    eff20 = trend_efficiency_ratio(close, 20)
+    z = shock_zscore_series(df)
+    return {
+        "shock z>=2 (incumbent)": (z >= 2) & (z.shift(1) < 2),
+        "range compressed p<0.10": rank(rng) <= 0.10,
+        "bollinger tight p<0.10": rank(bb_width) <= 0.10,
+        "bollinger tight 5d running": (rank(bb_width) <= 0.20).rolling(5).min().fillna(0).astype(bool),
+        "choppy market eff20<0.2": eff20 < 0.2,
+        "compression + chop": (rank(bb_width) <= 0.25) & (eff20 < 0.25),
+    }
 
 
 def main() -> int:
@@ -237,6 +301,32 @@ def main() -> int:
         print(f"{name + ' minus shock':<30}{e['n']:>7}{cells}")
         results[f"{name} minus shock"] = {"days": e["n"],
                                            "p": {h: float(np.median(e[h])) for h in (1, 3, 7) if e[h]}}
+
+    # The question that actually matters: does the trigger precede a TREND?
+    for horizon in (14, 21):
+        print(f"\nTrend precursors -- trend = |move| >= 1sd AND forward efficiency >= 0.5, "
+              f"{horizon}d")
+        print(f"{'trigger':<30}{'days':>7}{'trend after':>13}{'base':>8}{'p':>9}")
+        print("-" * 68)
+        agg = {}
+        for coin in COINS:
+            df = load_daily(coin)
+            idx = df.index[(df.index >= START) & (df.index <= END)]
+            trend = _is_trend(df, horizon).reindex(idx).fillna(False)
+            for name, mask in _trend_precursors(df).items():
+                mask = mask.reindex(idx).fillna(False)
+                e = agg.setdefault(name, {"n": 0, "a": [], "b": []})
+                e["n"] += int(mask.sum())
+                e["a"].append(trend[mask]); e["b"].append(trend[~mask])
+        for name, e in agg.items():
+            a, b = pd.concat(e["a"]), pd.concat(e["b"])
+            if len(a) < 50:
+                continue
+            pv = mannwhitneyu(a.astype(float), b.astype(float), alternative="greater").pvalue
+            print(f"{name:<30}{e['n']:>7}{a.mean():>12.1%}{b.mean():>8.1%}{pv:>9.4f}")
+            results[f"{name} -> trend @{horizon}d"] = {
+                "days": e["n"], "trend_rate": float(a.mean()),
+                "base_rate": float(b.mean()), "p": float(pv)}
 
     RESULTS_PATH.write_text(json.dumps(results, indent=1, default=str))
     print(f"\nWritten to {RESULTS_PATH.name}")
