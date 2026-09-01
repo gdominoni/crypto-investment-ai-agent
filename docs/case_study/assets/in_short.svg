@@ -19,30 +19,31 @@
   <!-- STEP 1 -->
   <circle cx="78" cy="156" r="15" fill="#eef1f5" stroke="#c9d1dc"/>
   <text x="78" y="161" text-anchor="middle" font-size="13" font-weight="700" fill="#3d4657">1</text>
-  <text x="106" y="150" font-size="15" font-weight="600" fill="#1f2430">Collect the data, hourly</text>
-  <text x="106" y="172" font-size="13" fill="#4b5563">Price candles for 7 coins, plus real macro releases</text>
-  <text x="106" y="190" font-size="13" fill="#4b5563">dated by when they were actually published, plus</text>
-  <text x="106" y="208" font-size="13" fill="#4b5563">live news headlines.</text>
+  <text x="106" y="150" font-size="15" font-weight="600" fill="#1f2430">Watch every coin for an unusually quiet spell</text>
+  <text x="106" y="172" font-size="13" fill="#4b5563">Price candles for 7 coins, hourly, plus real macro</text>
+  <text x="106" y="190" font-size="13" fill="#4b5563">releases dated by when they were actually published.</text>
+  <text x="106" y="208" font-size="13" fill="#4b5563">The system flags the moment a quiet spell ends.</text>
 
   <rect x="620" y="130" width="500" height="86" rx="6" fill="#ffffff" stroke="#e6e2db"/>
-  <text x="638" y="154" font-size="13" fill="#3d4657">CPI is published on 12 March. The system already knows</text>
-  <text x="638" y="174" font-size="13" fill="#3d4657">that date is a real release day, not an estimate — and that</text>
-  <text x="638" y="194" font-size="13" fill="#3d4657">Bitcoin fell 9% three days earlier.</text>
+  <text x="638" y="154" font-size="13" fill="#3d4657">Bitcoin's volatility drops unusually low for 12 days.</text>
+  <text x="638" y="174" font-size="13" fill="#3d4657">Three jobless-claims reports during that stretch come in</text>
+  <text x="638" y="194" font-size="13" fill="#3d4657">worse than expected. Volatility just picked back up.</text>
 
   <line x1="78" y1="222" x2="78" y2="256" stroke="#9aa3b0" stroke-width="1.5" marker-end="url(#sArrow)"/>
 
   <!-- STEP 2 -->
   <circle cx="78" cy="278" r="15" fill="#eef1f5" stroke="#c9d1dc"/>
   <text x="78" y="283" text-anchor="middle" font-size="13" font-weight="700" fill="#3d4657">2</text>
-  <text x="106" y="272" font-size="15" font-weight="600" fill="#1f2430">Two Claude models look for a pattern worth testing</text>
-  <text x="106" y="294" font-size="13" fill="#4b5563">Haiku reads the news cheaply and forwards only what</text>
-  <text x="106" y="312" font-size="13" fill="#4b5563">looks significant. Sonnet gets the real indicator readings</text>
-  <text x="106" y="330" font-size="13" fill="#4b5563">and proposes a specific, testable combination.</text>
+  <text x="106" y="272" font-size="15" font-weight="600" fill="#1f2430">Sonnet proposes up to two testable ideas</text>
+  <text x="106" y="294" font-size="13" fill="#4b5563">Given the real releases and readings from that quiet</text>
+  <text x="106" y="312" font-size="13" fill="#4b5563">spell, Sonnet proposes one or two specific, different</text>
+  <text x="106" y="330" font-size="13" fill="#4b5563">combinations — never a vague hunch.</text>
 
   <rect x="620" y="252" width="500" height="86" rx="6" fill="#ffffff" stroke="#e6e2db"/>
-  <text x="638" y="276" font-size="13" fill="#3d4657">Sonnet proposes: <tspan font-weight="600">"a sharp drop in the days BEFORE a</tspan></text>
-  <text x="638" y="296" font-size="13" fill="#3d4657"><tspan font-weight="600">CPI release, with Bitcoin already oversold"</tspan> — an order,</text>
-  <text x="638" y="316" font-size="13" fill="#3d4657">not a coincidence. The order is part of the claim.</text>
+  <text x="638" y="272" font-size="13" fill="#3d4657">Sonnet proposes two ideas sharing the same news but a</text>
+  <text x="638" y="290" font-size="13" fill="#3d4657">different market reading: <tspan font-weight="600">"weak jobless claims + RSI already</tspan></text>
+  <text x="638" y="308" font-size="13" fill="#3d4657"><tspan font-weight="600">oversold"</tspan>, and separately <tspan font-weight="600">"weak jobless claims + falling volume."</tspan></text>
+  <text x="638" y="326" font-size="13" fill="#3d4657">Two measurable ideas, not one that can't be tested.</text>
 
   <line x1="78" y1="344" x2="78" y2="378" stroke="#9aa3b0" stroke-width="1.5" marker-end="url(#sArrow)"/>
 
@@ -55,9 +56,9 @@
   <text x="106" y="452" font-size="13" fill="#4b5563">makes; everything after it is automatic.</text>
 
   <rect x="620" y="374" width="500" height="86" rx="6" fill="#fffaf5" stroke="#f0d9c4"/>
-  <text x="638" y="398" font-size="13" fill="#3d4657">The proposal arrives on the phone in plain English, with</text>
-  <text x="638" y="418" font-size="13" fill="#3d4657">two buttons: <tspan font-weight="600" fill="#c2540c">Test It</tspan> / <tspan font-weight="600" fill="#6b7280">Don't Test It</tspan>. No typing, so the</text>
-  <text x="638" y="438" font-size="13" fill="#3d4657">model can never be talked into running its own idea.</text>
+  <text x="638" y="398" font-size="13" fill="#3d4657">Both proposals arrive on the phone in plain English, in</text>
+  <text x="638" y="418" font-size="13" fill="#3d4657">one message with two buttons: <tspan font-weight="600" fill="#c2540c">Test It</tspan> / <tspan font-weight="600" fill="#6b7280">Don't Test It</tspan>. No</text>
+  <text x="638" y="438" font-size="13" fill="#3d4657">typing, so the model can never argue its own case.</text>
 
   <line x1="78" y1="466" x2="78" y2="500" stroke="#9aa3b0" stroke-width="1.5" marker-end="url(#sArrow)"/>
 
@@ -65,26 +66,26 @@
   <circle cx="78" cy="522" r="15" fill="#eef1f5" stroke="#c9d1dc"/>
   <text x="78" y="527" text-anchor="middle" font-size="13" font-weight="700" fill="#3d4657">4</text>
   <text x="106" y="516" font-size="15" font-weight="600" fill="#1f2430">Check it against history, honestly</text>
-  <text x="106" y="538" font-size="13" fill="#4b5563">Every past occurrence is found and measured: is the</text>
-  <text x="106" y="556" font-size="13" fill="#4b5563">effect real or luck, how far does price run in your favour</text>
-  <text x="106" y="574" font-size="13" fill="#4b5563">versus against you, and over how many days.</text>
+  <text x="106" y="538" font-size="13" fill="#4b5563">Every past occurrence is found and measured, counted so</text>
+  <text x="106" y="556" font-size="13" fill="#4b5563">the same episode is never counted twice: is the effect</text>
+  <text x="106" y="574" font-size="13" fill="#4b5563">real or luck, and over how many days does it play out.</text>
 
   <rect x="620" y="496" width="500" height="86" rx="6" fill="#ffffff" stroke="#e6e2db"/>
-  <text x="638" y="520" font-size="13" fill="#3d4657">Found 84 past occurrences. Tested on years the model</text>
-  <text x="638" y="540" font-size="13" fill="#3d4657">never saw when choosing. Best holding period: 7 days.</text>
-  <text x="638" y="560" font-size="13" fill="#3d4657">Most fail here — and being wrong is the normal outcome.</text>
+  <text x="638" y="520" font-size="13" fill="#3d4657">Found 134 past occurrences, 41 separate episodes. Tested</text>
+  <text x="638" y="540" font-size="13" fill="#3d4657">on years the model never saw when proposing. Best holding</text>
+  <text x="638" y="560" font-size="13" fill="#3d4657">period: 7 days. Most ideas fail here — that's the norm.</text>
 
   <line x1="78" y1="588" x2="78" y2="622" stroke="#9aa3b0" stroke-width="1.5" marker-end="url(#sArrow)"/>
 
   <!-- STEP 5 -->
   <circle cx="78" cy="644" r="15" fill="#fdf6e0" stroke="#dcc98a"/>
   <text x="78" y="649" text-anchor="middle" font-size="13" font-weight="700" fill="#92720a">5</text>
-  <text x="106" y="638" font-size="15" font-weight="600" fill="#92720a">Track it forward, in real time</text>
-  <text x="106" y="660" font-size="13" fill="#4b5563">Survivors join a watch list. Each new occurrence is</text>
-  <text x="106" y="678" font-size="13" fill="#4b5563">recorded and measured as it happens — the real test.</text>
+  <text x="106" y="638" font-size="15" font-weight="600" fill="#92720a">Track it forward, honestly</text>
+  <text x="106" y="660" font-size="13" fill="#4b5563">Survivors are logged. Only occurrences AFTER the idea was</text>
+  <text x="106" y="678" font-size="13" fill="#4b5563">written down count toward the next word.</text>
 
   <rect x="620" y="618" width="500" height="82" rx="6" fill="#fffdf6" stroke="#eadfb8"/>
-  <text x="638" y="642" font-size="13" fill="#3d4657">Next time this exact setup occurs, it is logged and held</text>
-  <text x="638" y="662" font-size="13" fill="#3d4657">for 7 days. Only after <tspan font-weight="600">50 such live occurrences</tspan> does it</text>
-  <text x="638" y="682" font-size="13" fill="#3d4657">earn the word "validated". <tspan font-weight="600">So far, nothing has.</tspan></text>
+  <text x="638" y="642" font-size="13" fill="#3d4657">Next time this exact setup occurs, it's logged and held</text>
+  <text x="638" y="662" font-size="13" fill="#3d4657">for 7 days. After <tspan font-weight="600">20 such occurrences since the idea was</tspan></text>
+  <text x="638" y="682" font-size="13" fill="#3d4657"><tspan font-weight="600">written down</tspan>, it earns "confirmed" — persistence, not proof.</text>
 </svg>

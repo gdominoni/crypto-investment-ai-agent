@@ -10,7 +10,8 @@
 <b>TL;DR — Key Engineering Highlights</b>
 <br><br>
 <sub><b>ARCHITECTURE</b><br>
-Autonomous, 2-tier LLM Agent (Claude Haiku for routing → Claude Sonnet for reasoning),<br>
+Autonomous Claude Sonnet agent that proposes and tests market hypotheses<br>
+(Claude Haiku separately pre-screens news headlines before anything reaches it),<br>
 integrated with a Telegram bot interface &amp; human-in-the-loop gating.</sub>
 <br><br>
 <sub><b>STATISTICAL RIGOR</b><br>
@@ -31,19 +32,19 @@ observational engine running via a single daemon scheduler.</sub>
 
 Whether an LLM-driven architecture — reading real market news and recognizing specific, recurring market conditions as they happen — can identify genuine, statistically real patterns in crypto prices. Not a paper-trading guess: every candidate pattern is tested directly against that coin's own historical baseline with a real significance test, and once identified, tracked through real, dated occurrences going forward. In plain terms: after a specific kind of announcement (say, a Federal Reserve rate decision), under a specific kind of market condition (say, Bitcoin's price swinging unusually wide that day and closing lower) — is there a clear, repeatable, *statistically significant* reaction in that coin's price over the following days, one an AI system could actually recognize and track as it happens?
 
-**This project never opens a funded position.** It is a knowledge-discovery investigation of patterns, not an investment strategy — every "trade" described below is an observational live test: a real, dated occurrence of a tracked condition, held for a fixed horizon, resolved by measuring what actually happened next. No capital is ever at risk, at any point, in any phase. Everything below (the historical methodology, the statistical significance test, the Haiku/Sonnet judgment layer, the human gate on testing genuinely new patterns) exists to answer the question above honestly and live, rather than assume the answer from a backtest.
+**This project never opens a funded position.** It is a knowledge-discovery investigation of patterns, not an investment strategy — every "trade" described below is an observational live test: a real, dated occurrence of a tracked condition, held for a fixed horizon, resolved by measuring what actually happened next. No capital is ever at risk, at any point, in any phase. Everything below (the historical methodology, the statistical significance test, the Sonnet judgment layer, the human gate on testing genuinely new patterns) exists to answer the question above honestly and live, rather than assume the answer from a backtest.
 
 ## Executive Summary
 
-A prior, static rule-based research phase (Phase 1 below) tested six categories of deterministic market triggers — scheduled macro releases, futures-market crowding, trend-efficiency continuation — across seven-plus years of crypto data, under full walk-forward validation, and found no fully persistent, unconditional edge. This project's response to that finding is the adaptive system described below: a continuously re-validated statistical baseline, a bootstrap significance test that asks whether a pattern is *real* (not merely profitable-looking in one backtest), an LLM judgment layer (Claude Haiku → Claude Sonnet) that discovers and proposes genuinely new conditions, and a human supervisor at exactly one decision point — observed live rather than assumed from a backtest.
+An earlier, static rule-based research phase tested six categories of deterministic market triggers — scheduled macro releases, futures-market crowding, trend-efficiency continuation — across seven-plus years of crypto data, under full walk-forward validation, and found no fully persistent, unconditional edge. This project's response is the adaptive system described below: a continuously re-validated statistical baseline, a bootstrap significance test that asks whether a pattern is *real* (not merely profitable-looking in one backtest), a Claude Sonnet judgment layer that discovers and proposes genuinely new conditions, and a human supervisor at exactly one decision point — whether a newly-proposed condition is even worth testing. Everything downstream of that one decision is deterministic and code-driven; no further human input is needed.
+
+**How this project checks its own instruments.** A system that reports "no pattern found" has an obvious failure mode: a detector that never fires looks identical to a detector that is broken. Before trusting any null result, this project plants a synthetic signal it already knows the answer to and confirms the pipeline finds it — and confirms a pure-noise arm stays silent. Only once the instrument is shown to work is a real result reported as a fact about the market rather than a bug.
 
 <p align="center">
   <img src="docs/case_study/assets/in_short.svg" alt="In short: the five steps the system runs, and the same five steps again as a worked example" width="100%">
 </p>
 
-### The System, Live on Telegram — Real Screenshots
-
-Every message below is a real, unedited screenshot from this project's own Telegram bot — nothing staged, nothing mocked up for this README. They show the interface as it actually behaves; the *verdicts* visible in them predate the [2026-08-29 statistical audit](docs/case_study/methodology-decisions.md) and no longer hold — see Phase 3 for the current, corrected battery.
+### Screenshots
 
 <table>
 <tr>
@@ -58,271 +59,117 @@ Every message below is a real, unedited screenshot from this project's own Teleg
 </tr>
 </table>
 
-## Target Objectives
-
-1. Determine whether adaptive re-validation and LLM-mediated discovery surface real, statistically significant patterns the static baseline missed.
-2. Do so with a fully causality-safe, leakage-free methodology throughout, and a significance test independent of any specific trade structure.
-3. Keep every classification traceable to a specific, real number — on demand, in plain language, never invented.
-
-The human gate sits on exactly one kind of decision: whether a genuinely new, LLM-proposed condition is worth testing at all. Once a condition is being tracked — whether from the original static battery or a human-approved test — everything downstream (the statistical classification, whether it opens a live test, whether it earns "confirmed" status) is fully deterministic and code-driven, with no further human input needed. Gating every individual classification on a human would test human-plus-LLM judgment, not the LLM's own, defeating the point of objective 1.
-
-**How this project checks its own instruments.** A system that reports "no pattern found" has an obvious failure mode: a detector that never fires looks identical to a detector that is broken. [`forecast/`](forecast/) is the answer to that — a set of offline experiments (no API calls, no market claims) that test the pipeline against *known ground truth*: synthetic signals planted by deliberate lookahead on days that genuinely are followed by strong returns, alongside a pure-noise arm that must stay silent. Planted signals reach `accepted`; noise reaches `rejected` with +0.61% excess return. That is what licenses reading the null results here as facts about the market rather than bugs — and the same harness produced the gate autopsy (of 294 known-good candidates, 92% died at the significance threshold, 4 at concentration, 0 at MFE/MAE) that redirected every threshold decision described below.
-
-Every non-obvious methodology or design decision — why 50, why 60%, why a fixed horizon instead of a TP/SL ladder, why no funded position is ever opened — is logged with its own stated reasoning in [`docs/case_study/methodology-decisions.md`](docs/case_study/methodology-decisions.md). Step-by-step walk-through of what happens on one simulated day, which triggers consult the LLM and which never do: [`docs/case_study/how-the-replay-runs.md`](docs/case_study/how-the-replay-runs.md). File-by-file guide to the whole codebase: [`PROJECT_MAP.md`](PROJECT_MAP.md). Want to run this yourself, step by step, no prior knowledge of the code assumed? See [`HOW_TO_RUN.md`](HOW_TO_RUN.md).
-
----
-
-## Phase 1: Historical Research & Statistical Methodology
-
-Before any live component was built, this project ran a systematic historical study of whether deterministic market triggers predict real, repeatable price moves in crypto — the foundation everything downstream is built on, and honest about what it did and didn't find.
-
-**What was tested.** A battery of trigger categories tied to scheduled financial releases and market-structure signals — FOMC / CPI / initial-jobless-claims macro-event reactions, futures/perpetual funding-rate crowding, and Kaufman Efficiency-Ratio trend continuation — across BTC, ETH, BNB, XRP, DOGE, ADA, and LTC, using daily and hourly data spanning 2017 through the present, kept current by a live data refresh rather than a frozen snapshot.
-
-**Why the methodology is built the way it is** — six requirements, each chosen for a specific, verifiable reason rather than as boilerplate rigor. Click any one for the reasoning behind it:
-
-<details>
-<summary><b>A pattern must be statistically real, not just profitable-looking, to be accepted.</b></summary>
-
-The actual acceptance gate is a bootstrap significance test (`candidates/methodology.py::pattern_significance`, 2,000 resamples): it compares a trigger's forward returns against that *same coin's own* unconditional baseline over the identical calendar stretch, at whichever holding horizon (1, 3, 7, 14, or 21 days) a walk-forward search finds most reliable on training data alone. **The test is directional and pre-specified** — the horizon is chosen by *signed* mean return and the p-value is a fixed upper tail in the direction the candidate actually trades, so a pattern that is real but points the *opposite* way can never pass (it previously could; see the audit entry in the decisions log). Because the baseline's overlapping windows are serially dependent, the resampling is a **moving-block** bootstrap rather than i.i.d. — calibrated against a true-null harness, where the i.i.d. version rejected 43% of the time at a nominal 5%. Win rate, strict win rate, and a TP/SL-conditioned Sortino ratio are still computed and shown, purely for reference — they describe how well a barrier-based trade structure would have captured the pattern historically, but they no longer decide accepted/watch/rejected. This project's purpose is finding real patterns, not fitting the most flattering trade structure around noise. A candidate also needs a favorable risk path during the hold (the average best-case move exceeding the average worst-case move) and no single coin or calendar year carrying more than 60% of the positive result — a real, general pattern, not a fluke of one period or one coin.
-
-</details>
-
-<details>
-<summary><b>Strict causality lag, enforced structurally, not by convention.</b></summary>
-
-Several trigger definitions are only knowable once the period they describe is fully over — "the day closes bearish" cannot be evaluated before the day closes. Entry is therefore always the *next* period's open following the period a trigger condition reads, with no code path that allows an earlier fill. This matters because the alternative — filling at a price from before that information existed — silently inflates a backtest with information no live system could ever have had.
-
-</details>
-
-<details>
-<summary><b>Purged walk-forward validation with mandatory concentration checks.</b></summary>
-
-Every candidate's out-of-sample result — and the significance test above — is checked for concentration: is the pooled result actually carried by one coin or one calendar year? A result that doesn't diversify across both is held at `watch`, regardless of how strong its headline number looks. A single strong year or a single strong coin is not evidence of a general, repeatable pattern.
-
-</details>
-
-<details>
-<summary><b>Win rate is always reported with a strict counterpart and a Sortino ratio, never alone — but never as the acceptance gate either.</b></summary>
-
-A headline win rate computed only on decisively-resolved trades can look strong while a large population of inconclusive, loss-leaning timeouts sits outside that denominator. Reporting the strict version (timeouts counted as non-wins) alongside Sortino removes that blind spot for anyone reading the reference numbers — precision that matters for the informational TP/SL comparison, even though none of these three numbers gates acceptance anymore.
-
-</details>
-
-<details>
-<summary><b>Extreme historical shocks are statistically isolated from the static battery's fitting, not blended in.</b></summary>
-
-A coin's short-term realized volatility is z-scored against its own longer trailing distribution; events where that z-score crosses an extreme threshold are excluded from the pattern test the static battery runs, so a handful of crash days can't distort the read on ordinary conditions. These excluded events aren't discarded — they're the population the live shock-detection pathway (Phase 2) is built and tested on instead.
-
-</details>
-
-<details>
-<summary><b>"Accepted" and "confirmed" are two different, deliberately non-interchangeable claims — and neither means "proven".</b></summary>
-
-`accepted` means a candidate has cleared the statistical bar above — a real pattern, right now, in the historical record. `confirmed` is earned separately and later: a candidate that has kept occurring, and still clears that bar, after occurrences that **postdate the hypothesis itself** (see Phase 3 for what counts). The first is a backtest's verdict; the second is a track record built on evidence the hypothesis could not have been shaped by.
-
-The word is `confirmed` and not `validated` for a measured reason. At this project's horizons, demonstrating a 5% effect at 80% power would need **307 occurrences at a 7-day horizon and 742 at 14** (`required_n_for_power`), against a typical candidate producing about 11 independent occurrences a year. No count reachable in any realistic tracking window proves an effect of interesting size. What a checkpoint can honestly assert is **persistence** — it kept happening and still passes on the enlarged sample — and every live-test message shows the achieved count beside the required one so the gap is never left implicit.
-
-</details>
-
-<h3 align="center">🔍 Technical & Quantitative Methodology Details</h3>
-
-<details>
-<summary><b>Fees, Concentration Thresholds & Shock Handling</b></summary>
-
-**Reference trading fees.** The informational TP/SL comparison line shown alongside every verdict nets a fixed 0.20% round-trip transaction cost — chosen to describe *directional* edge honestly if it were traded with a barrier structure, not to model exact execution cost of a real order that's never actually placed.
-
-**Why 60%.** The concentration threshold (no single coin or year may carry more than 60% of a candidate's positive return) isn't arbitrary — it's set to catch the specific failure mode that invalidated several nominally-positive candidates in this project's own prior research: one coin, or one calendar year, dressed up as a general result. The full reasoning, along with every other numeric threshold in this project, is logged in [`docs/case_study/methodology-decisions.md`](docs/case_study/methodology-decisions.md).
-
-**Variance non-stationary shift.** Realized volatility in crypto is not stationary — a handful of historic shocks (a 2018-style crash, a 2020-style crash, a 2022-style unwind) can dominate a naive average and produce a distorted read on ordinary conditions. This project's fix: a rolling z-score of short-term realized volatility against its own trailing baseline (`candidates/methodology.py::shock_zscore_series`, causally safe by construction — every value uses only bars up to and including itself) flags events crossing an extreme threshold (empirically ~2% of days, not the ~0.13% a normal distribution would predict — crypto's return distribution is heavily right-skewed) as `shock`-regime; the static battery's pattern test uses `normal`-regime events only.
-
-**Live compression-exit recognition.** Real-time market data is scanned for coins whose unusually quiet period has just ended and stayed ended (`llm_pipeline/compression_detector.py`) — Sonnet is escalated once per episode, independent of any news headline. Every scan refreshes local OHLCV from Binance first, rather than reading a static snapshot. This replaced a shock-based escalation for a measured reason: **this project looks for the causes of a trend, and a volatility shock is not a trend** — days following a shock produce a defined directional move *less* often than ordinary days, while days following a compression produce one more often ([`forecast/trigger_value.py`](forecast/trigger_value.py)). Compression is also the right shape for the question: it says a directional move is brewing **without saying which way**, leaving the direction to be explained by the macro context and market state. Sonnet's only available response is to propose testing a condition — same whitelist, same walk-forward, same concentration check as any other.
-
-</details>
-
-<h3 align="center">The honest finding.</h3>
-
-Applying this methodology across the full candidate battery, static deterministic rule sets did not produce a statistically persistent, cross-coin, cross-year edge on their own. That's the pessimistic baseline this project's live architecture is built to test against — not a result to argue away, and not one this project re-litigates by re-running the same static candidates hoping for a different answer.
-
-**And the adaptive layer has not overturned it.** As of the 2026-08-29 audit, 98 candidates have been tested against real history — 92 of them proposed by Sonnet, not hand-picked — and **none currently clears the bar** (Phase 3). An earlier version of this README reported two accepted and one confirmed; those were artifacts of a significance test that ignored direction and used a bootstrap rejecting at 43% under a true null. Correcting the statistics removed the finding rather than the other way round, which is the outcome this section always said it was prepared for.
-
-<h3 align="center">The Dynamic Agent Thesis.</h3>
-
-Given that a fixed rule set doesn't hold up on its own, this project's central bet is architectural rather than statistical: a system that (1) treats every historical finding as perishable, re-validating the full candidate battery on a weekly cadence against live data rather than fitting once and trusting it indefinitely; (2) escalates genuinely novel market conditions — by definition, the ones a fixed rule set cannot anticipate — to an LLM judgment layer and a human decision-maker, instead of silently misclassifying them; and (3) requires a real, tracked live occurrence, not just a favorable backtest, before ever calling a pattern "validated." This doesn't guarantee a different live outcome than the static study found — it's a mechanistically different hypothesis (adaptive discovery plus continuous re-validation, versus one rule set fit once), and this project exists to test it for real rather than assume it inherits the static result.
-
----
-
-## Phase 2: System Architecture
-
-Two cooperating components, run continuously by a single process (`scheduler/live_daemon.py` — see Phase 3):
-
-| Module | Role |
-|---|---|
-| **B — Live Test Engine** | Opens and resolves observational live tests the instant a tracked trigger's condition fires (mechanical, hourly detection, no LLM involved, run hourly by `scheduler/live_daemon.py`). Never a funded position, never a TP/SL ladder — holds for the horizon `pattern_significance` found significant, resolves by measuring the real forward return, best-case, and worst-case excursion. A separate, purely informational cross-check does simulate a TP/SL-bounded position for comparison — see below. (`execution/live_testing.py`) |
-| **C — Signal Layer** | The candidate battery (Phase 3) plus the Haiku Scout → Sonnet Strategist judgment pipeline. Cadence: hourly for headline/shock scanning, weekly for the full battery refresh — both run on that schedule by `scheduler/live_daemon.py`. (`candidates/`, `llm_pipeline/`) |
-
-**A separate, purely informational cross-check does use a TP/SL-bounded position — never the live tests above.** A periodic, local-only Freqtrade hyperopt run re-derives TP/SL multipliers for each tracked candidate by backtesting a simulated trade that *is* bounded by a take-profit/stop-loss ladder, using a genuinely different search method (Bayesian optimization) and a different, industry-standard backtesting engine. Shown alongside the reference numbers for context only — it never gates `accepted`/`watch`/`rejected`, never opens or closes anything live, and the live test engine above continues to hold for a fixed horizon regardless of what it finds. Full detail in Phase 3.
-
-<h3 align="center">Haiku Scout → Sonnet Strategist</h3>
-
-The adaptive layer at the center of the Dynamic Agent Thesis — narrowed, deliberately, to exactly two jobs:
-
-- **Haiku (runs continuously, cheap):** reads news, extracts asset/sentiment/magnitude/event type, and screens out routine, already-classified noise — run hourly by `scheduler/live_daemon.py`. Only genuinely escalation-worthy headlines reach Sonnet — Sonnet's attention is expensive and reserved for real judgment calls (`llm_pipeline/haiku_sonnet_pipeline.py`).
-- **Sonnet (escalated, judgment):** given an escalation, a real indicator snapshot for the relevant coin(s), the last 10 days of real macro releases, and the current candidate battery status — never invented, never a hand-maintained file — does exactly one of two things: **proposes testing a genuinely new condition**, or **does nothing** (routine, already-covered territory). That's the entire decision space. Sonnet never opens a live test itself, never decides accepted/watch/rejected, and never answers a direct human question without the real numbers behind it (§4).
-- **A proposal needs a human "yes" before anything is tested — via buttons, not free text.** Every proposal Sonnet makes arrives with two buttons: **Test It** / **Don't Test It**. This is deliberate: a fixed, small set of valid answers is *always* presented as buttons in this project, never left to free-text matching that can silently do nothing for a natural phrasing that doesn't hit an exact string. Pressing **Test It** runs the real methodology engine directly (`test_novel_condition` — the same walk-forward, significance-tested, concentration-checked pipeline the static battery uses) — Sonnet's job ends at proposing the spec; the actual classification is deterministic and Sonnet has no further say in the outcome.
-- **Novel-condition proposals are built as a whitelist, never as code execution.** A proposal can only compose from a fixed registry of thirteen indicators (`llm_pipeline/novel_condition_tester.py::proposable_indicators()` — RSI, ATR%, Bollinger %B, Donchian position, funding/volume/range z-scores, trend efficiency, forward returns, and three point-in-time-correct macro surprises: CPI, Fed funds rate, jobless claims) plus a comparison, a threshold, and an optional `within_days` lookback that makes an ORDERED hypothesis expressible ("the release came first, then the move" is a different claim from "both on the same day"), rendered back to a human in plain English (e.g. *"14-day RSI below 30 AND a hotter-than-prior CPI print in the last 3 days"*, never a raw variable name) — chosen specifically so there is no path from an LLM proposal to arbitrary executed code. **At most two clauses per condition, and a call returns up to two conditions rather than one deeper one.** That is a measured constraint, not a style rule: each extra clause divides the number of historical occurrences by roughly eight, so a three-clause condition has a median of 12 occurrences where 120 are needed to test anything. Splitting it into two two-clause hypotheses makes both measurable — and if only one survives, that is a finding the conjunction would have hidden. A second proposal that fires on the same days as the first is discarded automatically, since it would spend twice the multiple-comparisons budget for one piece of information. **Every proposal must contain a news/macro event clause — a necessary condition, enforced in code, not requested in a prompt.** A condition built only from price/volume/funding indicators is a chart pattern and does not test this project's question; `ConditionSpec` rejects it before it can ever be tested, and a label may not name a macro event its clauses lack. A market shock cannot appear in a condition at all: a violent price move is a price OUTCOME, not a market state, and "the price moved hard, then the price did something" is the tautology this project exists to exclude. Neither can the metric that defines the replay's own trigger, which is fixed by construction at every proposal and so can discriminate nothing. Tested or not, the condition is written to a persistent registry re-tested every week alongside the static battery, so nothing is trusted forever from one test, and a rejected condition isn't silently re-proposed without genuinely new evidence.
-- **A newly-discovered condition's own triggering occurrence can be honestly backdated.** Because no funded position is ever placed, there's nothing stopping a real, retroactive read of when a just-discovered condition first became true (`execution/live_testing.py::find_backdated_entry` scans the last 14 days of already-recorded hourly history) — anchoring the live test to the real hour it happened, not the moment a human happened to approve it. This would never be legitimate for a real funded order; it's exactly the honest thing to do for an observational record.
-- **Volatility-compression detection is a distinct escalation path, market-data-driven rather than news-driven.** `llm_pipeline/compression_detector.py` scans for coins whose unusually quiet period has just ended, and escalates to Sonnet once per episode. It fires on the *exit*, confirmed over five days, because compression is a state rather than an event — and on compression rather than on a shock because this project looks for the causes of a **trend**: measured, days following a volatility shock produce a defined directional move *less* often than ordinary days, while days following a compression produce one more often. The full measurement is in [`forecast/trigger_value.py`](forecast/trigger_value.py).
+## How It Works
 
 <p align="center">
-  <img src="docs/case_study/assets/architecture_diagram.svg" alt="System architecture: statistical baseline feeding and checked against the adaptive Haiku/Sonnet layer, both driving live testing and Telegram" width="900">
+  <img src="docs/case_study/assets/architecture_diagram.svg" alt="System architecture: a statistical baseline continuously re-validated and checked against an adaptive Claude Sonnet discovery layer, both feeding live testing and Telegram" width="900">
 </p>
+
+The static baseline (a fixed set of rule-based triggers, tested once under full walk-forward validation) found no persistent edge on its own — the finding this project's adaptive layer is built to test against, not one it re-litigates by re-running the same rules hoping for a different answer. Every non-obvious methodology or design decision — why each threshold is what it is, why a fixed horizon instead of a TP/SL ladder, why no funded position is ever opened — is logged with its own stated reasoning in [`docs/case_study/methodology-decisions.md`](docs/case_study/methodology-decisions.md). Step-by-step walk-through of what happens on one simulated day, which triggers consult the LLM and which never do: [`docs/case_study/how-the-replay-runs.md`](docs/case_study/how-the-replay-runs.md). File-by-file guide to the whole codebase: [`PROJECT_MAP.md`](PROJECT_MAP.md). Want to run this yourself, step by step, no prior knowledge of the code assumed? See [`HOW_TO_RUN.md`](HOW_TO_RUN.md).
 
 ---
 
-## Phase 3: Continuous Weekly Re-Validation & Candidate Battery Status
+## The Telegram Interface
 
-Every candidate signal carries a live status, re-derived — not assumed — on a fixed schedule:
+Two interaction modes, kept structurally apart: **free-text conversation never generates a financial number itself** — every figure a message cites comes from a real computation, never invented by the model. **Structured commands and buttons never touch the language model at all** — a fixed set of valid answers is always presented as buttons, never left to free-text guessing.
 
-| Status | Meaning |
-|---|---|
-| `accepted` | Clears the statistical significance test, the risk-path check, and the concentration check. Its own trigger opens a live test automatically the moment it next fires. |
-| `watch` | A real pattern signal that fails a robustness check (concentration, or an unfavorable risk path), or too little data yet for the significance test itself to say either way. |
-| `rejected` | No statistically significant pattern found, or too small a sample even to test. Logged so it isn't silently re-proposed without new evidence. |
-| `insufficient_data` | Fewer historical occurrences than the minimum needed to run the test at all. |
+The messages below are illustrative — real message formats, example figures, not a claim about the current battery's exact state, which `/summary` always reports fresh.
 
-**`confirmed` is a separate, later claim — and the rule for what counts toward it is one line: an occurrence counts when it happened AFTER the hypothesis was written down.** That puts two things on the same footing. A condition proposed by Sonnet but too rare to test yet is **parked**, not discarded, and the occurrences it accumulates while waiting are prospective by construction — nothing about the hypothesis could have been shaped by them, since it was already written. Live tests opened after registration are the same thing arriving one day at a time. Both count; neither is privileged.
+### A pair of ideas, proposed and approved
 
-This replaced a rule that topped a candidate up with its **full** historical count, under which a condition with 120 past occurrences reached its first checkpoint on day one with no prospective evidence at all. An occurrence from 2019 cannot confirm a hypothesis written in 2023, however uncontaminated the model that wrote it was — the distinction is not who saw what, it is which came first. Static candidates are unaffected: they were derived by mining this same history, so none of it postdates them.
-
-The checkpoint recurs, so the label is re-earned or lost each time, never a one-time badge. `prospective_split` reports the two halves of a candidate's evidence separately wherever a result is shown — full reasoning in [`docs/case_study/methodology-decisions.md`](docs/case_study/methodology-decisions.md). A separate, purely calendar-based safety net (2+ years tracked, never once accepted) catches a trigger too rare to ever reach even its first checkpoint on its own, offering the same keep-or-drop decision to a human either way.
-
-### Current Candidate Battery Status
-
-`candidates/run_battery.py`, 7 coins, daily bars, walk-forward-selected horizon, bootstrap significance test against each coin's own baseline — recomputed fresh, not a frozen snapshot:
-
-| Candidate | Direction | Status | N | p-value | Excess return | Risk Path (MFE/MAE) |
-|---|---|---|---|---|---|---|
-| c1 (funding crowding) | long | watch | 314 | 0.846 | −0.51% | 0.74 |
-| c1 (funding crowding) | short | watch | 163 | 0.982 | −1.67% | 0.67 |
-| c2 (post-macro reaction) | long | watch | 241 | 0.983 | −0.55% | 0.86 |
-| c2 (post-macro reaction) | short | watch | 202 | 0.869 | −1.97% | 0.57 |
-| c6 (efficiency trend) | long | rejected | 264 | 0.081 | +6.75% | 2.30 |
-| c6 (efficiency trend) | short | watch | 167 | 0.815 | −3.78% | 1.18 |
-
-**On what a condition must clear before it is even tested.** Two floors, guarding two different failures. A condition must have occurred at least **120 times** — below that a walk-forward test cannot run at all, measured directly: 90% of conditions with 35-60 occurrences returned `insufficient_data`, 10% at 100-200, none above 200. And it must have occurred on at least **40 separate occasions** — because a condition that stays true for several days in a row produces several test events whose outcome windows overlap almost entirely, and those are one piece of evidence counted many times, not many pieces. Measured, a seven-day lookback produces about eight times the raw firings for 1.7 times the independent evidence. A condition that is too rare is not discarded: its thresholds are loosened toward the nearest measurable version, moving each one toward that indicator's neutral point and never across it, and the substitution is stated in the approval message. The search criterion is the occurrence count and nothing else — no return, no p-value — which is what makes it a power calculation rather than a hunt for a result.
-
-**On the acceptance thresholds, and how they were set.** Every gate in this system was audited on 2026-08-30 against a *positive control*: synthetic signals planted by deliberate lookahead on days that genuinely are followed by strong returns, plus a pure-noise arm that must stay silent. Ground truth makes the only useful question answerable directly — when a signal really is there, which gate kills it? The answer was unambiguous: of 294 known-good conditions with a valid test and adequate data, **92% died at the significance threshold**; the concentration check killed four and the MFE/MAE gate killed none. That redirected the tuning entirely — the gates that *felt* strict were not the problem, statistical power was. Three changes followed, each with its measurement in [`methodology-decisions.md`](docs/case_study/methodology-decisions.md): the per-test significance level moved to 0.10 (detection of real effects 8.3% → 27.4%, at a measured false-positive cost of about 5%), the minimum-events gate from 50 to 20, and a genuine bug was found in horizon selection — it scored raw mean forward return, which grows with horizon from pure market drift, so it was systematically picking the longest horizon on offer rather than the one where the effect lived.
-
-**Nothing is currently `accepted` — and after the 2026-08-30 threshold work, that verdict now rests entirely on multiplicity control.** `c6_long` clears *every individual gate*: n=264, p=0.0805 (under the corrected significance level of 0.10), excess return +6.75%, MFE/MAE 2.30, coin concentration 30.1% and year concentration 49.3%, both comfortably inside the 60% bar. `classify_status` marks it `accepted`. Benjamini–Hochberg then removes it, because six candidates were tested in the same family and the smallest p-value would have to beat (1/6)×0.05 = 0.0083 to survive. It doesn't, so it is demoted to `rejected` and dropped from the live-test state.
-
-That is the multiplicity correction doing precisely the job it exists for, and it is worth stating plainly rather than reporting a bare "0 accepted": relaxing the thresholds *did* surface a candidate that passes every test taken on its own, and the family-level correction still says the evidence isn't there once you account for having looked six times. Two further caveats belong with it — **c6 is the Kaufman efficiency-ratio trigger, a pure chart pattern with no news term**, so it is off-thesis by this project's own necessary-condition rule whatever its p-value does; and its predecessor figure (p=0.0710) came from a horizon selector since found to be biased toward long horizons, so the two numbers are not directly comparable.
-
-The corrected selector also visibly changed what the battery holds for: `c1_long` and `c2_long` now resolve at **1 day** rather than drifting to the longest horizon on offer.
-
-These numbers replace an earlier version of this table that showed all six candidates as significant (p < 0.05) and two as `accepted`. A [statistical audit on 2026-08-29](docs/case_study/methodology-decisions.md) found the significance test was measuring the wrong thing in two compounding ways, both since fixed:
-
-- **It ignored direction.** The holding horizon was chosen by the strongest effect *in either direction*, and the p-value's tail was picked after seeing which way the effect went. Four of six candidates were "significant" with a **negative** excess return — a real pattern, pointing the opposite way from the direction the candidate actually trades. The gate never checked the sign.
-- **Its bootstrap was miscalibrated.** Overlapping forward-return windows were resampled independently, which understates the null's variance. Measured under a true null, where there is nothing to find, the old test rejected **43% of the time** against a nominal 5%. That alone explains six of six looking significant.
-
-The test is now directional and uses a block bootstrap calibrated to an 8.7% false-positive rate (stated, not rounded to 5%). Under it, four candidates are held at `watch` on concentration, and the strongest survivor — c6_long, +9.49% excess return — misses significance at p=0.075. That is the honest reading, and it is consistent with Phase 1's own finding rather than an exception to it.
-
-### The Re-Validation Loop That Keeps This Table Alive
-
-`scheduler/weekly_revalidation.py` first refreshes local OHLCV/funding data from Binance, then re-runs the full battery's significance test and concentration check against that current data, diffs every candidate's status against the previous run, and notifies a human only when something actually changed — run automatically once a week by `scheduler/live_daemon.py`, no external cron job needed. Separately, any time Haiku/Sonnet flag a genuinely novel condition, a human can approve testing it on the spot instead of waiting for the next re-validation run — if it clears the bar, it joins the same weekly regime from then on. One candidate's own bad data or bug can't take the rest of the battery down with it — each is isolated and retried the following run — and any failure that does reach the top level sends a Telegram alert rather than failing silently.
-
-**A second, fully independent opinion — never load-bearing.** A periodic, local-only Freqtrade hyperopt run re-derives TP/SL multipliers for each tracked candidate using a genuinely different search method (Bayesian optimization over a continuous space vs. this project's own grid search) and a different, industry-standard backtesting engine — shown alongside the reference numbers above, purely informational, never gating acceptance and never touching live execution. Deliberately kept off any live host (see [`PROJECT_MAP.md`](PROJECT_MAP.md)'s "Cost Optimization" section) — run it yourself with `python3 -m execution.hyperopt_runner`.
-
-### Historical Replay: Results So Far
-
-The table above is production's — real, but young, with no live tests resolved yet. The historical replay (`replay/`, see [`HOW_TO_RUN.md`](HOW_TO_RUN.md) to run it yourself) exists to answer this project's own question against years of real history rather than waiting on real time to pass.
-
-**The replay has been reset and is being re-run from 2017.** The previous run's results are withdrawn, for a reason worth stating plainly: it tested 92 Sonnet-proposed conditions, and **80 of them contained no news or macro event at all** — 31 were pure chart patterns, 49 carried only a market shock. The code never enforced the event term that this project's own question requires, so the large majority of what it measured did not answer that question. Fourteen labels made it worse by *naming* a macro event their clauses never contained.
-
-An event clause is now a necessary condition, enforced in `ConditionSpec` rather than requested in a prompt. The re-run is therefore the first one that tests the stated hypothesis at all.
-
-What the withdrawn run did establish, and which still holds, is a **null result under corrected statistics**: re-graded against the full 2017–2026 history with a directional test, a calibrated block bootstrap and Benjamini–Hochberg FDR, **0 of 98 candidates cleared every gate**, and 21 of 47 testable candidates had a positive excess return — 45%, a coin flip. That is the honest baseline the new run starts from.
-
-## Phase 4: Interactive Telegram Interface
-
-Two structurally separate interaction modes, kept apart deliberately: **free-text conversation never generates a financial number itself** — every figure a message cites is pulled from a real computation, never invented by the language model. **Structured commands and buttons never touch the language model at all** — a fixed, small set of valid answers is always presented as buttons, never left to free-text guessing.
-
-The conversations below are illustrative mockups of the real message format this project's bot produces — the specific figures shown are examples, not a claim about the current battery's exact state, which is reported plainly in Phase 3 and on demand via `/summary`.
-
-### 4.1 A new condition, proposed and approved
+Bitcoin's volatility has just come out of an unusually quiet stretch. Sonnet is shown what happened during that quiet spell — the real macro releases, dated and graded as a surprise, not just "something came out" — and proposes up to two different, specific ideas at once, sharing one approval:
 
 ```
-🤖 Agent: Sonnet Strategist Alert
+🤖 Agent: COMPRESSION RESOLVED: BTCUSDT
 
-          Headline: Exchange X halts withdrawals amid liquidity concerns
-          Asset: BTC | Magnitude: 4/5
+          Quiet since: 2024-02-01 (12 days, volatility 1.7 sd below
+          this coin's own normal)
+          Broke out: 2024-02-13 (-3.10% that day)
 
-          Assessment: This looks like a genuine liquidity shock, not
-          routine noise.
+          Assessment: Two ideas worth testing from this squeeze —
+          jobless claims worsened twice during it, and the market
+          was already stretched two different ways.
 
-          This needs your input. This looks like a condition we haven't
-          tested before.
+          This needs your input.
 
-          Proposed test: "rsi_shock_combo"
-          (14-day RSI (momentum, 0-100 scale) below 30.0 AND shock
-          z-score (how extreme today's price move is vs. this coin's
-          own history) above 3.0 → long)
+          1. "weak_claims_then_oversold"
 
-          Test It runs a real walk-forward backtest of this condition
-          before it's tracked as a live test (no real money is ever
-          placed on it). Don't Test It dismisses this proposal.
+          (jobless-claims surprise worse than expected, within the
+          last 7 days, AND 14-day RSI below 30) → long
+
+          2. "weak_claims_then_volume_dryup"
+
+          (jobless-claims surprise worse than expected, within the
+          last 7 days, AND 30-day volume z-score below -1.0) → long
+
+          Test It runs a real walk-forward backtest of each condition
+          before they are tracked as live tests (no real money is
+          ever placed). Don't Test It dismisses them.
 
           [ Test It ]  [ Don't Test It ]
 
 You:     [taps "Test It"]
 
-🤖 Agent: Historical backtest -- rsi_shock_combo
+🤖 Agent: Historical backtest -- weak_claims_then_oversold
 
-          (14-day RSI (momentum, 0-100 scale) below 30.0 AND shock
-          z-score above 3.0 → long)
+          (jobless-claims surprise worse than expected, within the
+          last 7 days, AND 14-day RSI below 30 → long)
 
           Pattern signal: excess return +2.10% vs. this coin's own
-          baseline over the same period, p=0.031 (significant at the
-          5% level, N=62).
-          Risk profile: MFE/MAE ratio=2.05 (favorable -- reward tends
-          to exceed the risk taken to get there).
+          baseline over the same period, p=0.031, N=134 occurrences
+          across 41 separate episodes.
+          Risk profile: MFE/MAE ratio=2.05 (favorable -- the typical
+          run in your favor exceeds the typical run against you).
 
           Verdict: ACCEPTED
 
           This is a historical screening result, not a live track
-          record -- the real test is ongoing: added to the battery now,
-          re-tested every Sunday alongside the static candidates.
+          record -- the real test is ongoing: added to the battery
+          now, re-tested every week.
 ```
 
-### 4.2 A live test, opened and resolved
+Two ideas rather than one deeper combination is a deliberate design choice, not generosity: each added condition divides how often it has actually happened by roughly eight, so a single three-part idea is usually untestable where two separate two-part ideas both are — and if only one survives, that's a finding a single combined idea would have hidden. If the two ideas turn out to fire on nearly the same days, the second is dropped automatically before it ever reaches a human, since it would just be one idea counted twice.
+
+### A live test, opened and resolved
+
+Once tracked, a candidate's own trigger opens and resolves a live occurrence with no human or model involved — mechanical, hourly detection, no TP/SL:
 
 ```
-🤖 Agent: 2026-08-27
+🤖 Agent: 2024-03-04
 
           Live test opened -- LONG BTCUSDT
 
-          (candidate c1_long: funding rate persistently and heavily
-          negative, a classic crowded-short setup)
+          (candidate weak_claims_then_oversold: jobless-claims surprise
+          worse than expected AND RSI below 30)
 
           Held for 7d, no TP/SL.
 ```
 
 ```
-🤖 Agent: 2026-09-03
+🤖 Agent: 2024-03-11
 
           Live test resolved -- LONG BTCUSDT
 
-          (candidate c1_long: funding rate persistently and heavily
-          negative, a classic crowded-short setup, held 7d, opened
-          2026-08-27)
+          (candidate weak_claims_then_oversold, held 7d, opened
+          2024-03-04)
 
           Forward return: +3.10%
           Best point reached: +4.20%
           Worst point reached: -1.80%
+
+          Confirmation record -- weak_claims_then_oversold
+          Occurrence 23 of 307 (needed for a 5% effect at 80% power
+          over 7d)
+          Trend materialised: 61% of 23 resolved
+          Mean best point +3.40%, mean worst -2.10% -- MFE/MAE 1.62
+          TP/SL: pending hyperopt cross-check.
 ```
 
-**A VALIDATED candidate's own aggregate is, by design, resistant to a short losing streak — a separate, fast alert covers the gap that creates.** Measured directly: a well-established candidate can absorb 20-30 consecutive worst-case losses before its own significance test would ever flip status — correct behavior against noise, but too slow to flag a genuine regime change (a market-structure shift, a new rule, an arbitraged-away inefficiency) on its own. So immediately after any live test resolves, if a VALIDATED candidate's last 2+ resolved live tests came back negative in a row, it fires a purely informational alert — the last several occurrences with their return/MFE/MAE, never a status change — long before the aggregate statistics would ever say anything.
+That second number in "Occurrence 23 of 307" is deliberate, not an oversight: at this project's horizons, proving an effect with real statistical confidence needs occurrences in the hundreds, and no realistic tracking window reaches that. So the system never claims proof — only that a pattern has kept happening and still holds up on the larger sample. That's why the word here is **confirmed**, not "validated": persistence, honestly labeled as persistence.
 
-### 4.3 Natural-language conversation
+**A confirmed candidate's own aggregate is, by design, resistant to a short losing streak — a separate, fast alert covers the gap that creates.** A well-established candidate can absorb 20-30 consecutive worst-case losses before its own significance test would ever flip status — correct behavior against noise, but too slow to flag a genuine regime change on its own. So immediately after any live test resolves, if a confirmed candidate's last 2+ resolved live tests came back negative in a row, it fires a purely informational alert — never a status change, long before the aggregate statistics would say anything.
+
+### Natural-language conversation
 
 ```
 You:     How is the market going today?
@@ -333,16 +180,11 @@ You:     How is the market going today?
           rejected on significance. No live tests open.
 ```
 
-### 4.4 Structured commands — no LLM involved
+### Structured commands — no LLM involved
 
 `/summary`, `/details`, and `/help` never touch the language model — a command recomputes the real battery fresh (or, for `/help`, prints a static reference) and renders it directly.
 
 ```
-You:     /help
-
-🤖 Agent: [pinned] Standard commands, and the local-only hyperopt
-          cross-check CLI reference (see Phase 3).
-
 You:     /summary
 
 🤖 Agent: Still under test
@@ -351,40 +193,35 @@ You:     /summary
           a real pattern signal, but fails a robustness check
           (concentration or an unfavorable risk profile), or too
           little data for the risk check yet
-            c1_long -- N=325, p=0.010, MFE/MAE=0.74
-            c1_short -- N=166, p=0.005, MFE/MAE=0.38
+            weak_claims_then_oversold -- N=134, p=0.031, MFE/MAE=1.62
+            c1_long (control) -- N=325, p=0.010, MFE/MAE=0.74
             ...
 
-          [second message] Already discarded
+You:     /details weak_claims_then_oversold
 
-          Nothing here right now.
-
-You:     /details c1_long
-
-🤖 Agent: c1_long
-          What triggers it: 30-day funding-rate z-score below -2.0 --
-          extreme relative to that coin's own trailing 30-day funding
-          history, not a fixed absolute rate.
+🤖 Agent: weak_claims_then_oversold
+          What triggers it: jobless-claims surprise worse than
+          expected within the last 7 days, AND 14-day RSI below 30.
           Status: watch -- a real pattern signal, but fails a
           robustness check (direction: long)
-          Held for: 21d (empirically-derived, re-checked weekly)
+          Held for: 7d (empirically-derived, re-checked weekly)
 
-          • Historical occurrences (N): 325
-          • Statistical significance: significant (p=0.010), excess
-            return vs. this coin's own baseline: -1.67%
-          • Risk path (mean favorable / mean adverse excursion): 0.74
+          • Historical occurrences (N): 134, across 41 independent
+            episodes
+          • Statistical significance: significant (p=0.031), excess
+            return vs. this coin's own baseline: +2.10%
+          • Risk path (mean favorable / mean adverse excursion): 1.62
             (favorable if > 1.0)
-          • Coin concentration: 64% of total positive return comes
-            from a single coin (LTCUSDT) -- flagged above 60%
-          • Year concentration: 100% of total positive return comes
-            from a single year (2026) -- flagged above 60%
+          • Coin concentration: 38% from a single coin -- inside the
+            60% limit
+          • Year concentration: 64% from a single year -- flagged
+            above 60%
 
           Why not accepted: a statistically significant pattern, but
-          100% of it comes from a single year -- too concentrated to
-          trust as general.
+          too much of it comes from one year to trust as general.
 ```
 
-`/summary` is deliberately terse — a status line like "Watch, N=325, p=0.010" answers "what's the verdict" but not "what does 'elevated concentration' actually mean in numbers." `/details <name>` (and `/replay_details <name>` for the historical replay) exists for exactly that: the trigger's own exact numeric definition, plus every number behind its current classification, one candidate at a time — kept as a separate command rather than folded into every `/summary` line or every Sonnet proposal, which would make either too long to scan at a glance.
+`/summary` is deliberately terse — a status line answers "what's the verdict" but not "what does 'elevated concentration' actually mean in numbers." `/details <name>` exists for exactly that: the trigger's own exact numeric definition, plus every number behind its current classification, one candidate at a time.
 
 ---
 
@@ -392,10 +229,10 @@ You:     /details c1_long
 
 ```
 crypto-sentiment-trading-agent/
-├── candidates/                  # Phase 1's methodology + battery: methodology.py, definitions.py, run_battery.py
+├── candidates/                  # Statistical methodology + battery: methodology.py, definitions.py, run_battery.py
 ├── execution/                   # Live test engine (live_testing.py), local-only hyperopt cross-check (hyperopt_runner.py)
 ├── llm_pipeline/                # Haiku Scout, Sonnet Strategist, live context builder, novel-condition tester, compression_detector.py
-├── telegram/                    # Both interaction modes from Phase 4
+├── telegram/                    # Both interaction modes -- free text and structured commands
 ├── scheduler/                   # live_daemon.py (the one command that runs everything), weekly_revalidation.py
 ├── data_ingestion/               # market_data/binance_fetcher.py (keeps data/ current, from-scratch backfill capable)
 ├── data/                        # Historical + periodically-refreshed market/macro data
@@ -408,9 +245,9 @@ crypto-sentiment-trading-agent/
 
 **Running this live is one command:** `python3 -m scheduler.live_daemon`. This project is built to be operated as an agent, not maintained as infrastructure — one process owns the Telegram bot, the hourly scans, and the weekly re-validation, so there's no separate cron job to configure or forget. It picks up right where it left off after a restart.
 
-**Safety & guardrails:** this project never opens a funded position, at any point, in any phase — the single guarantee everything else is built around, not a configuration flag that could be toggled off. Every "trade" described above is an observational live test: a real, dated occurrence tracked and measured, never capital at risk. The human gate sits on exactly one decision — whether a genuinely new, LLM-proposed condition is worth testing at all (§2, §4.1); everything downstream is deterministic and code-driven, with no further human input needed.
+**Safety & guardrails:** this project never opens a funded position, at any point, in any phase — the single guarantee everything else is built around, not a configuration flag that could be toggled off. Every "trade" described above is an observational live test: a real, dated occurrence tracked and measured, never capital at risk. The human gate sits on exactly one decision — whether a genuinely new, LLM-proposed condition is worth testing at all; everything downstream is deterministic and code-driven, with no further human input needed.
 
-**Observation & reporting:** the candidate battery re-validates weekly against live data; a live test's outcome, once resolved, is never retroactively re-tuned. `/summary` and the full decision log are the report at any point — including if the honest result is "no better than the static baseline Phase 1 already found."
+**Observation & reporting:** the candidate battery re-validates weekly against live data; a live test's outcome, once resolved, is never retroactively re-tuned. `/summary` and the full decision log are the report at any point — including if the honest result is "no better than the static baseline already found."
 
 File-by-file guide to what every module does, including cost-optimization details: [`PROJECT_MAP.md`](PROJECT_MAP.md). Every non-obvious methodology or design decision, with its own reasoning: [`docs/case_study/methodology-decisions.md`](docs/case_study/methodology-decisions.md).
 
