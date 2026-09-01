@@ -462,3 +462,40 @@ should be presented that way.
   fold). Currently handled correctly by selecting on train and evaluating
   out-of-sample, which is the right discipline -- noted here only so a
   future reader doesn't mistake it for an oversight.
+
+---
+
+## 4. Final repository cleanup, before the project is presented
+
+Deferred to the end deliberately: pruning while the system is still changing
+risks deleting something that turns out to be load-bearing, and several of the
+items below only become clearly dead once the final replay has run.
+
+**Replay state files are tracked and public, and should probably not be.**
+`replay/state/` and the `replay/state_archive_*/` directories carry trade logs,
+status histories and parked-proposal queues from runs that are no longer
+current. They are not sensitive, but they are test artefacts in a repository
+that is a portfolio piece, and they are not small -- one archived
+`status_history.json` alone is 482 KB. Decide per directory:
+
+  * `replay/state/` -- live working state, almost certainly `.gitignore`;
+  * `replay/state_archive_preaudit/`, `state_archive_2026-09-01/`,
+    `state_archive_dryrun/` -- superseded runs. Keep only if a specific claim in
+    the case study points at one of them; otherwise local-only.
+
+**Other candidates for the same pass**, all to be confirmed rather than assumed
+dead at the time:
+
+  * `forecast/model_comparison_maxtokens2000.json` -- kept as the record of the
+    35% truncation rate. Worth keeping only if the write-up cites it.
+  * `execution/freqtrade_userdir/` build artefacts and any `.sqlite`/`-shm`/`-wal`
+    files from Freqtrade dry runs.
+  * `llm_usage.json` -- real token counts, genuinely useful evidence for the cost
+    section, but it accumulates across every experiment including abandoned ones.
+  * Superseded `forecast/` scripts whose conclusions have been folded into
+    `methodology-decisions.md`, if any turn out to be unreferenced.
+
+**One rule for the pass:** delete nothing that a documented claim depends on.
+Several numbers quoted in the README and PROJECT_MAP are traceable to a specific
+committed JSON, and a tidy repository that cannot show its working is worse than
+an untidy one that can.
