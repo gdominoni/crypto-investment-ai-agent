@@ -1,0 +1,98 @@
+{
+  "strong_labor_data_capitulation_volume_bounce": {
+    "label": "strong_labor_data_capitulation_volume_bounce",
+    "clauses": [
+      {
+        "indicator": "jobless_claims_surprise",
+        "op": "<=",
+        "threshold": -0.225,
+        "within_days": 14
+      },
+      {
+        "indicator": "volume_zscore_30d",
+        "op": ">=",
+        "threshold": 1.5
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "strong_labor_data_volume_climax_reversal_long": {
+    "label": "strong_labor_data_volume_climax_reversal_long",
+    "clauses": [
+      {
+        "indicator": "jobless_claims_surprise",
+        "op": "<=",
+        "threshold": -0.25,
+        "within_days": 7
+      },
+      {
+        "indicator": "volume_zscore_30d",
+        "op": ">=",
+        "threshold": 1.0
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "claims_miss_volume_breakdown_continuation": {
+    "label": "claims_miss_volume_breakdown_continuation",
+    "clauses": [
+      {
+        "indicator": "jobless_claims_surprise",
+        "op": ">=",
+        "threshold": 0.375,
+        "within_days": 7
+      },
+      {
+        "indicator": "volume_zscore_30d",
+        "op": ">",
+        "threshold": 0.75
+      }
+    ],
+    "direction": "short",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  },
+  "claims_beat_volume_confirmed_continuation": {
+    "label": "claims_beat_volume_confirmed_continuation",
+    "clauses": [
+      {
+        "indicator": "jobless_claims_surprise",
+        "op": "<=",
+        "threshold": -0.5,
+        "within_days": 14
+      },
+      {
+        "indicator": "volume_zscore_30d",
+        "op": ">",
+        "threshold": 1.0
+      }
+    ],
+    "direction": "long",
+    "horizons": [
+      1,
+      3,
+      7,
+      14,
+      21
+    ]
+  }
+}
