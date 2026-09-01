@@ -1882,3 +1882,71 @@ never calls a model. Their entire ongoing cost is local compute.
 nobody looks at is decoration, and the replay's results section must state both
 arms side by side rather than listing the static candidates as if they were
 ordinary candidates that happened not to work.
+
+---
+
+## A proposal too rare to test today is parked, not discarded
+
+**Raised by the project's director**: with a floor of 120 occurrences, a replay
+walking from 2018 cannot accept anything for years — so why run those years at
+all?
+
+**Measured, and the objection holds.** Share of the current grammar that is
+testable as of each 1 January:
+
+    2019   8%      2021  35%      2023  60%      2025  78%
+    2020  25%      2022  50%      2024  70%      2026  78%
+
+In 2019, 92% of proposals would be refused. **The defect was not the refusal —
+it was that a refused proposal was stored nowhere and lost permanently.** A
+condition written in 2019 that becomes testable in 2022 was discarded in 2019
+and never seen again. Four years of discovery, thrown away.
+
+**Parked instead.** A proposal that is well-formed and on-thesis but has not
+occurred often enough YET goes into `parked_proposals.json`, and the weekly
+battery refresh — which already runs and costs no API call — promotes the oldest
+one that has become testable. Oldest first, never best first: choosing which
+parked hypothesis to promote by any measured quality would be selecting on the
+outcome at proposal time, which is the one thing the proposal path must not do.
+
+Promotion goes through the same human gate a fresh proposal would, because it
+never reached one: it was refused before it could be shown.
+
+**The wait makes the eventual test STRONGER, and this is the part worth keeping.**
+A hypothesis written in 2019 and tested in 2022 is tested partly on data that did
+not exist when it was written. Nothing about the condition could have been shaped
+by that data.
+
+---
+
+## `prospective_split` — the only genuinely out-of-sample number here
+
+**The distinction this project's own vocabulary was blurring**, and it took the
+director pointing it out to surface: `pattern_significance` holds out a test FOLD
+inside the walk-forward and the code calls those rows `oos_returns`. That is a
+real discipline — it stops thresholds being fitted to the rows they are graded on
+— but every one of those rows already existed when the hypothesis was written.
+**It is out-of-sample with respect to the PARAMETERS, not with respect to the
+IDEA.**
+
+The project's stated epistemology has always put the real out-of-sample
+elsewhere: `accepted` means the historical statistics passed, `validated` is
+reserved for a candidate that has "actually lived through its own tracking
+window". Live is the genuine out-of-sample. Using the same phrase for both is how
+a reader — and the author — ends up believing the backtest already answered a
+question only the future can.
+
+`prospective_split(spec, coins, proposed_at)` reports the two halves separately:
+how many occurrences predate the hypothesis, how many postdate it, and what the
+post-formulation ones did against the same coins' unconditional return over the
+same span. The baseline is that span, not zero, because comparing to zero would
+credit a bull market to the condition.
+
+**Reported, never gated, and deliberately not a p-value.** At the counts this
+usually yields, a significance test would be underpowered, and a test that cannot
+detect anything must not be presented as a negative result.
+`required_n_for_power` says what would be needed; this says what there is.
+
+**Its practical effect.** A parked proposal arrives with a prospective component
+already built in, so the honest version of "has this held up since we thought of
+it" is available years before the live-occurrence milestone can answer it.

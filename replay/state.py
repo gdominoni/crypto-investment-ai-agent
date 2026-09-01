@@ -139,3 +139,39 @@ def due_reveals(as_of) -> list[str]:
     elif PENDING_REVEALS_PATH.exists():
         PENDING_REVEALS_PATH.unlink()
     return [q["message"] for q in due]
+
+
+def load_parked_proposals() -> list[dict]:
+    """Proposals that were on-thesis and well-formed but did not yet have enough
+    history behind them to be tested, waiting for the data to catch up.
+
+    They exist because discarding them was throwing away most of the early
+    replay. Measured against the current grammar, only 8% of conditions have
+    enough occurrences to be testable as of January 2019, rising through 50% by
+    2022 to 78% by 2025 -- so a replay walking from 2018 would reject the large
+    majority of everything it discovered in its first four years, permanently,
+    since a rejected proposal was never stored anywhere.
+
+    Parking them costs no API calls: they are re-checked by the weekly battery
+    refresh that already runs.
+
+    The delay also makes the eventual test STRONGER, not weaker. A condition
+    formulated in 2019 and tested in 2022 is tested partly on data that did not
+    exist when the hypothesis was written down -- which is the cleanest form of
+    out-of-sample evidence this system can produce, and the reason
+    `prospective_split` reports the two halves separately."""
+    return _read(STATE_DIR / "parked_proposals.json", [])
+
+
+def park_proposal(entry: dict) -> None:
+    """Idempotent on label: a condition re-proposed later must not queue twice."""
+    parked = load_parked_proposals()
+    if any(p["spec"].get("label") == entry["spec"].get("label") for p in parked):
+        return
+    parked.append(entry)
+    _write(STATE_DIR / "parked_proposals.json", parked)
+
+
+def unpark_proposal(label: str) -> None:
+    parked = [p for p in load_parked_proposals() if p["spec"].get("label") != label]
+    _write(STATE_DIR / "parked_proposals.json", parked)

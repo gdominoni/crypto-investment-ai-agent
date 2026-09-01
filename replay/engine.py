@@ -35,7 +35,8 @@ from candidates.data_loading import load_daily, load_funding, load_hourly
 from candidates.definitions import CANDIDATE_DIRECTIONS, TRIGGER_DESCRIPTIONS, compute_triggers
 from candidates.methodology import (COMPRESSION_CONFIRM_DAYS, COMPRESSION_ZSCORE_THRESHOLD,
                                      compression_exit, format_prune_digest, path_outcome,
-                                     prune_recommendation, vol_compression_series)
+                                     prospective_split, prune_recommendation,
+                                     vol_compression_series)
 from candidates.run_battery import COINS
 from execution import hyperopt_runner
 from llm_pipeline.haiku_sonnet_pipeline import escape_html, format_spec_clauses
@@ -230,9 +231,20 @@ def _prepare_proposal(raw: dict, as_of: pd.Timestamp) -> dict | None:
         # until it becomes significant would be p-hacking.
         relaxed = relax_to_testable(spec, COINS, as_of=as_of)
         if relaxed is None:
-            print(f"[{as_of.date()}] proposal '{raw.get('label')}' rejected, not tested: "
-                  f"{why_not}, and no loosening within the indicators' meaning reaches "
-                  f"the floor.")
+            # PARKED, not discarded. The condition is well-formed and on-thesis;
+            # it simply has not happened enough times YET. Only 8% of this
+            # grammar is testable as of January 2019, so discarding these threw
+            # away most of what the first four years of a replay discovers, and
+            # threw it away permanently -- nothing stored it.
+            #
+            # `_check_parked_proposals` re-checks them at the weekly battery
+            # refresh, which costs no API call. And the wait makes the eventual
+            # test stronger: a hypothesis written in 2019 and tested in 2022 is
+            # tested partly on data that did not exist when it was written.
+            state.park_proposal({"spec": spec_to_dict(spec), "proposed_at": str(as_of.date()),
+                                  "reason": why_not})
+            print(f"[{as_of.date()}] proposal '{raw.get('label')}' PARKED, not discarded: "
+                  f"{why_not}. Re-checked weekly as history accumulates.")
             return None
         spec, relax_note = relaxed
         # Substituted, not silently: the condition about to be tested is NOT the
@@ -243,6 +255,41 @@ def _prepare_proposal(raw: dict, as_of: pd.Timestamp) -> dict | None:
         raw["relaxed_from"] = relax_note
         print(f"[{as_of.date()}] proposal '{raw.get('label')}': {relax_note}")
     return {"spec": spec, "dict": raw, "relaxed_from": relax_note}
+
+
+
+def _check_parked_proposals(as_of: pd.Timestamp, live_coin: str | None = None) -> dict | None:
+    """Promote the OLDEST parked proposal that has become testable, if any.
+
+    One per refresh, deliberately. The replay holds a single pending slot and
+    halts on it, so promoting several at once would need a queue for no benefit
+    -- with a weekly refresh there are roughly 470 opportunities across a nine
+    year run, far more than the number of proposals that will ever be parked.
+
+    Oldest first, not best first: choosing which parked hypothesis to promote by
+    any measured quality would be selecting on the outcome, which is the one
+    thing the proposal path must never do."""
+    parked = state.load_parked_proposals()
+    if not parked:
+        return None
+    for entry in sorted(parked, key=lambda e: e.get("proposed_at", "")):
+        try:
+            spec = spec_from_dict(entry["spec"])
+        except ValueError:
+            # Written under an older grammar and no longer expressible -- drop it
+            # rather than let it block the queue forever.
+            state.unpark_proposal(entry["spec"].get("label", ""))
+            continue
+        if is_testable(spec, COINS, as_of=as_of) is not None:
+            continue
+        state.unpark_proposal(spec.label)
+        entry["spec"]["parked_since"] = entry.get("proposed_at")
+        print(f"[{as_of.date()}] parked proposal '{spec.label}' is now testable "
+              f"(proposed {entry.get('proposed_at')}) -- promoting.")
+        return {"specs": [entry["spec"]], "coins": COINS, "live_coin": live_coin,
+                "as_of": str(as_of.date()), "proposed_at": entry.get("proposed_at")}
+    return None
+
 
 
 def _handle_assessment(as_of: pd.Timestamp, event_desc: str, assessment: dict, live_coin: str | None = None) -> str | None:
@@ -705,6 +752,24 @@ def advance(chunk_days: int = CHUNK_DAYS) -> dict:
                           f"Now held for <b>{info['horizon_changed_to']}d</b> going forward (empirically "
                           f"re-derived from accumulated history, replacing the previous value).")
             last_battery_refresh = d
+            # A parked proposal whose history has caught up goes through the same
+            # human gate a fresh one would -- it was never shown to anyone, since
+            # it was refused before it could be.
+            if state.load_pending_test() is None:
+                promoted = _check_parked_proposals(d)
+                if promoted is not None:
+                    state.save_pending_test(promoted)
+                    _send(judgment.format_telegram_message(
+                        d, f"A hypothesis proposed on {promoted['proposed_at']} now has enough "
+                           f"history behind it to be tested.",
+                        {"assessment": "Parked when first proposed because it had not occurred often "
+                                        "enough to measure. It has now.",
+                         "recommended_action": "propose_novel_test",
+                         "novel_condition_specs": promoted["specs"]}),
+                        reply_markup=REPLAY_PROPOSAL_KEYBOARD)
+                    state.save_checkpoint(str(d.date()), status="waiting_for_human")
+                    return {"stopped": "waiting_for_human", "current_date": str(d.date()),
+                            "events": events_this_chunk}
 
         # THE ONLY TRIGGER. Macro releases and volatility shocks were both
         # removed, on the same principle and each with its own measurement:
@@ -956,6 +1021,27 @@ def _resolve_one_proposal(spec: "ConditionSpec", pending: dict, as_of: pd.Timest
                      f"(informational only, doesn't affect the verdict above).")
         lines.append("Testing continues going forward regardless of this verdict -- re-checked automatically "
                       "every 7 days alongside every other tracked trigger.")
+
+    # The genuinely prospective half, when the hypothesis predates part of its own
+    # evidence. A parked proposal has this by construction; a freshly-proposed one
+    # has none, and says so rather than showing an empty section.
+    proposed_at = (pending.get("proposed_at")
+                   or next((d.get("parked_since") for d in (pending.get("specs") or [])
+                            if d.get("label") == spec.label and d.get("parked_since")), None))
+    if proposed_at and status != "insufficient_data":
+        split = prospective_split(spec, pending["coins"], proposed_at, as_of=as_of,
+                                   horizon=(pattern.get("horizon") or PLACEHOLDER_HORIZON_DAYS))
+        if split["n_after"]:
+            lines += ["", f"<b>Out-of-sample since the hypothesis was written ({split['proposed_at']}):</b>",
+                      f"{split['n_after']} of {split['n_before'] + split['n_after']} occurrences happened "
+                      f"AFTER this condition was written down, so nothing about it could have been "
+                      f"shaped by them.",
+                      f"Mean forward return on those: {split['mean_after']:+.2%} against "
+                      f"{split['baseline_after']:+.2%} for simply holding over the same span "
+                      f"(excess {split['excess_after']:+.2%}).",
+                      f"<i>Reported, not gated: at this count a significance test would usually be "
+                      f"underpowered, and a test that cannot detect anything must not be read as a "
+                      f"negative result.</i>"]
 
     if pattern.get("status") == "ok":
         horizons = state.load_horizons()

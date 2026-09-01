@@ -1207,6 +1207,72 @@ def _format_dominant_year(value) -> str:
     return str(value)
 
 
+
+def prospective_split(spec, coins: list[str], proposed_at, as_of=None,
+                       horizon: int = 7) -> dict:
+    """Split a condition's occurrences into those that predate the hypothesis and
+    those that came after it, and report the second half on its own.
+
+    THIS IS THE ONLY GENUINELY OUT-OF-SAMPLE NUMBER THIS PROJECT PRODUCES, and
+    the distinction it rests on is worth stating exactly, because the codebase
+    uses "out-of-sample" for a different thing elsewhere.
+
+    `pattern_significance` holds out a test FOLD inside the walk-forward. That is
+    a discipline against fitting thresholds to the same rows they are graded on,
+    and it is worth having -- but every one of those rows already existed when
+    the hypothesis was written. It is out-of-sample with respect to the
+    PARAMETERS, not with respect to the IDEA.
+
+    Occurrences after `proposed_at` are out-of-sample in the sense that matters:
+    the hypothesis was fixed in writing before that data existed, so nothing
+    about it could have been shaped by them. That is the same standing the live
+    tests have, obtained without waiting -- and it is why a proposal parked for
+    three years until its history caught up is tested more rigorously than one
+    tested immediately, not less.
+
+    Returns counts and the post-formulation mean forward return against the same
+    coins' unconditional mean over the same span. Deliberately NOT a gate and
+    NOT a p-value: with the counts this yields it would usually be underpowered,
+    and reporting a significance test that cannot detect anything invites it to
+    be read as a negative result. `required_n_for_power` says what would be
+    needed; this says what there is."""
+    import numpy as np
+
+    from candidates.data_loading import load_daily
+    from llm_pipeline.novel_condition_tester import occurrence_set
+
+    proposed_at = pd.Timestamp(proposed_at)
+    fired = occurrence_set(spec, coins, as_of)
+    before = [(c, t) for c, t in fired if t < proposed_at]
+    after = [(c, t) for c, t in fired if t >= proposed_at]
+    out = {"n_before": len(before), "n_after": len(after),
+           "proposed_at": str(proposed_at.date()),
+           "mean_after": float("nan"), "baseline_after": float("nan")}
+    if not after:
+        return out
+
+    sign = 1.0 if spec.direction == "long" else -1.0
+    rets, base = [], []
+    for coin in {c for c, _ in after}:
+        ohlc = load_daily(coin)
+        if as_of is not None:
+            ohlc = ohlc.loc[:as_of]
+        fwd = (ohlc["close"].shift(-horizon) / ohlc["close"] - 1.0) * sign
+        days = [t for c, t in after if c == coin]
+        rets += [float(fwd.get(t)) for t in days if fwd.get(t) == fwd.get(t)]
+        # The same coins' unconditional forward return over the same span, so the
+        # comparison is against what simply holding through that period did --
+        # not against zero, which would credit a bull market to the condition.
+        span = fwd.loc[proposed_at:]
+        base += [float(v) for v in span.dropna()]
+    if rets:
+        out["mean_after"] = float(np.mean(rets))
+    if base:
+        out["baseline_after"] = float(np.mean(base))
+    out["excess_after"] = out["mean_after"] - out["baseline_after"]
+    return out
+
+
 def explain_non_acceptance(row: dict, min_report_events: int = 50) -> str:
     """Turns a run_battery.py/run_replay_battery result row into a
     SPECIFIC, honest reason the candidate hasn't reached 'accepted' --
