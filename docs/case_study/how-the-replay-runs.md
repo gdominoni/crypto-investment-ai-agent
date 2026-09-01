@@ -129,24 +129,39 @@ nothing.
 A proposal is not sent to the human as-is. Three deterministic checks run first,
 in order, and each can end it:
 
-**1. Is it on-thesis?** `spec_from_proposal` rejects any spec with no news or
-macro event clause, and separately rejects any spec using `is_macro_day` at all
-(`NON_PROPOSABLE_INDICATORS`) — a scheduled release date says nothing about what
-the release contained. This project tests market conditions **combined with a
-real-world event**; the event term is a necessary condition, not an option.
-`shock_zscore` is a market event, not news, and does not satisfy this alone. A
-proposal that is purely technical is refused here and never reaches the phone.
+A proposal now arrives as a SET of one or two conditions, and each is prepared
+separately before the set is offered for one human decision.
 
-**2. Is it measurable?** `count_occurrences(spec, COINS, as_of=d)` counts how often
-the condition has occurred **up to the simulated date**. Roughly 0.25s of local
-computation, no API call. Below `MIN_HISTORICAL_OCCURRENCES = 35`, a walk-forward
-test would burn a full run and return `insufficient_data` — where 193 of 234
-candidates ended in a real run.
+**1. Is it on-thesis, and buildable?** `spec_from_proposal` rejects any spec with
+no news or macro event clause — this project tests market conditions **combined
+with a real-world event**, and the event term is a necessary condition, not an
+option. It also rejects a spec with more than **two clauses**, and any spec using
+an indicator in `NON_PROPOSABLE_INDICATORS`: `shock_zscore` (a price outcome, not
+a market state), `vol_compression_zscore` (the trigger itself, fixed at every
+proposal by construction), `is_macro_day` (records that a release was scheduled,
+never what it said) and raw `daily_range_pct` (non-stationary — a fixed threshold
+on it selects a year rather than a market state).
+
+**2. Is it measurable?** `is_testable(spec, COINS, as_of=d)` applies two floors,
+both counted **up to the simulated date**, in about a second of local computation
+and no API call:
+
+- **120 raw occurrences**, because below that a walk-forward test cannot run —
+  measured, 90% of conditions with 35-60 occurrences returned `insufficient_data`;
+- **40 separate occasions**, because `build_events` makes one row per triggered
+  bar, so a condition true for several consecutive days produces several events
+  whose outcome windows overlap almost entirely. Those are one piece of evidence
+  counted many times. A seven-day lookback yields roughly eight times the firings
+  for 1.7 times the independent evidence.
+
+The two bind in different regimes, which is why neither replaces the other.
 
 **3. If too rare, can it be rescued?** `relax_to_testable` searches for the
-smallest loosening of the thresholds that reaches the floor: 10%, then 25%, then
-50%. On the 118 candidates the replay had accumulated, 17 sat below the floor and
-**all 17 were recoverable**, six of them at 10%.
+smallest loosening that reaches BOTH floors: 10%, then 25%, then 50%. Each
+threshold moves toward its indicator's neutral point and never across it —
+`RELAXATION_NEUTRAL` puts RSI's at 50 and consensus at 0, so "overbought, RSI ≥
+70" relaxes to 60 rather than to the 52.5 a naive percentage-of-magnitude step
+produces, and "cool CPI, surprise ≤ 0" cannot flip to matching hot prints.
 
 The search criterion is the occurrence count and nothing else — no return, no
 p-value, no outcome is visible to it. That is what separates a **power
@@ -158,6 +173,13 @@ percentage-of-magnitude step produces. When a relaxation is applied, the Telegra
 message says so before the human presses anything — the condition being tested is
 not the one proposed, and an approval that hid that would be an approval of
 nothing in particular.
+
+**4. Are the two actually two?** `filter_redundant_proposals` drops a second
+proposal that fires on the same days as the first — judged on behaviour
+(`behavioural_agreement`, the Jaccard overlap of their firing days), never on
+shared clauses, since the intended pattern is precisely two proposals sharing
+their news term and differing in the market term. Measured, that pattern's
+overlap is 0.000 while a near-duplicate scores 0.84.
 
 **Then, and only then, the replay stops.** The proposal is sent with *Test It* /
 *Don't Test It* buttons and the checkpoint is saved as `waiting_for_human`. This
