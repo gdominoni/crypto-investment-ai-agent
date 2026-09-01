@@ -112,7 +112,31 @@ def record_horizon(candidate: str, horizon: int) -> bool:
     return changed
 
 
-MILESTONE_N = 50  # same threshold classify_status itself requires -- see docs/case_study/methodology-decisions.md
+# The live-occurrence checkpoint. TIED TO `MethodologyConfig.min_report_events`,
+# which is the whole reason it has the value it does: the milestone exists to fire
+# when a candidate has as much LIVE evidence as the statistics require to report
+# on it at all, rather than at an unrelated calendar span.
+#
+# It was 50, and that coupling had silently broken. `min_report_events` was
+# lowered from 50 to 20 in the 2026-08-30 sample-size audit; MILESTONE_N was not
+# touched, so the comment beside it ("same threshold classify_status itself
+# requires") became false and the checkpoint drifted to 2.5x the bar it was
+# supposed to mirror.
+#
+# Restoring it is a correction, not a loosening for convenience. Measured effect
+# on whether a live-only checkpoint is reachable at all within a 9-year replay,
+# at a median 10.8 independent occurrences/year:
+#
+#     MILESTONE_N   2nd checkpoint   discovered yr 1   yr 3   yr 5   median time
+#              50        100 live                43%    36%    13%     9.3 years
+#              30         60 live                85%    55%    40%     5.6 years
+#              20         40 live               100%    91%    55%     3.7 years
+#
+# At 50 the median candidate never reached a checkpoint resting on live evidence
+# alone -- the first one is topped up from the backtest by design (see
+# `_effective_milestone_count`), so a bar nothing could reach meant "validated"
+# never once meant what the word was reserved for.
+MILESTONE_N = 20
 
 
 def candidates_due_for_milestone(resolved_live_test_counts: dict[str, int], n_step: int = MILESTONE_N) -> list[str]:

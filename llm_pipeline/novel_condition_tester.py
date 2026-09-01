@@ -658,10 +658,13 @@ def spec_from_proposal(d: dict) -> "tuple[ConditionSpec | None, str | None]":
 # two thirds of occurrences); there are two, and measured, events reaching the
 # test are already 50-60% of counted occurrences before the fold split.
 #
-# Separately: at ~4.4 occurrences/year, a candidate admitted at 35 would need
-# 11.4 YEARS of live testing to reach MILESTONE_N = 50. At 120 it reaches it in
-# about three. The testability floor and the validation milestone disagreed;
-# 120 is where they agree, which is why it is 120 and not 100 or 150.
+# Separately, the floor has to be consistent with the validation milestone, and
+# it was not: at ~4.4 occurrences/year a candidate admitted at 35 could not reach
+# a live-only checkpoint inside a human timescale. 120 puts it within about
+# three years. (MILESTONE_N was 50 at the time this was written and is now 20 --
+# see candidates/status_history.py for why that coupling had broken too. Both
+# corrections push the same way: the floor and the milestone now describe
+# reachable amounts of evidence rather than nominal ones.)
 #
 # THE COST, measured rather than assumed. The relaxation search still reaches
 # this floor with its existing steps, but only when the news clause carries a

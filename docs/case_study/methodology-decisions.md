@@ -38,7 +38,7 @@ Each entry is dated and never silently rewritten — if a decision is later reve
 
 ## N > 50 replaces N > 100 as the sample-size gate
 
-**Decision.** `MethodologyConfig.min_report_events = 50` (was 100, briefly, before that).
+**Decision.** `MethodologyConfig.min_report_events = 50` (was 100, briefly, before that). **Superseded 2026-08-30: lowered to 20 by the sample-size audit** -- and the milestone that was tied to it was not updated at the same time, which is corrected below.
 
 **Why.** A compromise, stated plainly: N > 100 combined with the other new gates (Sortino > 1, win_rate > 50%, strict_win_rate ≥ 45%, MFE/MAE > 1, statistical significance, no concentration) risked accepting *nothing at all* given the amount of real history available — five gates stacked that tightly is a lot to clear simultaneously. Lowering the sample-size floor to 50 doesn't weaken any of the other, more important gates (particularly statistical significance, which is the one that actually answers "does a pattern exist") — it just stops sample size itself from being the bottleneck. If nothing clears the bar even at N=50, that is itself a real, reportable finding, not a problem to engineer away further.
 
@@ -1796,3 +1796,89 @@ previous system — which made about 1,200 calls to get them, against 217.
 More material, from a trigger measured to precede what the project is looking
 for, at roughly a sixth of the cost. That is the case for running it; it is not
 evidence that anything will be found.
+
+---
+
+## `MILESTONE_N` follows `min_report_events` again — the coupling had silently broken
+
+**The defect.** `MILESTONE_N = 50` carried the comment "same threshold
+classify_status itself requires". That was true when written. The 2026-08-30
+sample-size audit lowered `min_report_events` from 50 to 20 and did not touch the
+milestone, so the checkpoint drifted to 2.5x the bar it exists to mirror, and the
+comment beside it became false.
+
+**Why that mattered more than a stale comment.** The first checkpoint of a
+DYNAMIC candidate is topped up from its backtest by design
+(`_effective_milestone_count`), so it fires essentially on discovery — a
+candidate with 120 backtest occurrences reaches an effective count of 50 with
+zero live tests. The first "validated" therefore rests on the backtest, which is
+documented and deliberate. The SECOND checkpoint is the one resting on live
+evidence alone, and it is where the word starts to mean what it was reserved for.
+
+At 50 that checkpoint required 100 real live occurrences. Measured across the
+current grammar, testable conditions fire at a median of 10.8 INDEPENDENT
+occurrences per year:
+
+    MILESTONE_N   2nd checkpoint   discovered yr 1   yr 3   yr 5   median time
+             50        100 live                43%    36%    13%     9.3 years
+             30         60 live                85%    55%    40%     5.6 years
+             20         40 live               100%    91%    55%     3.7 years
+
+**The median candidate never reached it.** A bar nothing can clear does not
+protect a claim; it just means the claim is never made either way.
+
+**Restoring 20 is a correction, not a concession.** It is not a threshold lowered
+to produce results faster — it is the number the design's own stated logic gives,
+recovered after the link it depended on was cut by an unrelated change. The
+milestone fires when a candidate has as much LIVE evidence as the statistics
+require to report on it at all, which is exactly what it was built to do.
+
+**What it does not fix, stated plainly.** 20 live occurrences is a modest sample,
+and "validated" at this bar means "still accepted after 20 independent live
+occurrences", not "proven". The word's meaning is unchanged; only the amount of
+evidence behind it is now stated correctly rather than aspirationally.
+
+**An earlier claim in these notes was wrong and is corrected here.** The
+inconsistency between the testability floor and the milestone was recorded as
+"11.4 years to validate", implying no candidate could ever be validated. That
+figure described the SECOND checkpoint, not the first, and the first fires
+immediately for dynamic candidates. The binding constraint on how many candidates
+get validated was never the milestone — it is the acceptance rate, measured at
+about 8%.
+
+---
+
+## The static battery is the control arm, not a second class of candidate
+
+**Raised by the project's director**: do C1/C2/C6 still serve any purpose, now
+that discovery runs on compression-triggered LLM proposals?
+
+**The sharp version of the problem.** They are held to a standard the LLM is
+forbidden from meeting. Every proposed condition must contain a real news or
+macro SURPRISE term — enforced in code, not requested in a prompt. C1
+(funding-rate crowding) and C6 (efficiency-ratio trend) contain no event term at
+all. C2 rests on `is_macro_day`, which is barred from proposals precisely because
+it records that a release was scheduled and never what it said. Run through
+`spec_from_proposal` today, **all six variants are rejected by this project's own
+validator.** The battery is also empty: nothing accepted.
+
+**They are not deleted, because they are already the control arm — it was just
+never said.** This project's question is whether market conditions COMBINED WITH
+a real macro event produce a repeatable pattern. That question needs a baseline
+of conditions built from market state ALONE, put through identical machinery: the
+same walk-forward, the same moving-block bootstrap, the same concentration check,
+the same milestone rule. That is exactly what C1/C2/C6 are.
+
+Read as a control arm they stop being an inconsistency and become the comparison
+the project otherwise lacks: **if LLM-discovered news+market conditions do no
+better than pure chart patterns, the thesis has not been demonstrated.** A null
+result on the treatment arm means little without one; a null on both means the
+method, not the data.
+
+**It costs nothing.** They are detected by the mechanical hourly scan, which
+never calls a model. Their entire ongoing cost is local compute.
+
+**What this obliges.** The comparison has to actually be reported. A control arm
+nobody looks at is decoration, and the replay's results section must state both
+arms side by side rather than listing the static candidates as if they were
+ordinary candidates that happened not to work.

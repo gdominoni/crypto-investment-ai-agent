@@ -1,25 +1,33 @@
-"""Trigger definitions for the statistical baseline battery: C1, C2, and
-C6 -- the three candidates selected, out of the prior research's larger
-set, as ideas worth re-deriving clean and continuing to test here (the
-numbering is inherited from that prior labeling, not sequential by
-design -- C3 was never one of the three carried forward). C4
-stablecoin-supply and C5 basis-unwind are deliberately NOT included here
-yet -- their required data source, on-chain stablecoin supply, isn't
-wired into this project's data layer; add them once it is, rather than
-approximate with something weaker):
+"""The three static candidate families -- C1 funding-rate crowding, C2
+post-macro-release reaction, C6 efficiency-ratio trend -- and the CONTROL ARM
+they now serve as.
 
-  C1 -- funding-rate crowding: an extreme funding rate (perpetual futures
-        positioning) split by sign, betting on a squeeze in the opposite
-        direction.
-  C2 -- post-macro-release reaction: FOMC / CPI / jobless-claims release day with an unusually wide
-        range, betting the day's own initial close direction reverses.
-  C6 -- efficiency-ratio trend: a high Kaufman efficiency ratio (a clean,
-        low-noise trend) paired with a volume surge, split by the
-        direction already in motion.
+WHAT THEY ARE FOR, restated 2026-09-01. These were derived by mining this
+project's own history, and none of them would survive the rule the pipeline now
+enforces on everything an LLM proposes: every proposed condition must contain a
+real news or macro SURPRISE term (`NEWS_EVENT_INDICATORS`). C1 and C6 contain no
+event term at all -- they are pure chart patterns. C2 rests on `is_macro_day`,
+which is barred from proposals because it records that a release was scheduled
+and never what it said. Run through `spec_from_proposal` today, all six variants
+are rejected.
 
-Every trigger here is defined on bar N's own close/range -- by
-construction, `methodology.build_events()` enters at bar N+1's open, so
-no trigger definition needs its own leak-avoidance logic.
+That could be read as an inconsistency -- the static battery held to a lower bar
+than the LLM. It is better used as the thing it already was without anyone
+saying so: the CONTROL ARM for this project's central question.
+
+The question is whether market conditions COMBINED WITH a real macro event
+produce a repeatable pattern. Answering it needs a comparison against conditions
+built from market state alone, put through the identical machinery -- the same
+walk-forward, the same bootstrap, the same concentration check, the same
+milestone rule. That is exactly what these are. Read that way they are not a
+weaker class of candidate; they are the baseline the LLM-discovered conditions
+have to beat, and if the two arms perform alike the project's own thesis has not
+been demonstrated.
+
+This costs nothing to keep: they are detected by the mechanical hourly scan and
+never consult a model.
+
+Each is a pure function of price/volume/funding data.
 """
 from __future__ import annotations
 
