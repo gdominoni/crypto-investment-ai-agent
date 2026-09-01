@@ -44,9 +44,17 @@ HYPEROPT_RESULTS_DIR = FT_USERDIR / "hyperopt_results"
 
 
 def load_results() -> dict:
+    """Never raises. This is read from inside the notification loop, where an
+    unreadable cross-check file must not take down the message that carries the
+    actual result -- a purely informational second opinion is not worth losing a
+    live-test notification over."""
     if not RESULTS_PATH.exists():
         return {}
-    return json.loads(RESULTS_PATH.read_text())
+    try:
+        data = json.loads(RESULTS_PATH.read_text())
+    except (json.JSONDecodeError, OSError):
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 def _save_results(results: dict) -> None:
@@ -167,17 +175,37 @@ def run_all(candidates: list[str] | None = None, timerange: str = "20180101-", e
     return results
 
 
-def format_result(candidate: str) -> str:
+def format_result(candidate: str, short: bool = False) -> str:
+    """Never raises, for any shape of stored record.
+
+    Every field is fetched with `.get` and type-checked before formatting. The
+    previous version indexed `r['tp_mult']` directly on the success path, so a
+    record written by an older version of this module -- or a run interrupted
+    mid-write -- would have raised KeyError inside the notification loop and
+    killed the message it was appended to.
+
+    `short=True` gives the one-line form used per resolved live test; the full
+    form is for periodic checkpoints, where the extra detail is worth the space."""
     r = load_results().get(candidate)
-    if r is None:
-        return "Freqtrade hyperopt cross-check: not run yet for this trigger."
+    if not isinstance(r, dict):
+        return "TP/SL: pending hyperopt cross-check."
     if r.get("status") == "failed":
-        return (f"Freqtrade hyperopt cross-check: last attempt FAILED ({r.get('at', 'unknown time')}) -- "
+        return (f"TP/SL: last hyperopt attempt failed ({r.get('at', 'unknown time')}) -- "
                 f"{r.get('reason', 'no reason recorded')}.")
+    tp, sl = r.get("tp_mult"), r.get("sl_mult")
+    if not isinstance(tp, (int, float)) or not isinstance(sl, (int, float)):
+        return "TP/SL: pending hyperopt cross-check (stored record incomplete)."
+    if short:
+        return f"TP/SL from hyperopt: {tp:.2f} / {sl:.2f} (independent cross-check, informational)"
+
+    def _num(key, fmt, default="n/a"):
+        v = r.get(key)
+        return format(v, fmt) if isinstance(v, (int, float)) else default
+
     return (f"Freqtrade hyperopt cross-check (independent optimizer, local/periodic, purely informational): "
-            f"TP mult={r['tp_mult']:.2f}, SL mult={r['sl_mult']:.2f} -> N={r['n']}, win_rate={r['winrate']:.1%}, "
-            f"Sortino={r['sortino']:.2f}, total_profit={r['profit_total']:+.1%} "
-            f"(searched {r['epochs_run']} epochs over {r['timerange']}).")
+            f"TP mult={tp:.2f}, SL mult={sl:.2f} -> N={_num('n', 'd')}, win_rate={_num('winrate', '.1%')}, "
+            f"Sortino={_num('sortino', '.2f')}, total_profit={_num('profit_total', '+.1%')} "
+            f"(searched {_num('epochs_run', 'd')} epochs over {r.get('timerange', 'an unrecorded range')}).")
 
 
 if __name__ == "__main__":

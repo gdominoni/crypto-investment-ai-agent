@@ -72,6 +72,14 @@ def run_to_completion(max_chunks: int = 1500, ask_every: int = 4) -> dict:
 
         if result.get("reached_end"):
             print("Replay has reached the present. Stopping.")
+            # The hyperopt cross-check is deliberately NOT run inline -- it
+            # optimises over the whole history to the present, so a message dated
+            # 2020 quoting it would be showing the future, and at several minutes
+            # a candidate it would add 10-16 hours to the run. See
+            # replay/post_replay_hyperopt.py.
+            print("\nNext, if you want the independent Freqtrade cross-check on what survived:")
+            print("    python3 -m replay.post_replay_hyperopt --dry-run   # see what it would run")
+            print("    python3 -m replay.post_replay_hyperopt             # run it (local, hours)")
             return {"chunks": chunk_count, "reached_end": True}
 
         if chunk_count % ask_every == 0:

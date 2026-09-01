@@ -191,63 +191,54 @@ def _market_return_over(entry_loc: int, horizon: int, direction: str) -> float:
 def _confirmation_block(candidate: str) -> str:
     """The running confirmation record, appended to every resolved live test.
 
-    NOT a validation. At the horizons this project uses, `required_n_for_power`
-    puts the sample needed to demonstrate a 5% effect at 80% power in the
-    hundreds -- 307 occurrences at a 7-day horizon, 742 at 14. No count reachable
-    in a nine-year replay gets there. Showing the required number beside the
-    achieved one is the honest form: it says what this evidence can and cannot
-    settle, instead of letting an accumulating counter imply a proof.
+    NOT a validation, and the second line is what keeps that honest. At this
+    project's horizons `required_n_for_power` puts the sample needed to
+    demonstrate a 5% effect at 80% power in the hundreds -- 307 occurrences over
+    7 days, 742 over 14 -- against a typical candidate producing about 11
+    independent occurrences a year. No count reachable in any realistic tracking
+    window gets there. Printing the achieved count AS A FRACTION of the required
+    one is what stops an accumulating counter from implying a proof: "23 of 307"
+    cannot be misread the way a bare "23" can.
 
-    Two win rates, because "the trend happened" and "the trend happened BECAUSE
-    of this condition" are different claims. Across 2017-2026 a long-only rule is
-    right most of the time for reasons that have nothing to do with any macro
-    release, so the raw rate is reported first (it is what was asked: did the
-    macro news plus indicator predict the move) and the market-adjusted rate
-    beside it (did it predict more than holding would have).
-    """
+    Never raises. This runs inside the notification loop, so a missing statistic
+    degrades to a stated gap rather than taking down the message carrying the
+    actual result."""
     import numpy as np
 
-    closed = [t for t in state.load_trade_log()
-              if t["candidate"] == candidate and t["status"] == "closed"]
-    prior = state.load_confirmation_priors().get(candidate, 0)
-    n = _effective_milestone_count(candidate, prior, len(closed))
-    lines = [f"<b>Confirmation record -- {escape_html(candidate)}</b>"]
+    try:
+        closed = [t for t in state.load_trade_log()
+                  if t["candidate"] == candidate and t["status"] == "closed"]
+        prior = state.load_confirmation_priors().get(candidate, 0)
+        n = _effective_milestone_count(candidate, prior, len(closed))
+        horizon = int(state.load_horizons().get(candidate, PLACEHOLDER_HORIZON_DAYS))
+        sd = ((state.load_battery_status().get("summary") or {})
+              .get(candidate, {}).get("pattern_oos_sd"))
+        need = required_n_for_power(sd) if isinstance(sd, (int, float)) else float("nan")
 
-    summary = (state.load_battery_status().get("summary") or {}).get(candidate, {})
-    sd = summary.get("pattern_oos_sd")
-    horizon = int(state.load_horizons().get(candidate, PLACEHOLDER_HORIZON_DAYS))
-    need = required_n_for_power(sd) if sd else float("nan")
-    if need == need:
-        lines.append(f"Occurrence <b>{n}</b> — {need:.0f} would be needed to demonstrate a "
-                     f"{MIN_INTERESTING_EFFECT:.0%} effect at 80% power over {horizon}d. "
-                     f"This is a CONFIRMATION record, not a proof.")
-    else:
-        lines.append(f"Occurrence <b>{n}</b>. (Required sample for a conclusive test not yet "
-                     f"computable — no volatility estimate for this candidate.)")
-    if prior:
-        lines.append(f"<i>{prior} of these predate registration but postdate the hypothesis: "
-                     f"they accumulated while the proposal waited for enough history to be "
-                     f"testable, so nothing about it could have been shaped by them.</i>")
+        lines = [f"<b>Confirmation record -- {escape_html(candidate)}</b>"]
+        if need == need:
+            lines.append(f"Occurrence <b>{n} of {need:.0f}</b> "
+                         f"(needed for a {MIN_INTERESTING_EFFECT:.0%} effect at 80% power over {horizon}d)")
+        else:
+            lines.append(f"Occurrence <b>{n}</b> (required sample not yet computable -- "
+                         f"no volatility estimate for this candidate)")
 
-    if closed:
-        rets = [t["forward_return"] for t in closed]
-        wins = sum(1 for r in rets if r > 0)
-        adj = [t["forward_return"] - t["baseline_return"] for t in closed
-               if t.get("baseline_return") is not None and t["baseline_return"] == t["baseline_return"]]
-        adj_wins = sum(1 for r in adj if r > 0)
-        mfe = float(np.mean([t["mfe"] for t in closed]))
-        mae = float(np.mean([t["mae"] for t in closed]))
-        ratio = mfe / abs(mae) if mae else float("nan")
-        wr = f"Trend materialised: <b>{wins/len(closed):.0%}</b> of {len(closed)} resolved"
-        if adj:
-            wr += f" ({adj_wins/len(adj):.0%} after subtracting what holding the market did)"
-        lines.append(wr)
-        lines.append(f"Mean best point {mfe:+.2%}, mean worst {mae:+.2%}"
-                     + (f" — MFE/MAE {ratio:.2f}" if ratio == ratio else ""))
-    tpsl = hyperopt_runner.format_result(candidate)
-    if tpsl:
-        lines.append(tpsl)
-    return "\n".join(lines)
+        if closed:
+            wins = sum(1 for t in closed if t["forward_return"] > 0)
+            lines.append(f"Trend materialised: <b>{wins/len(closed):.0%}</b> of {len(closed)} resolved")
+            mfe = float(np.mean([t["mfe"] for t in closed]))
+            mae = float(np.mean([t["mae"] for t in closed]))
+            ratio = mfe / abs(mae) if mae else float("nan")
+            lines.append(f"Mean best point {mfe:+.2%}, mean worst {mae:+.2%}"
+                         + (f" -- MFE/MAE {ratio:.2f}" if ratio == ratio else ""))
+        else:
+            lines.append("Trend materialised: no occurrence has resolved yet")
+        lines.append(hyperopt_runner.format_result(candidate, short=True))
+        return "\n".join(lines)
+    except Exception as e:
+        # One malformed statistic must not cost the message the outcome it exists
+        # to report -- same isolation discipline as every other loop here.
+        return f"<i>(confirmation record unavailable: {type(e).__name__})</i>"
 
 
 
@@ -697,6 +688,22 @@ def _check_n50_milestones(as_of: pd.Timestamp, status_summary: dict) -> None:
         # one thing the opinion could not -- whether there was POWER to detect an
         # effect -- so a "no" means something different from "we could not tell".
         _verdict, advice = prune_recommendation(info)
+        # "The trend happened" and "the trend happened BECAUSE of this condition"
+        # are different claims. Across 2017-2026 a long-only rule is right most of
+        # the time for reasons unrelated to any macro release, so the checkpoint --
+        # unlike the per-occurrence message, which stays deliberately short --
+        # carries the rate net of what simply holding the market did.
+        _closed = [t for t in state.load_trade_log()
+                   if t["candidate"] == candidate and t["status"] == "closed"]
+        _adj = [t["forward_return"] - t["baseline_return"] for t in _closed
+                if isinstance(t.get("baseline_return"), (int, float))
+                and t["baseline_return"] == t["baseline_return"]]
+        market_line = ""
+        if _adj:
+            raw_w = sum(1 for t in _closed if t["forward_return"] > 0) / len(_closed)
+            adj_w = sum(1 for r in _adj if r > 0) / len(_adj)
+            market_line = (f"Trend materialised {raw_w:.0%} of the time; {adj_w:.0%} after subtracting "
+                           f"what holding the whole coin universe did over the same windows.\n")
         count_basis = (f"{live_n} live occurrence(s) so far" if is_static else
                        f"{n_reached} recent occurrence(s) so far ({live_n} live, the rest backtest -- static "
                        f"candidates count live occurrences only; this one is Sonnet-proposed, so backtest tops "
@@ -713,6 +720,7 @@ def _check_n50_milestones(as_of: pd.Timestamp, status_summary: dict) -> None:
             f"not proof.</i>\n"
             f"{escape_html(criteria_str)}. (No single coin or period may carry more than 60% of the positive "
             f"return either, for either check to pass.)\n\n"
+            f"{market_line}"
             f"Current status: <b>{escape_html(status)}</b>\n"
             f"Re-evaluated fresh at every {sh.MILESTONE_N}-occurrence checkpoint, not a permanent verdict -- re-checked "
             f"again at {n_reached + sh.MILESTONE_N} either way, unless dropped below.\n\n"

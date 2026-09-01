@@ -125,16 +125,31 @@ class TestConfirmationNotValidation:
         assert "CONFIRMED" in src
 
     def test_every_resolved_test_states_what_would_be_required(self):
-        """Showing the required sample beside the achieved one is what stops an
-        accumulating counter from implying a proof it cannot deliver."""
+        """Showing the achieved count AS A FRACTION of the required one is what
+        stops an accumulating counter from implying a proof: "23 of 307" cannot
+        be misread the way a bare "23" can."""
         import inspect
 
         from replay.engine import _confirmation_block
         src = inspect.getsource(_confirmation_block)
         assert "required_n_for_power" in src
-        assert "not a proof" in src
-        # Both win rates: "the trend happened" and "it happened because of this
-        # condition" are different claims, and a long-only rule is right most of
-        # the time in a rising market for unrelated reasons.
-        assert "baseline_return" in src and "holding the market" in src
+        assert "{n} of {need:.0f}" in src
         assert "hyperopt_runner.format_result" in src
+
+    def test_the_market_adjusted_rate_lives_on_the_checkpoint(self):
+        """Kept out of the per-occurrence message, which stays short, but not
+        dropped: a long-only rule is right most of the time in a rising market
+        for reasons unrelated to any macro release."""
+        import inspect
+
+        from replay.engine import _check_n50_milestones
+        src = inspect.getsource(_check_n50_milestones)
+        assert "baseline_return" in src and "holding the whole coin universe" in src
+
+    def test_the_confirmation_block_never_raises(self):
+        """It runs inside the notification loop: a missing statistic must degrade
+        to a stated gap, never take down the message carrying the actual result."""
+        from replay.engine import _confirmation_block
+        out = _confirmation_block("candidate_that_does_not_exist")
+        assert "Confirmation record" in out
+        assert "pending hyperopt" in out

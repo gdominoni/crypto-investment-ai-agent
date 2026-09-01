@@ -2020,3 +2020,35 @@ proposed condition now starts at zero and needs real time to reach a checkpoint 
 roughly 1.9 years at the median rate — where before it arrived instantly. There
 will be FEWER confirmations in the replay, and later. The ones that arrive will
 mean something.
+
+---
+
+## The hyperopt cross-check runs after the replay, not during it
+
+**The problem, and why it is not the problem it looks like.**
+`hyperopt_runner.run_all` optimises TP/SL over `timerange="20180101-"` — the
+whole history, to the present. A replay message dated 2020 quoting that figure
+would be showing information from 2026.
+
+**That misalignment is an artefact of the replay, not a property of the system.**
+Live, "the whole history to the present" IS the present: the two coincide and
+there is nothing to reconcile. The replay compresses nine years into a short run,
+and this is one of the few places where that compression shows. It is also
+harmless in the direction that matters — the cross-check never gates any verdict,
+and its output goes to a human rather than to the model, so nothing downstream
+could be contaminated by it either way.
+
+Recorded here explicitly because a reader who spots the anachronism should find
+it already accounted for rather than assume it went unnoticed.
+
+**Moved rather than removed**, for two reasons. The independent second opinion is
+worth having — a different optimiser (Bayesian over a continuous space) on a
+different engine (Freqtrade) is a real check on this project's own 25-point grid
+— it just should not carry a date it could not have been computed on. And inline
+it would be ruinous: several real minutes per candidate against a replay that
+discovers roughly 190, so 10-16 hours added to a run whose whole API cost is
+about $3.
+
+`replay/post_replay_hyperopt.py` runs it once, after the replay reaches the
+present, over the candidates that survived. Live-test messages meanwhile print
+`TP/SL: pending hyperopt cross-check`, which is accurate.
