@@ -1,0 +1,922 @@
+[
+ {
+  "key": "compression_2021-11-16_BTCUSDT",
+  "as_of": "2021-11-16",
+  "coin": "BTCUSDT",
+  "desc": "VOLATILITY COMPRESSION RESOLVED: BTCUSDT\nPHASE A -- compression began 2021-11-15 (volatility 1.29 sd below this coin's own normal)\nPHASE MIDDLE -- it stayed compressed for 1 day(s); price moved -5.58%",
+  "sonnet_a_error": "No text block in response.content: ['thinking']",
+  "sonnet_b_action": "no_action",
+  "sonnet_b_labels": [],
+  "haiku_action": "no_action",
+  "haiku_labels": [],
+  "ceiling": {
+   "same_action": true,
+   "both_proposed": false,
+   "both_silent": true,
+   "n_a": 0,
+   "n_b": 0,
+   "overlap": null
+  },
+  "haiku_vs_sonnet": {
+   "same_action": true,
+   "both_proposed": false,
+   "both_silent": true,
+   "n_a": 0,
+   "n_b": 0,
+   "overlap": null
+  }
+ },
+ {
+  "key": "compression_2022-01-21_BTCUSDT",
+  "as_of": "2022-01-21",
+  "coin": "BTCUSDT",
+  "desc": "VOLATILITY COMPRESSION RESOLVED: BTCUSDT\nPHASE A -- compression began 2022-01-02 (volatility 1.66 sd below this coin's own normal)\nPHASE MIDDLE -- it stayed compressed for 19 day(s); price moved -22.9",
+  "sonnet_a_action": "propose_novel_test",
+  "sonnet_a_labels": [
+   "jobless_surprise_then_oversold_long",
+   "jobless_surprise_then_volume_capitulation_short"
+  ],
+  "sonnet_b_error": "No text block in response.content: ['thinking']",
+  "haiku_action": "propose_novel_test",
+  "haiku_labels": [
+   "jobless_claims_spike_with_rsi_washout",
+   "sustained_jobless_deterioration_into_compression_exit"
+  ],
+  "ceiling": {
+   "same_action": false,
+   "both_proposed": false,
+   "both_silent": false,
+   "n_a": 2,
+   "n_b": 0,
+   "overlap": null
+  },
+  "haiku_vs_sonnet": {
+   "same_action": true,
+   "both_proposed": true,
+   "both_silent": false,
+   "n_a": 2,
+   "n_b": 2,
+   "overlap": 0.36097560975609755,
+   "labels_a": [
+    "jobless_surprise_then_oversold_long",
+    "jobless_surprise_then_volume_capitulation_short"
+   ],
+   "labels_b": [
+    "jobless_claims_spike_with_rsi_washout",
+    "sustained_jobless_deterioration_into_compression_exit"
+   ]
+  }
+ },
+ {
+  "key": "compression_2023-09-28_BTCUSDT",
+  "as_of": "2023-09-28",
+  "coin": "BTCUSDT",
+  "desc": "VOLATILITY COMPRESSION RESOLVED: BTCUSDT\nPHASE A -- compression began 2023-09-27 (volatility 1.25 sd below this coin's own normal)\nPHASE MIDDLE -- it stayed compressed for 1 day(s); price moved +2.46%",
+  "sonnet_a_action": "propose_novel_test",
+  "sonnet_a_labels": [
+   "jobless_claims_surprise_with_negative_funding_squeeze",
+   "jobless_claims_surprise_with_band_breakout"
+  ],
+  "sonnet_b_error": "Expecting property name enclosed in double quotes: line 1 column 968 (char 967)",
+  "haiku_action": "no_action",
+  "haiku_labels": [],
+  "ceiling": {
+   "same_action": false,
+   "both_proposed": false,
+   "both_silent": false,
+   "n_a": 2,
+   "n_b": 0,
+   "overlap": null
+  },
+  "haiku_vs_sonnet": {
+   "same_action": false,
+   "both_proposed": false,
+   "both_silent": false,
+   "n_a": 2,
+   "n_b": 0,
+   "overlap": null
+  }
+ },
+ {
+  "key": "compression_2024-06-28_BTCUSDT",
+  "as_of": "2024-06-28",
+  "coin": "BTCUSDT",
+  "desc": "VOLATILITY COMPRESSION RESOLVED: BTCUSDT\nPHASE A -- compression began 2024-06-09 (volatility 2.07 sd below this coin's own normal)\nPHASE MIDDLE -- it stayed compressed for 19 day(s); price moved -13.2",
+  "sonnet_a_action": "propose_novel_test",
+  "sonnet_a_labels": [
+   "cooler_cpi_then_oversold_long",
+   "weak_claims_then_lowerband_long"
+  ],
+  "sonnet_b_error": "Unterminated string starting at: line 1 column 713 (char 712)",
+  "haiku_action": "no_action",
+  "haiku_labels": [],
+  "ceiling": {
+   "same_action": false,
+   "both_proposed": false,
+   "both_silent": false,
+   "n_a": 2,
+   "n_b": 0,
+   "overlap": null
+  },
+  "haiku_vs_sonnet": {
+   "same_action": false,
+   "both_proposed": false,
+   "both_silent": false,
+   "n_a": 2,
+   "n_b": 0,
+   "overlap": null
+  }
+ },
+ {
+  "key": "compression_2025-02-12_BTCUSDT",
+  "as_of": "2025-02-12",
+  "coin": "BTCUSDT",
+  "desc": "VOLATILITY COMPRESSION RESOLVED: BTCUSDT\nPHASE A -- compression began 2025-02-11 (volatility 1.28 sd below this coin's own normal)\nPHASE MIDDLE -- it stayed compressed for 1 day(s); price moved +2.18%",
+  "sonnet_a_action": "propose_novel_test",
+  "sonnet_a_labels": [
+   "hot CPI surprise with crowded short funding -> squeeze long"
+  ],
+  "sonnet_b_action": "propose_novel_test",
+  "sonnet_b_labels": [
+   "hot_cpi_crowded_shorts_squeeze_long",
+   "hot_cpi_neutral_momentum_fade_short"
+  ],
+  "haiku_action": "no_action",
+  "haiku_labels": [],
+  "ceiling": {
+   "same_action": true,
+   "both_proposed": true,
+   "both_silent": false,
+   "n_a": 1,
+   "n_b": 2,
+   "overlap": 0.27459016393442626,
+   "labels_a": [
+    "hot CPI surprise with crowded short funding -> squeeze long"
+   ],
+   "labels_b": [
+    "hot_cpi_crowded_shorts_squeeze_long",
+    "hot_cpi_neutral_momentum_fade_short"
+   ]
+  },
+  "haiku_vs_sonnet": {
+   "same_action": false,
+   "both_proposed": false,
+   "both_silent": false,
+   "n_a": 1,
+   "n_b": 0,
+   "overlap": null
+  }
+ },
+ {
+  "key": "compression_2025-05-06_BTCUSDT",
+  "as_of": "2025-05-06",
+  "coin": "BTCUSDT",
+  "desc": "VOLATILITY COMPRESSION RESOLVED: BTCUSDT\nPHASE A -- compression began 2025-05-05 (volatility 1.27 sd below this coin's own normal)\nPHASE MIDDLE -- it stayed compressed for 1 day(s); price moved +2.22%",
+  "sonnet_a_action": "no_action",
+  "sonnet_a_labels": [],
+  "sonnet_b_action": "no_action",
+  "sonnet_b_labels": [],
+  "haiku_action": "no_action",
+  "haiku_labels": [],
+  "ceiling": {
+   "same_action": true,
+   "both_proposed": false,
+   "both_silent": true,
+   "n_a": 0,
+   "n_b": 0,
+   "overlap": null
+  },
+  "haiku_vs_sonnet": {
+   "same_action": true,
+   "both_proposed": false,
+   "both_silent": true,
+   "n_a": 0,
+   "n_b": 0,
+   "overlap": null
+  }
+ },
+ {
+  "key": "compression_2019-04-02_ETHUSDT",
+  "as_of": "2019-04-02",
+  "coin": "ETHUSDT",
+  "desc": "VOLATILITY COMPRESSION RESOLVED: ETHUSDT\nPHASE A -- compression began 2019-03-16 (volatility 1.45 sd below this coin's own normal)\nPHASE MIDDLE -- it stayed compressed for 17 day(s); price moved +15.8",
+  "sonnet_a_action": "propose_novel_test",
+  "sonnet_a_labels": [
+   "dovish_rate_surprise_then_overbought_breakout",
+   "dovish_rate_surprise_then_volume_surge"
+  ],
+  "sonnet_b_action": "propose_novel_test",
+  "sonnet_b_labels": [
+   "dovish_rate_surprise_plus_volume_breakout_long",
+   "dovish_rate_surprise_plus_overbought_rsi_short"
+  ],
+  "haiku_action": "propose_novel_test",
+  "haiku_labels": [
+   "Dovish surprise (rate hold or jobless improvement) + exit-bar overbought RSI"
+  ],
+  "ceiling": {
+   "same_action": true,
+   "both_proposed": true,
+   "both_silent": false,
+   "n_a": 2,
+   "n_b": 2,
+   "overlap": 0.1875,
+   "labels_a": [
+    "dovish_rate_surprise_then_overbought_breakout",
+    "dovish_rate_surprise_then_volume_surge"
+   ],
+   "labels_b": [
+    "dovish_rate_surprise_plus_volume_breakout_long",
+    "dovish_rate_surprise_plus_overbought_rsi_short"
+   ]
+  },
+  "haiku_vs_sonnet": {
+   "same_action": true,
+   "both_proposed": true,
+   "both_silent": false,
+   "n_a": 2,
+   "n_b": 1,
+   "overlap": 0.0,
+   "labels_a": [
+    "dovish_rate_surprise_then_overbought_breakout",
+    "dovish_rate_surprise_then_volume_surge"
+   ],
+   "labels_b": [
+    "Dovish surprise (rate hold or jobless improvement) + exit-bar overbought RSI"
+   ]
+  }
+ },
+ {
+  "key": "compression_2022-01-11_ETHUSDT",
+  "as_of": "2022-01-11",
+  "coin": "ETHUSDT",
+  "desc": "VOLATILITY COMPRESSION RESOLVED: ETHUSDT\nPHASE A -- compression began 2021-12-30 (volatility 1.31 sd below this coin's own normal)\nPHASE MIDDLE -- it stayed compressed for 12 day(s); price moved -12.6",
+  "sonnet_a_action": "propose_novel_test",
+  "sonnet_a_labels": [
+   "jobless_claims_miss_then_oversold_rsi",
+   "jobless_claims_miss_then_negative_funding"
+  ],
+  "sonnet_b_action": "propose_novel_test",
+  "sonnet_b_labels": [
+   "jobless_claims_miss_with_negative_funding_short",
+   "jobless_claims_miss_with_oversold_rsi_long"
+  ],
+  "haiku_action": "no_action",
+  "haiku_labels": [],
+  "ceiling": {
+   "same_action": true,
+   "both_proposed": true,
+   "both_silent": false,
+   "n_a": 2,
+   "n_b": 2,
+   "overlap": 0.5114573785517873,
+   "labels_a": [
+    "jobless_claims_miss_then_oversold_rsi",
+    "jobless_claims_miss_then_negative_funding"
+   ],
+   "labels_b": [
+    "jobless_claims_miss_with_negative_funding_short",
+    "jobless_claims_miss_with_oversold_rsi_long"
+   ]
+  },
+  "haiku_vs_sonnet": {
+   "same_action": false,
+   "both_proposed": false,
+   "both_silent": false,
+   "n_a": 2,
+   "n_b": 0,
+   "overlap": null
+  }
+ },
+ {
+  "key": "compression_2022-04-11_ETHUSDT",
+  "as_of": "2022-04-11",
+  "coin": "ETHUSDT",
+  "desc": "VOLATILITY COMPRESSION RESOLVED: ETHUSDT\nPHASE A -- compression began 2022-04-07 (volatility 1.36 sd below this coin's own normal)\nPHASE MIDDLE -- it stayed compressed for 4 day(s); price moved -7.67%",
+  "sonnet_a_action": "propose_novel_test",
+  "sonnet_a_labels": [
+   "jobless_claims_beat_then_lower_band",
+   "jobless_claims_beat_then_volume_surge"
+  ],
+  "sonnet_b_error": "Unterminated string starting at: line 1 column 848 (char 847)",
+  "haiku_action": "propose_novel_test",
+  "haiku_labels": [
+   "Better-than-expected jobless claims landing during negative funding regimes",
+   "Jobless surprise during compression, exiting into RSI < 45"
+  ],
+  "ceiling": {
+   "same_action": false,
+   "both_proposed": false,
+   "both_silent": false,
+   "n_a": 2,
+   "n_b": 0,
+   "overlap": null
+  },
+  "haiku_vs_sonnet": {
+   "same_action": true,
+   "both_proposed": true,
+   "both_silent": false,
+   "n_a": 2,
+   "n_b": 2,
+   "overlap": 0.1716867469879518,
+   "labels_a": [
+    "jobless_claims_beat_then_lower_band",
+    "jobless_claims_beat_then_volume_surge"
+   ],
+   "labels_b": [
+    "Better-than-expected jobless claims landing during negative funding regimes",
+    "Jobless surprise during compression, exiting into RSI < 45"
+   ]
+  }
+ },
+ {
+  "key": "compression_2022-12-15_ETHUSDT",
+  "as_of": "2022-12-15",
+  "coin": "ETHUSDT",
+  "desc": "VOLATILITY COMPRESSION RESOLVED: ETHUSDT\nPHASE A -- compression began 2022-12-11 (volatility 1.28 sd below this coin's own normal)\nPHASE MIDDLE -- it stayed compressed for 4 day(s); price moved +0.28%",
+  "sonnet_a_error": "No text block in response.content: ['thinking']",
+  "sonnet_b_error": "Unterminated string starting at: line 1 column 16 (char 15)",
+  "haiku_action": "no_action",
+  "haiku_labels": [],
+  "ceiling": {
+   "same_action": true,
+   "both_proposed": false,
+   "both_silent": true,
+   "n_a": 0,
+   "n_b": 0,
+   "overlap": null
+  },
+  "haiku_vs_sonnet": {
+   "same_action": true,
+   "both_proposed": false,
+   "both_silent": true,
+   "n_a": 0,
+   "n_b": 0,
+   "overlap": null
+  }
+ },
+ {
+  "key": "compression_2023-06-06_ETHUSDT",
+  "as_of": "2023-06-06",
+  "coin": "ETHUSDT",
+  "desc": "VOLATILITY COMPRESSION RESOLVED: ETHUSDT\nPHASE A -- compression began 2023-05-25 (volatility 1.75 sd below this coin's own normal)\nPHASE MIDDLE -- it stayed compressed for 12 day(s); price moved +4.38",
+  "sonnet_a_action": "propose_novel_test",
+  "sonnet_a_labels": [
+   "dovish_rate_surprise_negative_funding_eth",
+   "dovish_rate_surprise_bollinger_breakout"
+  ],
+  "sonnet_b_error": "No text block in response.content: ['thinking']",
+  "haiku_action": "no_action",
+  "haiku_labels": [],
+  "ceiling": {
+   "same_action": false,
+   "both_proposed": false,
+   "both_silent": false,
+   "n_a": 2,
+   "n_b": 0,
+   "overlap": null
+  },
+  "haiku_vs_sonnet": {
+   "same_action": false,
+   "both_proposed": false,
+   "both_silent": false,
+   "n_a": 2,
+   "n_b": 0,
+   "overlap": null
+  }
+ },
+ {
+  "key": "compression_2023-08-17_ETHUSDT",
+  "as_of": "2023-08-17",
+  "coin": "ETHUSDT",
+  "desc": "VOLATILITY COMPRESSION RESOLVED: ETHUSDT\nPHASE A -- compression began 2023-08-02 (volatility 2.56 sd below this coin's own normal)\nPHASE MIDDLE -- it stayed compressed for 15 day(s); price moved -8.61",
+  "sonnet_a_action": "propose_novel_test",
+  "sonnet_a_labels": [
+   "labor_shock_oversold_reversion",
+   "labor_shock_volume_capitulation"
+  ],
+  "sonnet_b_error": "No text block in response.content: ['thinking']",
+  "haiku_action": "propose_novel_test",
+  "haiku_labels": [
+   "labor_deterioration_then_oversold_bounce",
+   "volume_spike_out_of_compression_after_labor_shock"
+  ],
+  "ceiling": {
+   "same_action": false,
+   "both_proposed": false,
+   "both_silent": false,
+   "n_a": 2,
+   "n_b": 0,
+   "overlap": null
+  },
+  "haiku_vs_sonnet": {
+   "same_action": true,
+   "both_proposed": true,
+   "both_silent": false,
+   "n_a": 2,
+   "n_b": 2,
+   "overlap": 0.3485714285714286,
+   "labels_a": [
+    "labor_shock_oversold_reversion",
+    "labor_shock_volume_capitulation"
+   ],
+   "labels_b": [
+    "labor_deterioration_then_oversold_bounce",
+    "volume_spike_out_of_compression_after_labor_shock"
+   ]
+  }
+ },
+ {
+  "key": "compression_2023-09-21_ETHUSDT",
+  "as_of": "2023-09-21",
+  "coin": "ETHUSDT",
+  "desc": "VOLATILITY COMPRESSION RESOLVED: ETHUSDT\nPHASE A -- compression began 2023-09-20 (volatility 1.31 sd below this coin's own normal)\nPHASE MIDDLE -- it stayed compressed for 1 day(s); price moved -2.36%",
+  "sonnet_a_action": "propose_novel_test",
+  "sonnet_a_labels": [
+   "hawkish_claims_crowded_longs_short",
+   "hawkish_claims_weak_price_short"
+  ],
+  "sonnet_b_action": "propose_novel_test",
+  "sonnet_b_labels": [
+   "hawkish_claims_surprise_crowded_funding_short",
+   "hawkish_claims_surprise_oversold_bounce"
+  ],
+  "haiku_action": "no_action",
+  "haiku_labels": [],
+  "ceiling": {
+   "same_action": true,
+   "both_proposed": true,
+   "both_silent": false,
+   "n_a": 2,
+   "n_b": 2,
+   "overlap": 0.6658291457286433,
+   "labels_a": [
+    "hawkish_claims_crowded_longs_short",
+    "hawkish_claims_weak_price_short"
+   ],
+   "labels_b": [
+    "hawkish_claims_surprise_crowded_funding_short",
+    "hawkish_claims_surprise_oversold_bounce"
+   ]
+  },
+  "haiku_vs_sonnet": {
+   "same_action": false,
+   "both_proposed": false,
+   "both_silent": false,
+   "n_a": 2,
+   "n_b": 0,
+   "overlap": null
+  }
+ },
+ {
+  "key": "compression_2024-06-19_ETHUSDT",
+  "as_of": "2024-06-19",
+  "coin": "ETHUSDT",
+  "desc": "VOLATILITY COMPRESSION RESOLVED: ETHUSDT\nPHASE A -- compression began 2024-06-18 (volatility 1.25 sd below this coin's own normal)\nPHASE MIDDLE -- it stayed compressed for 1 day(s); price moved +2.21%",
+  "sonnet_a_action": "no_action",
+  "sonnet_a_labels": [],
+  "sonnet_b_action": "no_action",
+  "sonnet_b_labels": [],
+  "haiku_action": "no_action",
+  "haiku_labels": [],
+  "ceiling": {
+   "same_action": true,
+   "both_proposed": false,
+   "both_silent": true,
+   "n_a": 0,
+   "n_b": 0,
+   "overlap": null
+  },
+  "haiku_vs_sonnet": {
+   "same_action": true,
+   "both_proposed": false,
+   "both_silent": true,
+   "n_a": 0,
+   "n_b": 0,
+   "overlap": null
+  }
+ },
+ {
+  "key": "compression_2025-05-08_ETHUSDT",
+  "as_of": "2025-05-08",
+  "coin": "ETHUSDT",
+  "desc": "VOLATILITY COMPRESSION RESOLVED: ETHUSDT\nPHASE A -- compression began 2025-05-05 (volatility 1.31 sd below this coin's own normal)\nPHASE MIDDLE -- it stayed compressed for 3 day(s); price moved +21.27",
+  "sonnet_a_error": "Unterminated string starting at: line 1 column 1177 (char 1176)",
+  "sonnet_b_error": "Unterminated string starting at: line 1 column 16 (char 15)",
+  "haiku_action": "no_action",
+  "haiku_labels": [],
+  "ceiling": {
+   "same_action": true,
+   "both_proposed": false,
+   "both_silent": true,
+   "n_a": 0,
+   "n_b": 0,
+   "overlap": null
+  },
+  "haiku_vs_sonnet": {
+   "same_action": true,
+   "both_proposed": false,
+   "both_silent": true,
+   "n_a": 0,
+   "n_b": 0,
+   "overlap": null
+  }
+ },
+ {
+  "key": "compression_2019-09-24_BNBUSDT",
+  "as_of": "2019-09-24",
+  "coin": "BNBUSDT",
+  "desc": "VOLATILITY COMPRESSION RESOLVED: BNBUSDT\nPHASE A -- compression began 2019-09-17 (volatility 1.33 sd below this coin's own normal)\nPHASE MIDDLE -- it stayed compressed for 7 day(s); price moved -24.81",
+  "sonnet_a_action": "propose_novel_test",
+  "sonnet_a_labels": [
+   "jobless_claims_surprise_then_oversold_bounce",
+   "jobless_claims_surprise_then_volume_capitulation_continuation"
+  ],
+  "sonnet_b_action": "propose_novel_test",
+  "sonnet_b_labels": [
+   "jobless_claims_mild_surprise_with_oversold_bnb",
+   "jobless_claims_mild_surprise_with_panic_volume_bnb"
+  ],
+  "haiku_action": "propose_novel_test",
+  "haiku_labels": [
+   "jobless_claims_miss_during_compression_exit_oversold"
+  ],
+  "ceiling": {
+   "same_action": true,
+   "both_proposed": true,
+   "both_silent": false,
+   "n_a": 2,
+   "n_b": 2,
+   "overlap": 0.10089020771513353,
+   "labels_a": [
+    "jobless_claims_surprise_then_oversold_bounce",
+    "jobless_claims_surprise_then_volume_capitulation_continuation"
+   ],
+   "labels_b": [
+    "jobless_claims_mild_surprise_with_oversold_bnb",
+    "jobless_claims_mild_surprise_with_panic_volume_bnb"
+   ]
+  },
+  "haiku_vs_sonnet": {
+   "same_action": true,
+   "both_proposed": true,
+   "both_silent": false,
+   "n_a": 2,
+   "n_b": 1,
+   "overlap": 0.314540059347181,
+   "labels_a": [
+    "jobless_claims_surprise_then_oversold_bounce",
+    "jobless_claims_surprise_then_volume_capitulation_continuation"
+   ],
+   "labels_b": [
+    "jobless_claims_miss_during_compression_exit_oversold"
+   ]
+  }
+ },
+ {
+  "key": "compression_2019-11-22_BNBUSDT",
+  "as_of": "2019-11-22",
+  "coin": "BNBUSDT",
+  "desc": "VOLATILITY COMPRESSION RESOLVED: BNBUSDT\nPHASE A -- compression began 2019-11-12 (volatility 1.38 sd below this coin's own normal)\nPHASE MIDDLE -- it stayed compressed for 10 day(s); price moved -26.1",
+  "sonnet_a_error": "No text block in response.content: ['thinking']",
+  "sonnet_b_error": "Unterminated string starting at: line 1 column 16 (char 15)",
+  "haiku_action": "propose_novel_test",
+  "haiku_labels": [
+   "jobless_rise_during_coil_then_oversold_exit",
+   "jobless_shock_with_high_realized_vol_on_exit"
+  ],
+  "ceiling": {
+   "same_action": true,
+   "both_proposed": false,
+   "both_silent": true,
+   "n_a": 0,
+   "n_b": 0,
+   "overlap": null
+  },
+  "haiku_vs_sonnet": {
+   "same_action": false,
+   "both_proposed": false,
+   "both_silent": false,
+   "n_a": 0,
+   "n_b": 2,
+   "overlap": null
+  }
+ },
+ {
+  "key": "compression_2020-02-06_BNBUSDT",
+  "as_of": "2020-02-06",
+  "coin": "BNBUSDT",
+  "desc": "VOLATILITY COMPRESSION RESOLVED: BNBUSDT\nPHASE A -- compression began 2020-02-04 (volatility 1.58 sd below this coin's own normal)\nPHASE MIDDLE -- it stayed compressed for 2 day(s); price moved +13.70",
+  "sonnet_a_error": "Unterminated string starting at: line 1 column 16 (char 15)",
+  "sonnet_b_action": "propose_novel_test",
+  "sonnet_b_labels": [
+   "good_jobless_claims_surprise_with_volume_breakout_long",
+   "good_jobless_claims_surprise_with_overbought_rsi_short"
+  ],
+  "haiku_action": "no_action",
+  "haiku_labels": [],
+  "ceiling": {
+   "same_action": false,
+   "both_proposed": false,
+   "both_silent": false,
+   "n_a": 0,
+   "n_b": 2,
+   "overlap": null
+  },
+  "haiku_vs_sonnet": {
+   "same_action": true,
+   "both_proposed": false,
+   "both_silent": true,
+   "n_a": 0,
+   "n_b": 0,
+   "overlap": null
+  }
+ },
+ {
+  "key": "compression_2021-07-16_BNBUSDT",
+  "as_of": "2021-07-16",
+  "coin": "BNBUSDT",
+  "desc": "VOLATILITY COMPRESSION RESOLVED: BNBUSDT\nPHASE A -- compression began 2021-07-15 (volatility 1.27 sd below this coin's own normal)\nPHASE MIDDLE -- it stayed compressed for 1 day(s); price moved -4.19%",
+  "sonnet_a_action": "no_action",
+  "sonnet_a_labels": [],
+  "sonnet_b_action": "no_action",
+  "sonnet_b_labels": [],
+  "haiku_action": "no_action",
+  "haiku_labels": [],
+  "ceiling": {
+   "same_action": true,
+   "both_proposed": false,
+   "both_silent": true,
+   "n_a": 0,
+   "n_b": 0,
+   "overlap": null
+  },
+  "haiku_vs_sonnet": {
+   "same_action": true,
+   "both_proposed": false,
+   "both_silent": true,
+   "n_a": 0,
+   "n_b": 0,
+   "overlap": null
+  }
+ },
+ {
+  "key": "compression_2022-01-11_BNBUSDT",
+  "as_of": "2022-01-11",
+  "coin": "BNBUSDT",
+  "desc": "VOLATILITY COMPRESSION RESOLVED: BNBUSDT\nPHASE A -- compression began 2021-12-29 (volatility 1.43 sd below this coin's own normal)\nPHASE MIDDLE -- it stayed compressed for 13 day(s); price moved -9.89",
+  "sonnet_a_action": "propose_novel_test",
+  "sonnet_a_labels": [
+   "weak jobless claims print followed by crowded-short funding",
+   "weak jobless claims print with volume-spike capitulation"
+  ],
+  "sonnet_b_action": "propose_novel_test",
+  "sonnet_b_labels": [
+   "weak_claims_then_negative_funding_long",
+   "weak_claims_then_low_rsi_long"
+  ],
+  "haiku_action": "propose_novel_test",
+  "haiku_labels": [
+   "jobless_claims_tightening_in_compression_with_rsi_recovery"
+  ],
+  "ceiling": {
+   "same_action": true,
+   "both_proposed": true,
+   "both_silent": false,
+   "n_a": 2,
+   "n_b": 2,
+   "overlap": 0.1570493753718025,
+   "labels_a": [
+    "weak jobless claims print followed by crowded-short funding",
+    "weak jobless claims print with volume-spike capitulation"
+   ],
+   "labels_b": [
+    "weak_claims_then_negative_funding_long",
+    "weak_claims_then_low_rsi_long"
+   ]
+  },
+  "haiku_vs_sonnet": {
+   "same_action": true,
+   "both_proposed": true,
+   "both_silent": false,
+   "n_a": 2,
+   "n_b": 1,
+   "overlap": 0.17166074149314373,
+   "labels_a": [
+    "weak jobless claims print followed by crowded-short funding",
+    "weak jobless claims print with volume-spike capitulation"
+   ],
+   "labels_b": [
+    "jobless_claims_tightening_in_compression_with_rsi_recovery"
+   ]
+  }
+ },
+ {
+  "key": "compression_2022-04-11_BNBUSDT",
+  "as_of": "2022-04-11",
+  "coin": "BNBUSDT",
+  "desc": "VOLATILITY COMPRESSION RESOLVED: BNBUSDT\nPHASE A -- compression began 2022-03-20 (volatility 1.67 sd below this coin's own normal)\nPHASE MIDDLE -- it stayed compressed for 22 day(s); price moved +0.97",
+  "sonnet_a_error": "Expecting ',' delimiter: line 1 column 776 (char 775)",
+  "sonnet_b_action": "propose_novel_test",
+  "sonnet_b_labels": [
+   "hawkish_rate_surprise_then_volume_breakdown",
+   "hawkish_rate_surprise_then_lowerband_break"
+  ],
+  "haiku_action": "propose_novel_test",
+  "haiku_labels": [
+   "Rate shock during compression resolved into oversold RSI"
+  ],
+  "ceiling": {
+   "same_action": false,
+   "both_proposed": false,
+   "both_silent": false,
+   "n_a": 0,
+   "n_b": 2,
+   "overlap": null
+  },
+  "haiku_vs_sonnet": {
+   "same_action": false,
+   "both_proposed": false,
+   "both_silent": false,
+   "n_a": 0,
+   "n_b": 1,
+   "overlap": null
+  }
+ },
+ {
+  "key": "compression_2023-06-05_BNBUSDT",
+  "as_of": "2023-06-05",
+  "coin": "BNBUSDT",
+  "desc": "VOLATILITY COMPRESSION RESOLVED: BNBUSDT\nPHASE A -- compression began 2023-05-20 (volatility 1.46 sd below this coin's own normal)\nPHASE MIDDLE -- it stayed compressed for 16 day(s); price moved -10.8",
+  "sonnet_a_error": "No text block in response.content: ['thinking']",
+  "sonnet_b_action": "propose_novel_test",
+  "sonnet_b_labels": [
+   "dovish_rate_surprise_oversold_reversion",
+   "hawkish_claims_volume_capitulation_continuation"
+  ],
+  "haiku_action": "no_action",
+  "haiku_labels": [],
+  "ceiling": {
+   "same_action": false,
+   "both_proposed": false,
+   "both_silent": false,
+   "n_a": 0,
+   "n_b": 2,
+   "overlap": null
+  },
+  "haiku_vs_sonnet": {
+   "same_action": true,
+   "both_proposed": false,
+   "both_silent": true,
+   "n_a": 0,
+   "n_b": 0,
+   "overlap": null
+  }
+ },
+ {
+  "key": "compression_2024-09-30_BNBUSDT",
+  "as_of": "2024-09-30",
+  "coin": "BNBUSDT",
+  "desc": "VOLATILITY COMPRESSION RESOLVED: BNBUSDT\nPHASE A -- compression began 2024-09-29 (volatility 1.28 sd below this coin's own normal)\nPHASE MIDDLE -- it stayed compressed for 1 day(s); price moved -4.73%",
+  "sonnet_a_action": "no_action",
+  "sonnet_a_labels": [],
+  "sonnet_b_action": "no_action",
+  "sonnet_b_labels": [],
+  "haiku_action": "no_action",
+  "haiku_labels": [],
+  "ceiling": {
+   "same_action": true,
+   "both_proposed": false,
+   "both_silent": true,
+   "n_a": 0,
+   "n_b": 0,
+   "overlap": null
+  },
+  "haiku_vs_sonnet": {
+   "same_action": true,
+   "both_proposed": false,
+   "both_silent": true,
+   "n_a": 0,
+   "n_b": 0,
+   "overlap": null
+  }
+ },
+ {
+  "key": "compression_2025-07-06_BNBUSDT",
+  "as_of": "2025-07-06",
+  "coin": "BNBUSDT",
+  "desc": "VOLATILITY COMPRESSION RESOLVED: BNBUSDT\nPHASE A -- compression began 2025-06-25 (volatility 1.32 sd below this coin's own normal)\nPHASE MIDDLE -- it stayed compressed for 11 day(s); price moved +2.64",
+  "sonnet_a_error": "Unterminated string starting at: line 1 column 16 (char 15)",
+  "sonnet_b_error": "Expecting ',' delimiter: line 1 column 659 (char 658)",
+  "haiku_action": "no_action",
+  "haiku_labels": [],
+  "ceiling": {
+   "same_action": true,
+   "both_proposed": false,
+   "both_silent": true,
+   "n_a": 0,
+   "n_b": 0,
+   "overlap": null
+  },
+  "haiku_vs_sonnet": {
+   "same_action": true,
+   "both_proposed": false,
+   "both_silent": true,
+   "n_a": 0,
+   "n_b": 0,
+   "overlap": null
+  }
+ },
+ {
+  "key": "compression_2019-04-02_XRPUSDT",
+  "as_of": "2019-04-02",
+  "coin": "XRPUSDT",
+  "desc": "VOLATILITY COMPRESSION RESOLVED: XRPUSDT\nPHASE A -- compression began 2019-03-17 (volatility 1.44 sd below this coin's own normal)\nPHASE MIDDLE -- it stayed compressed for 16 day(s); price moved +11.1",
+  "sonnet_a_action": "propose_novel_test",
+  "sonnet_a_labels": [
+   "dovish_rate_surprise_volume_breakout",
+   "claims_strength_overbought_reversion"
+  ],
+  "sonnet_b_error": "Unterminated string starting at: line 1 column 413 (char 412)",
+  "haiku_action": "no_action",
+  "haiku_labels": [],
+  "ceiling": {
+   "same_action": false,
+   "both_proposed": false,
+   "both_silent": false,
+   "n_a": 2,
+   "n_b": 0,
+   "overlap": null
+  },
+  "haiku_vs_sonnet": {
+   "same_action": false,
+   "both_proposed": false,
+   "both_silent": false,
+   "n_a": 2,
+   "n_b": 0,
+   "overlap": null
+  }
+ },
+ {
+  "key": "compression_2019-09-14_XRPUSDT",
+  "as_of": "2019-09-14",
+  "coin": "XRPUSDT",
+  "desc": "VOLATILITY COMPRESSION RESOLVED: XRPUSDT\nPHASE A -- compression began 2019-09-12 (volatility 1.25 sd below this coin's own normal)\nPHASE MIDDLE -- it stayed compressed for 2 day(s); price moved +2.83%",
+  "sonnet_a_error": "No text block in response.content: ['thinking']",
+  "sonnet_b_action": "propose_novel_test",
+  "sonnet_b_labels": [
+   "jobless claims surprise (stronger labor market) preceding neutral-to-low RSI",
+   "benign CPI surprise preceding volume breakout from compression"
+  ],
+  "haiku_action": "no_action",
+  "haiku_labels": [],
+  "ceiling": {
+   "same_action": false,
+   "both_proposed": false,
+   "both_silent": false,
+   "n_a": 0,
+   "n_b": 2,
+   "overlap": null
+  },
+  "haiku_vs_sonnet": {
+   "same_action": true,
+   "both_proposed": false,
+   "both_silent": true,
+   "n_a": 0,
+   "n_b": 0,
+   "overlap": null
+  }
+ },
+ {
+  "key": "compression_2019-12-17_XRPUSDT",
+  "as_of": "2019-12-17",
+  "coin": "XRPUSDT",
+  "desc": "VOLATILITY COMPRESSION RESOLVED: XRPUSDT\nPHASE A -- compression began 2019-12-12 (volatility 1.32 sd below this coin's own normal)\nPHASE MIDDLE -- it stayed compressed for 5 day(s); price moved -16.15",
+  "sonnet_a_error": "Unterminated string starting at: line 1 column 448 (char 447)",
+  "sonnet_b_action": "propose_novel_test",
+  "sonnet_b_labels": [
+   "jobless_claims_surprise_then_oversold_bounce",
+   "jobless_claims_surprise_then_volume_panic_continuation"
+  ],
+  "haiku_action": "propose_novel_test",
+  "haiku_labels": [
+   "jobless_claims_surprise_hawkish_into_oversold"
+  ],
+  "ceiling": {
+   "same_action": false,
+   "both_proposed": false,
+   "both_silent": false,
+   "n_a": 0,
+   "n_b": 2,
+   "overlap": null
+  },
+  "haiku_vs_sonnet": {
+   "same_action": false,
+   "both_proposed": false,
+   "both_silent": false,
+   "n_a": 0,
+   "n_b": 1,
+   "overlap": null
+  }
+ }
+]

@@ -31,9 +31,44 @@ import numpy as np
 
 RESULTS_PATH = Path(__file__).resolve().parent / "model_comparison.json"
 
-SONNET_PER_CALL = 0.0153
+SONNET_PER_CALL = 0.0139   # measured, at the corrected $2/$10 pricing
 HAIKU_PER_CALL = SONNET_PER_CALL / 3
 FULL_REPLAY_CALLS = 1200
+
+
+
+def _quality_report(rows) -> None:
+    """The second question: which model is the better analyst.
+
+    Agreement says whether one model can stand in for another. It says nothing
+    about whether either is any good -- and this project's whole subject is
+    whether an LLB can find a real pattern, not whether two of them can be
+    swapped. Reported on the p-value distribution because acceptance is far too
+    rare to separate anything at this sample size."""
+    import numpy as np
+
+    print("\n" + "=" * 62)
+    print("Which model is the better ANALYST -- independent of who agrees with whom\n")
+    print(f"{'':<22}{'specs':>7}{'testable':>10}{'accepted':>10}{'median p':>11}{'p<0.10':>8}")
+    print("-" * 68)
+    for tag, label in (("sonnet_a", "Sonnet"), ("sonnet_b", "Sonnet (2nd run)"), ("haiku", "Haiku")):
+        n = sum(r.get(f"{tag}_quality", {}).get("n_specs", 0) for r in rows)
+        te = sum(r.get(f"{tag}_quality", {}).get("testable", 0) for r in rows)
+        ac = sum(r.get(f"{tag}_quality", {}).get("accepted", 0) for r in rows)
+        ps = [p for r in rows for p in r.get(f"{tag}_quality", {}).get("p_values", [])]
+        med = f"{np.median(ps):.3f}" if ps else "--"
+        lo = sum(1 for p in ps if p < 0.10)
+        print(f"{label:<22}{n:>7}{te:>10}{ac:>10}{med:>11}{lo:>8}")
+    sp = [p for r in rows for p in r.get("sonnet_a_quality", {}).get("p_values", [])]
+    hp = [p for r in rows for p in r.get("haiku_quality", {}).get("p_values", [])]
+    if len(sp) >= 5 and len(hp) >= 5:
+        from scipy.stats import mannwhitneyu
+        pv = mannwhitneyu(sp, hp, alternative="less").pvalue
+        print(f"\nAre Sonnet's p-values lower than Haiku's? Mann-Whitney p = {pv:.3f}")
+        print("(one-sided: lower p-values mean the analyst is finding more that holds up)")
+    else:
+        print(f"\nToo few tested proposals to compare p-value distributions "
+              f"(Sonnet {len(sp)}, Haiku {len(hp)}).")
 
 
 def main() -> None:
@@ -93,6 +128,8 @@ def main() -> None:
         stat_note = f"Wilcoxon signed-rank, one-sided (ceiling > Haiku): p = {pval:.4f}"
     print(f"\n{stat_note}")
     print(f"Mean shortfall vs the ceiling: {diff.mean():+.3f}")
+
+    _quality_report(rows)
 
     saving = FULL_REPLAY_CALLS * (SONNET_PER_CALL - HAIKU_PER_CALL)
     print("\n" + "=" * 62)

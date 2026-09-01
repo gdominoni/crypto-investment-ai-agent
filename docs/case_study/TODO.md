@@ -126,7 +126,33 @@ expressible once sentiment is a term *separate* from price.
 
 ---
 
-## 1b. Haiku-vs-Sonnet substitutability -- BUILT, NOT YET RUN
+## 1b. Haiku-vs-Sonnet substitutability -- RUN, ANSWER IS SONNET
+
+> **Result, 2026-09-01.** 34 compression-exit events, judged three times each
+> (Sonnet twice as the control, Haiku once), \$1.21.
+>
+>     Sonnet vs Sonnet (ceiling)   mean 0.443   median 0.388
+>     Haiku  vs Sonnet             mean 0.209   median 0.137   Wilcoxon p = 0.042
+>
+>     model     proposals   testable   median p   p<0.10
+>     Sonnet           52         19      0.531        3
+>     Haiku            13          6      0.640        0
+>
+> Haiku proposes a QUARTER of the hypotheses at a THIRD of the price, so per
+> testable candidate the two cost the same (\$0.025 vs \$0.026) and Sonnet
+> delivers three times the material. The \$11.12/replay saving is illusory.
+>
+> **Cost per call is meaningless when two models do not do the same amount of
+> work.** Agreement alone would have said "indistinguishable and cheaper"; only
+> the quality measurement, added at the director's insistence, made the volume
+> difference visible.
+>
+> Also found: `max_tokens=2000` was truncating 35% of Sonnet calls into
+> text-less thinking blocks. Raised to 4000, 0 failures in 102 calls.
+>
+> Kept below for the design reasoning, which is what a future reader needs.
+
+## 1b (original plan). Haiku-vs-Sonnet substitutability
 
 Deferred until the trigger rework settles: the comparison samples real trigger
 days, so re-running it before the triggers are final would measure the old

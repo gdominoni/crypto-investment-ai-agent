@@ -5,7 +5,14 @@ $0.0153 each, roughly 1,200 over a full replay. Haiku 4.5 is priced at exactly
 one third on both input and output. Whether that is a saving or a false economy
 is an empirical question, and a cheap one.
 
-THE QUESTION IS SUBSTITUTABILITY, NOT QUALITY. Sonnet is taken as the reference:
+TWO QUESTIONS, NOT ONE. Substitutability -- does Haiku propose what Sonnet
+proposes -- and QUALITY: which model is the better analyst. They are different,
+and agreement cannot answer the second, since two models can agree perfectly
+while both being useless. Quality is scored by `_quality()` on the p-value
+distribution of each model's own proposals, which costs nothing beyond local
+compute.
+
+ON SUBSTITUTABILITY. Sonnet is taken as the reference:
 in a given situation it proposes some set of conditions, and what matters is
 whether Haiku proposes the same ones. This is deliberately not a test of which
 model is *better*.
@@ -83,82 +90,122 @@ USABLE_SPEC_RATE = 118 / 212
 
 def _sample_events(n: int) -> list[dict]:
     """Real trigger days, drawn deterministically and rebuilt exactly as
-    `replay/engine.py::advance` builds them -- same `release_dates` filter
-    (`new_periods_only`), same `_shock_transition` rule, same event text. If
-    this drifted from the engine the comparison would measure the models on a
-    task neither is actually asked to do."""
+    `replay/engine.py::advance` builds them -- the same `compression_exit`, the
+    same three-phase event text. If this drifted from the engine the comparison
+    would measure the models on a task neither is actually asked to do, which is
+    why this file was deferred until the trigger design settled."""
     import numpy as np
 
     from candidates.data_loading import load_daily
-    from candidates.macro_vintage import MACRO_SERIES
+    from candidates.methodology import compression_exit
     from candidates.run_battery import COINS
     from replay import judgment
-    from replay.engine import _shock_transition
-    from replay.time_sandbox import latest_release_with_prior, release_dates
 
     rng = np.random.default_rng(SEED)
-
-    macro = [{"kind": "macro", "series": k, "label": lbl, "as_of": d}
-             for k, lbl in MACRO_SERIES.items()
-             for d in release_dates(k, SAMPLE_START, SAMPLE_END, new_periods_only=True)]
-
-    shock, ohlc = [], {c: load_daily(c) for c in COINS}
+    pool = []
     for coin in COINS:
-        idx = ohlc[coin].index
-        for d in idx[(idx >= SAMPLE_START) & (idx <= SAMPLE_END)]:
-            t = _shock_transition(ohlc[coin], d)
-            if t is not None:
-                shock.append({"kind": "shock", "coin": coin, "as_of": d,
-                              "z": t[0], "direction": t[1]})
-
-    half = n // 2
-    picks = []
-    for pool, k in ((macro, half), (shock, n - half)):
-        if pool:
-            chosen = rng.choice(len(pool), size=min(k, len(pool)), replace=False)
-            picks += [pool[i] for i in sorted(chosen)]
-
+        ohlc = load_daily(coin)
+        idx = ohlc.index[(ohlc.index >= SAMPLE_START) & (ohlc.index <= SAMPLE_END)]
+        for d in idx:
+            episode = compression_exit(ohlc, d)
+            if episode is not None:
+                pool.append({"coin": coin, "as_of": episode["b_date"], "episode": {"symbol": coin, **episode}})
+    if not pool:
+        return []
+    chosen = rng.choice(len(pool), size=min(n, len(pool)), replace=False)
+    picks = [pool[i] for i in sorted(chosen)]
     for p in picks:
-        if p["kind"] == "macro":
-            rel = latest_release_with_prior(p["series"], p["as_of"])
-            p["desc"] = judgment.format_macro_event(p["label"], rel) if rel else None
-        else:
-            p["desc"] = judgment.format_shock_event(p["coin"], p["z"], p["direction"])
-    return [p for p in picks if p.get("desc")]
+        p["desc"] = judgment.format_compression_event(p["coin"], p["episode"])
+    return picks
 
 
-def _spec_of(raw: dict | None):
-    """The proposed condition, or None when the model proposed nothing (or
-    proposed something the validator refuses). A refused proposal is treated as
-    'no usable condition', which is what it is downstream."""
-    from llm_pipeline.novel_condition_tester import spec_from_proposal
+def _specs_of(raw: dict | None) -> list:
+    """Every usable condition in one judgment. A call now returns up to two, and
+    a proposal the validator refuses counts as no condition, which is what it is
+    downstream."""
+    from llm_pipeline.novel_condition_tester import proposals_from_assessment, spec_from_proposal
 
-    if not raw or raw.get("recommended_action") != "propose_novel_test":
-        return None
-    if not raw.get("novel_condition_spec"):
-        return None
-    spec, _ = spec_from_proposal(raw["novel_condition_spec"])
-    return spec
+    out = []
+    for d in proposals_from_assessment(raw or {}):
+        spec, _ = spec_from_proposal(d)
+        if spec is not None:
+            out.append(spec)
+    return out
 
 
-def _compare(a, b, as_of) -> dict:
-    """Agreement between two judgments, at both levels that matter.
+def _compare(a: list, b: list, as_of) -> dict:
+    """Agreement between two judgments, each of which may hold one or two
+    conditions.
 
-    Agreeing to propose NOTHING is real agreement and is recorded as such --
-    dropping those events would silently restrict the comparison to the cases
-    where the reference model happened to be talkative, and a model that
-    correctly stays quiet is exactly what a cheaper substitute should do."""
+    A SET's behaviour is the union of the days its conditions fire on, and two
+    sets agree to the extent those unions coincide. Comparing sets pairwise would
+    need an arbitrary matching rule and would break on a one-versus-two
+    comparison; the union has neither problem and is the honest question anyway
+    -- "would these two judgments have selected the same moments".
+
+    Agreeing to propose NOTHING is real agreement and is recorded as such.
+    Dropping those events would restrict the comparison to cases where the
+    reference model happened to be talkative, and a model that correctly stays
+    quiet is exactly what a cheaper substitute should do."""
     from candidates.run_battery import COINS
-    from llm_pipeline.novel_condition_tester import behavioural_agreement
+    from llm_pipeline.novel_condition_tester import occurrence_set
 
-    out = {"same_action": (a is None) == (b is None), "overlap": None,
-           "both_proposed": a is not None and b is not None,
-           "both_silent": a is None and b is None}
-    if out["both_proposed"]:
-        out["overlap"] = behavioural_agreement(a, b, COINS, as_of=as_of)
-        out["same_direction"] = a.direction == b.direction
-        out["indicators_a"] = sorted({c.indicator for c in a.clauses})
-        out["indicators_b"] = sorted({c.indicator for c in b.clauses})
+    out = {"same_action": (len(a) == 0) == (len(b) == 0),
+           "both_proposed": bool(a) and bool(b),
+           "both_silent": not a and not b,
+           "n_a": len(a), "n_b": len(b), "overlap": None}
+    if not out["both_proposed"]:
+        return out
+    sa = set().union(*(occurrence_set(s, COINS, as_of=as_of) for s in a))
+    sb = set().union(*(occurrence_set(s, COINS, as_of=as_of) for s in b))
+    union = sa | sb
+    out["overlap"] = (len(sa & sb) / len(union)) if union else float("nan")
+    out["labels_a"] = [s.label for s in a]
+    out["labels_b"] = [s.label for s in b]
+    return out
+
+
+
+def _quality(specs: list, as_of) -> dict:
+    """How good the proposals ARE, independent of who else agrees with them.
+
+    Agreement answers substitutability; it does not answer which model is the
+    better analyst, and two models can agree perfectly while both being useless.
+    This is the second question, and it is free -- `test_novel_condition` is
+    local compute, no API call.
+
+    Scored on the P-VALUE distribution rather than on acceptances, deliberately.
+    Acceptance is a rare binary outcome (measured at 8% across this grammar), so
+    counting acceptances over a few dozen proposals yields two or three events
+    and separates nothing -- that is why an earlier version of this file, which
+    scored exactly that way, was discarded. A p-value is continuous, defined for
+    every testable proposal, and is what the acceptance is a threshold on: an
+    analyst whose hypotheses land at p=0.2 is finding something an analyst whose
+    hypotheses land at p=0.6 is not, long before either clears a gate.
+
+    Also records the cheaper gates, which are denser still: how many proposals
+    were on-thesis at all, and how many were testable without being loosened."""
+    from candidates.run_battery import COINS
+    from llm_pipeline.novel_condition_tester import is_testable, test_novel_condition
+
+    out = {"n_specs": len(specs), "testable": 0, "tested": 0,
+           "accepted": 0, "p_values": [], "excess": []}
+    for spec in specs:
+        if is_testable(spec, COINS, as_of=as_of) is not None:
+            continue
+        out["testable"] += 1
+        try:
+            res = test_novel_condition(spec, COINS, as_of=as_of)
+        except Exception:
+            continue
+        pat = res.get("pattern_significance") or {}
+        out["tested"] += 1
+        if res.get("status") == "accepted":
+            out["accepted"] += 1
+        if pat.get("p_value") is not None:
+            out["p_values"].append(float(pat["p_value"]))
+        if pat.get("excess_return") is not None:
+            out["excess"].append(float(pat["excess_return"]))
     return out
 
 
@@ -226,28 +273,32 @@ def main() -> int:
             print("Raise --max-spend, or read the same-action agreement, which is")
             print("defined on every event and does not need pairs.")
             break
-        key = f"{ev['kind']}_{ev['as_of'].date()}_{ev.get('coin') or ev.get('series')}"
+        key = f"compression_{ev['as_of'].date()}_{ev['coin']}"
         if key in done:
             continue
-        row = {"key": key, "kind": ev["kind"], "as_of": str(ev["as_of"].date()),
-               "desc": ev["desc"][:200]}
+        row = {"key": key, "as_of": str(ev["as_of"].date()),
+               "coin": ev["coin"], "desc": ev["desc"][:200]}
         specs = {}
         for tag, model in (("sonnet_a", SONNET_MODEL), ("sonnet_b", SONNET_MODEL),
                            ("haiku", HAIKU_MODEL)):
             try:
                 raw = judgment.judge_event(ev["desc"], client, as_of=ev["as_of"],
                                             coin=ev.get("coin"), model=model)
-                specs[tag] = _spec_of(raw)
+                specs[tag] = _specs_of(raw)
                 row[f"{tag}_action"] = (raw or {}).get("recommended_action")
-                row[f"{tag}_label"] = ((raw or {}).get("novel_condition_spec") or {}).get("label")
+                row[f"{tag}_labels"] = [s.label for s in specs[tag]]
             except Exception as e:
                 # A response that cannot be parsed IS a result: it means the model
                 # does not hold the output contract, which disqualifies it as a
                 # substitute regardless of how well it agrees when it does parse.
-                specs[tag] = None
+                specs[tag] = []
                 row[f"{tag}_error"] = str(e)[:160]
         row["ceiling"] = _compare(specs["sonnet_a"], specs["sonnet_b"], ev["as_of"])
         row["haiku_vs_sonnet"] = _compare(specs["sonnet_a"], specs["haiku"], ev["as_of"])
+        # The second question, and the one agreement cannot answer: which model
+        # proposes hypotheses that hold up. Free -- local compute, no API call.
+        for tag in ("sonnet_a", "sonnet_b", "haiku"):
+            row[f"{tag}_quality"] = _quality(specs[tag], ev["as_of"])
         done[key] = row
         RESULTS_PATH.write_text(json.dumps(list(done.values()), indent=1))
         c, h = row["ceiling"]["overlap"], row["haiku_vs_sonnet"]["overlap"]

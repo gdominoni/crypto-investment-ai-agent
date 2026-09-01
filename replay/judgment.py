@@ -345,7 +345,18 @@ def judge_event(event_description: str, client: Anthropic, as_of: pd.Timestamp |
         # `model` is a parameter only so the same prompt, the same context and the
         # same scoring can be pointed at a cheaper model for comparison
         # (forecast/model_comparison.py). The replay itself never overrides it.
-        model=model, max_tokens=2000, system=cached_system(REPLAY_SYSTEM_PROMPT),
+        # 4000, raised from 2000 on 2026-09-01. Measured: Sonnet's mean output on
+        # this prompt is 1,438 tokens, so a 2,000 cap sat barely above the
+        # average and 35% of calls (14 of 40) hit it -- returning a thinking
+        # block with no text at all, which `extract_text` can only reject. Haiku
+        # on the same prompt averages 276 and never hit it.
+        #
+        # The cap grew because the prompt did: a three-phase episode narrative,
+        # a clause cap, two proposals, and the within_days explanation. Raising
+        # it costs nothing unless the model actually uses the room -- max_tokens
+        # is a ceiling, not a request, which is the same distinction that made
+        # an early cost forecast in this project 4x too high.
+        model=model, max_tokens=4000, system=cached_system(REPLAY_SYSTEM_PROMPT),
         messages=[{"role": "user", "content": user_content}],
     )
     _usage.record(response, ("replay.shock" if coin else "replay.macro")
@@ -502,7 +513,7 @@ def answer_market_question(question: str, client: Anthropic) -> str:
         # ("list every open live test, split by trigger") -- thinking alone used
         # over half that budget. Same root cause as judge_event's own comment,
         # just needed more headroom than the earlier bump gave it.
-        model=SONNET_MODEL, max_tokens=2000, system=MARKET_CHECK_SYSTEM_PROMPT,
+        model=SONNET_MODEL, max_tokens=4000, system=MARKET_CHECK_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": f"USER QUESTION: {question}\n\nSTATE:\n{snapshot}\n\n{context}"}],
     )
     _usage.record(response, "replay.market_check", SONNET_MODEL)

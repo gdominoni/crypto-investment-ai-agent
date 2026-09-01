@@ -50,7 +50,7 @@ A day-by-day walker through real 2017-present history, entirely isolated from pr
 
 ## Cost Optimization — what actually gets sent to Anthropic
 
-Pricing (verified against [platform.claude.com/docs/en/about-claude/pricing](https://platform.claude.com/docs/en/about-claude/pricing), not assumed): **Claude Sonnet 5** $2 / $10 per million tokens (input / output), **Claude Haiku 4.5** $1 / $5. Every number below is measured against this project's own real calls and real accumulated state, not a generic estimate.
+Pricing: **Claude Sonnet 5** $2 / $10 per million tokens (input / output), **Claude Haiku 4.5** $1 / $5, per [platform.claude.com/docs/en/about-claude/pricing](https://platform.claude.com/docs/en/about-claude/pricing). **`llm_pipeline/usage.py` currently prices Sonnet at $3 / $15 instead, and the two cannot both be right.** Flagged rather than quietly reconciled, because it may explain something: `COST_CALIBRATION = 0.735` was fitted by comparing that module's list-price arithmetic against one real invoice, and $2/$10 over $3/$15 is exactly 0.667 — close enough to 0.735 that the "empirical calibration" may be mostly a wrong list price rather than a billing subtlety. Token counts are exact either way; only the dollar column depends on this. Every number below is measured against this project's own real calls and real accumulated state, not a generic estimate.
 
 This section is in three parts, deliberately separated because they answer different questions about money: **Part 1** is the one-time cost of building and stress-testing this case study against nine years of real history (the historical replay) — not something that recurs once the demo exists. **Part 2** is the ongoing, recurring cost of actually running the system live (Anthropic API only). **Part 3** is server/hosting cost, kept separate from both because it's a non-Anthropic line item.
 
@@ -82,6 +82,58 @@ This project's LLM calls split into two kinds with deliberately different contex
 
 **For genuinely exhaustive questions, the answer is a free command, not a bigger LLM prompt.** `/summary` and `/replay_summary` (`telegram/bot.py`, via `format_trigger_summary()` in `candidates/methodology.py`) recompute the full battery fresh on demand — real statistics, no LLM call at all, no truncation, no cap — and cost **$0** in API terms (measured: ~4.4 seconds of local computation for 38 tracked candidates). The design split is deliberate: Sonnet answers *"what does this mean, why, what should I make of it"*; the local commands answer *"give me everything, exhaustively"* — the two questions don't need the same context budget, so they don't share one.
 
+**Could a cheaper model do the judging? Measured, not assumed — and the answer is no.**
+Sonnet judgment is the single largest running cost, so `forecast/model_comparison.py`
+tested whether Claude Haiku 4.5 (a third of the price) could replace it. 34 real
+compression-exit events, each judged three times — Sonnet twice and Haiku once —
+for \$1.21.
+
+The second Sonnet call is the control, not overhead. `temperature=0` is rejected by
+the API, so Sonnet is not deterministic: asked the same question twice it does not
+return the same proposal. Without knowing that self-agreement there is no scale to
+read a Haiku number against, and scoring Haiku against perfect agreement would
+condemn it for variance the reference model has too. Agreement is measured
+BEHAVIOURALLY — the Jaccard overlap of the days two conditions actually fire on —
+because two models never emit the same JSON and matching text would score formatting.
+
+    Sonnet vs Sonnet (ceiling)   mean 0.443   median 0.388
+    Haiku  vs Sonnet             mean 0.209   median 0.137
+    Wilcoxon signed-rank, one-sided, 10 paired events: p = 0.042
+
+**But agreement was the wrong question on its own, and nearly produced the wrong
+answer.** Two models can agree perfectly and both be useless; what the project needs
+is the better ANALYST. Scored separately on each model's own proposals — free, since
+`test_novel_condition` is local compute:
+
+                    proposals   testable   median p   p<0.10
+    Sonnet                 52         19      0.531        3
+    Haiku                  13          6      0.640        0
+
+Haiku proposes on 10 of 34 events where Sonnet proposes on 26 — **a quarter of the
+hypotheses at a third of the price.** Per unit of what the project actually needs
+the two cost the same: **\$0.025 per testable candidate for Sonnet, \$0.026 for
+Haiku**, and Sonnet delivers three times the material in the same wall-clock time,
+with three proposals under p=0.10 against none.
+
+The nominal saving is \$11.12 per replay (\$16.68 → \$5.56) and it is illusory.
+**Cost per call is a meaningless metric when two models do not do the same amount of
+work** — the comparison had to be per testable candidate, and only the quality
+measurement makes that visible.
+
+**A finding worth more than the model choice.** Sonnet's self-agreement is a median
+of 0.388: asked the same question twice it proposes conditions firing on well under
+half the same days. The proposal step is largely non-deterministic, and a single
+replay samples one grammar out of many that the same system would have produced.
+
+**The test also caught a live defect before it reached a replay.** On the first run,
+**35% of Sonnet calls (14 of 40) returned a thinking block with no text at all** and
+had to be discarded. Cause: `max_tokens` was 2000 while the mean output on the
+current prompt is 1,438 — the cap sat barely above the average, and the prompt had
+grown (a three-phase episode narrative, a clause cap, two proposals, the
+`within_days` explanation). Raised to 4000; the re-run had **0 failures in 102
+calls.** Haiku, averaging 276 output tokens, never hit either cap. No unit test could
+have found this: it only appears when the system runs.
+
 **A related correctness fix that's also a cost fix:** every Sonnet call in this project sets `max_tokens=2000` (not the 700-800 first used), after live testing showed the model spending an unpredictable, sometimes-large share of its output budget on an unrequested "thinking" block, occasionally leaving too little room for the actual JSON/text answer and truncating it (`stop_reason="max_tokens"`, observed live, not theoretical). A truncated call that then needs a retry effectively doubles its own cost; the fixed budget avoids that failure mode outright rather than paying for it via retries.
 
 ---
@@ -90,15 +142,15 @@ This project's LLM calls split into two kinds with deliberately different contex
 
 This is the recurring monthly cost once the system is actually deployed and left running — **API usage only**. Keeping the hourly/weekly jobs alive 24/7 needs a host of some kind (a small VPS, a scheduled cloud job, etc.); that cost is separate and not estimated here.
 
-Production's own escalation calls (`sonnet_strategist()` / `sonnet_shock_response()`) were measured directly against real production state and come to **~1,400 tokens/call** (~$0.01/call) — smaller than the Q&A path ever was before Part 1's fix, since they were never affected by that growth in the first place (they never call `build_live_test_summary()`, only the small, bounded `build_context_summary()`). This figure will drift up slowly as production accumulates real dynamic candidates over months (the "already tested" name list in `build_context_summary()` is deliberately uncapped, see Part 1), but stays name-only, not full-detail, so the growth is slow.
+Production's own escalation calls (`sonnet_strategist()` / `sonnet_compression_response()`) were measured directly against real production state and come to **~1,400 tokens/call** (~$0.01/call) — smaller than the Q&A path ever was before Part 1's fix, since they were never affected by that growth in the first place (they never call `build_live_test_summary()`, only the small, bounded `build_context_summary()`). This figure will drift up slowly as production accumulates real dynamic candidates over months (the "already tested" name list in `build_context_summary()` is deliberately uncapped, see Part 1), but stays name-only, not full-detail, so the growth is slow.
 
-Hourly shock scan (Sonnet only called on an actual detected shock, rare) + hourly headline screening (Haiku, cheap, batched) + a handful of escalations/day + occasional weekly keep/drop or milestone advice ≈ **$5-10/month** in moderate activity, likely under $20/month even in an unusually volatile month — a small fraction of Part 1's own replay cost, which compresses years of events into a short, continuous burst and is not representative of live, one-event-at-a-time operation.
+Hourly compression scan (Sonnet called only on a confirmed compression exit, and only ONCE per episode — the ledger in `compression_detector.py` is what makes that true; the shock path it replaced tested the volatility STATE, so a multi-day shock re-escalated the same market every hour) + hourly headline screening (Haiku, cheap, batched) + a handful of escalations/day + occasional weekly keep/drop or milestone advice ≈ **$5-10/month** in moderate activity, likely under $20/month even in an unusually volatile month — a small fraction of Part 1's own replay cost, which compresses years of events into a short, continuous burst and is not representative of live, one-event-at-a-time operation.
 
 ---
 
 ### 🖥️ Part 3 — Server / Hosting Cost Optimization (What Stays Off the Live Host)
 
-The live host only needs to run the cheap, real-time-sensitive jobs continuously: the hourly mechanical trigger scan (`execution/live_testing.py::run_once()`, pure pandas/statistics, no LLM), the hourly shock/headline scans (API calls only, no local compute), and the always-on Telegram bot loop (`telegram/bot.py::run_bot()`, idle almost all the time). None of these need meaningful CPU or memory — a minimal VPS handles all of them comfortably.
+The live host only needs to run the cheap, real-time-sensitive jobs continuously: the hourly mechanical trigger scan (`execution/live_testing.py::run_once()`, pure pandas/statistics, no LLM), the hourly compression/headline scans (API calls only, no local compute), and the always-on Telegram bot loop (`telegram/bot.py::run_bot()`, idle almost all the time). None of these need meaningful CPU or memory — a minimal VPS handles all of them comfortably.
 
 **One genuinely heavy periodic job is deliberately kept off the live host: `execution/hyperopt_runner.py`.** It was built local-only from the start (see its own module docstring), for reasons that hold up under measurement, not just intent:
 - **It's the one real compute cost in this project.** A single candidate at 50 epochs of Freqtrade's Bayesian hyperopt took several real minutes in this project's own testing — compare to the entire weekly candidate battery re-run (`run_all()` / `run_replay_battery()`), which is genuinely cheap: **4.4 seconds measured, for 38 tracked candidates.** Running hyperopt on a growing candidate registry (the historical replay alone reached 96) on a paid, always-on host would be paying 24/7 pricing for a workload that's actually bursty and occasional.

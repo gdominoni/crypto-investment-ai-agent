@@ -439,7 +439,7 @@ def sonnet_strategist(flagged: dict, client: Anthropic) -> dict:
         # 2000, not 700 -- see replay/judgment.py::judge_event's comment: observed
         # live, the model emits a thinking block even though `thinking` is never
         # requested, and 700 sometimes left no budget for the actual JSON answer.
-        model=SONNET_MODEL, max_tokens=2000, system=cached_system(SONNET_SYSTEM_PROMPT),
+        model=SONNET_MODEL, max_tokens=4000, system=cached_system(SONNET_SYSTEM_PROMPT),
         messages=[{"role": "user", "content": user_content}],
     )
     _usage.record(response, "prod.sonnet_strategist", SONNET_MODEL)
@@ -483,7 +483,7 @@ def sonnet_compression_response(episode: dict, client: Anthropic) -> dict:
         f"CANDIDATE BATTERY CONTEXT:\n{context_summary}"
     )
     response = client.messages.create(
-        model=SONNET_MODEL, max_tokens=2000, system=cached_system(COMPRESSION_SYSTEM_PROMPT),
+        model=SONNET_MODEL, max_tokens=4000, system=cached_system(COMPRESSION_SYSTEM_PROMPT),
         messages=[{"role": "user", "content": user_content}],
     )
     _usage.record(response, "prod.compression", SONNET_MODEL)

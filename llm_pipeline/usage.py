@@ -28,26 +28,41 @@ from candidates.atomic_json import read_json, write_json
 USAGE_PATH = Path(__file__).resolve().parent.parent / "llm_usage.json"
 
 # USD per 1M tokens (input, output), list prices.
+# CORRECTED 2026-09-01 against the published table. Sonnet 5 is $2/$10, not the
+# $3/$15 recorded here before -- a 1.5x overstatement on every dollar figure this
+# module ever produced.
 PRICES = {
-    "claude-sonnet-5": (3.00, 15.00),
+    "claude-sonnet-5": (2.00, 10.00),
     "claude-haiku-4-5": (1.00, 5.00),
 }
 
-# Empirical correction, from the only check that can settle this: comparing the
-# figure below against a real invoice. Over one measured window the list-price
-# arithmetic produced $12.25 where the account was actually charged $9.00 -- an
-# overestimate of 36%.
+# Cache multipliers, checked against the same table rather than assumed:
+# a 5-minute cache write is 1.25x base input ($2.50 on $2) and a cache read is
+# 0.10x ($0.20 on $2). Both already matched. The project marks its breakpoints
+# `{"type": "ephemeral"}` with no TTL, which is the 5-minute tier -- the 1-hour
+# tier writes at 2.0x, so a future switch to it would need this changed too.
+
+# No correction factor. There used to be one -- COST_CALIBRATION = 0.735, fitted
+# by comparing this module's output against a single real invoice ($12.25
+# computed, $9.00 charged) and described as an empirical adjustment for some
+# billing subtlety.
 #
-# Deliberately a single scalar rather than re-derived per-token prices. Two
-# different price sets reconcile that same observation (output at $8.81/M with
-# input unchanged, or everything scaled by 0.735), and one data point cannot
-# distinguish them. Inventing a specific price would be overfitting a noisy
-# measurement and would read as authoritative when it is not.
+# It was mostly a bug wearing a measurement's clothes. The prices above were
+# 1.5x too high, so the arithmetic overstated every figure by exactly that, and
+# 1/1.5 = 0.667 -- most of the 0.735. Fitting a scalar to absorb a wrong constant
+# hid the wrong constant, and made the error look like a property of Anthropic's
+# billing rather than of this file.
 #
-# TOKEN COUNTS ARE EXACT regardless -- they come straight off each response.
-# Only the dollar column depends on this. Re-derive the factor by comparing a
-# fresh /usage total against the console's billing page over the same period.
-COST_CALIBRATION = 0.735
+# With the prices corrected the same comparison lands about 10% BELOW the invoice
+# rather than 36% above. That residual is not fitted away: one invoice cannot
+# distinguish a real billing effect from a window that did not quite align with
+# what was recorded, or from calls that billed without being logged. Treat these
+# figures as accurate to roughly 10% and check the console for what was actually
+# charged.
+#
+# TOKEN COUNTS ARE EXACT regardless -- they come straight off each response, and
+# were never affected by any of this.
+COST_CALIBRATION = 1.0
 
 
 def _price(model: str) -> tuple[float, float]:
@@ -134,7 +149,7 @@ def summary() -> str:
                      f"-- near 0% means the breakpoint is on content that changes")
     if tc:
         lines.append(f"\nAverage cost per call: ${tu/tc:.5f}")
-    lines.append(f"\nToken counts are exact. Dollars apply a {COST_CALIBRATION:.3f} calibration to "
-                 f"list prices, fitted against one real invoice -- treat them as indicative and "
-                 f"check the console for what was actually billed.")
+    lines.append(f"\nToken counts are exact. Dollars are list-price arithmetic; measured against one "
+                 f"real invoice they came in about 10% low, so treat them as accurate to roughly "
+                 f"that and check the console for what was actually billed.")
     return "\n".join(lines)
