@@ -166,5 +166,10 @@ def run_replay_battery(as_of: pd.Timestamp) -> dict:
         if r.get("fdr_demoted"):
             sh.record_status(r["candidate"], r["status"], as_of_str)
 
+    # The per-candidate statistics are saved alongside the anchors, not just
+    # returned: a live test resolves on any day, not only on a battery day, and
+    # its message needs `pattern_oos_sd` to say how many occurrences would be
+    # needed for the null to mean anything.
+    battery["summary"] = status_summary
     state.save_battery_status(battery)
     return status_summary

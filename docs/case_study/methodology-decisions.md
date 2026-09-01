@@ -1950,3 +1950,73 @@ detect anything must not be presented as a negative result.
 **Its practical effect.** A parked proposal arrives with a prospective component
 already built in, so the honest version of "has this held up since we thought of
 it" is available years before the live-occurrence milestone can answer it.
+
+---
+
+## "Validated" becomes "confirmed", because the numbers cannot support the stronger word
+
+**The question that forced this**, from the project's director: what exactly are
+the live occurrences supposed to prove? The honest answer is the one that
+follows from `required_n_for_power`, which this project already uses elsewhere —
+the sample needed to demonstrate a `MIN_INTERESTING_EFFECT` of 5% at 80% power:
+
+    horizon    occurrences needed    smallest effect detectable at n=20
+     3 days                   121                                12.3%
+     7 days                   307                                19.6%
+    14 days                   742                                30.4%
+    21 days                 1,337                                40.9%
+
+**Twenty occurrences can only demonstrate effects of 20-40% over the horizon.** A
+30% mean forward return over 14 days would not be a discovery; it would be a bug
+to go looking for. And this is not a threshold that was set too low: **50 could
+not do it either, and neither could 100.** The required sample is in the
+hundreds, against a median candidate producing 10.8 independent occurrences a
+year. No value reachable in a nine-year replay clears it.
+
+**So the checkpoint cannot mean what "validated" promises.** What it can honestly
+mean — and what the code has always actually done — is that the condition kept
+occurring and still passes when re-tested on the enlarged sample. That is
+**persistence, not proof**, and the vocabulary now says so: `CONFIRMED at this
+checkpoint`, never `VALIDATED`.
+
+**Every live-test message now carries the gap explicitly**: "occurrence 23 — 307
+would be needed to demonstrate a 5% effect at 80% power". Showing the required
+number beside the achieved one is what stops an accumulating counter from
+implying a proof it cannot deliver. It will read as unbalanced for the whole
+replay. That is the accurate picture, and burying it would be the alternative.
+
+---
+
+## An occurrence counts when it postdates the hypothesis — not when it is "live"
+
+**`_effective_milestone_count` was topping up dynamic candidates with their FULL
+backtest count**, so a condition with 120 historical occurrences reached its
+first checkpoint on its first day with zero prospective evidence. The
+justification on record was that Sonnet never sees this project's backtest
+results, so the look-then-test risk is weak.
+
+That is true and it is not the point. **An occurrence from 2019 cannot confirm a
+hypothesis written in 2023, however uncontaminated the model was.** The
+distinction is not who saw what; it is which came first.
+
+The rule is now one line: an occurrence counts toward confirmation when it
+happened after the hypothesis was written down. That puts two things on the same
+footing which the code had treated differently, and which the director identified
+as equivalent:
+
+  * occurrences accumulated while a proposal sat PARKED waiting for enough
+    history to be testable — in the backtest, not the trade log, but prospective
+    by construction;
+  * live tests opened after registration, which are the same thing arriving one
+    day at a time.
+
+`confirmation_priors.json` holds the first count, computed once at registration
+via `prospective_split`. Static candidates are unaffected: they were derived by
+mining this project's own history, so none of their occurrences postdates the
+hypothesis, and the general rule gives them the zero their special case gave.
+
+**The consequence, stated because it runs against what was wanted.** A freshly
+proposed condition now starts at zero and needs real time to reach a checkpoint —
+roughly 1.9 years at the median rate — where before it arrived instantly. There
+will be FEWER confirmations in the replay, and later. The ones that arrive will
+mean something.

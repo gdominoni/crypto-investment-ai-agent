@@ -3,7 +3,7 @@
 status history, so run_battery.py can recognize "this has never been
 accepted in N years" and ask the human whether to keep testing it or
 drop it, instead of re-testing forever with no off-ramp. This project
-reserves the word "validated" for a candidate that has lived through 50
+reserves the word "confirmed" for a candidate that has lived through
 real, resolved live tests while still 'accepted' at that point -- see
 MILESTONE_N/candidates_due_for_milestone below (mirrors
 replay/status_history.py's own version, same N=50 threshold, live data
@@ -143,7 +143,7 @@ def candidates_due_for_milestone(resolved_live_test_counts: dict[str, int], n_st
     """NOT one-time -- fires again every time a candidate crosses a NEW
     multiple of `n_step` resolved LIVE tests (50, 100, 150, ...),
     regardless of current status. This is the ONE moment this project
-    calls a candidate "validated" in production, re-earned (or lost)
+    calls a candidate "confirmed" in production, re-earned (or lost)
     fresh at each checkpoint -- mirrors replay/status_history.py's own
     version exactly, driven by real resolved live tests instead of
     simulated ones."""

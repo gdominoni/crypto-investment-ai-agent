@@ -175,3 +175,16 @@ def park_proposal(entry: dict) -> None:
 def unpark_proposal(label: str) -> None:
     parked = [p for p in load_parked_proposals() if p["spec"].get("label") != label]
     _write(STATE_DIR / "parked_proposals.json", parked)
+
+
+def load_confirmation_priors() -> dict:
+    """Per candidate: how many occurrences already postdated its hypothesis at the
+    moment it was registered. Nonzero only for a proposal that sat parked -- see
+    `_effective_milestone_count`."""
+    return _read(STATE_DIR / "confirmation_priors.json", {})
+
+
+def save_confirmation_prior(candidate: str, n: int) -> None:
+    priors = load_confirmation_priors()
+    priors[candidate] = int(n)
+    _write(STATE_DIR / "confirmation_priors.json", priors)

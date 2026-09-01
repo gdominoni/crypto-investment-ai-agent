@@ -1141,7 +1141,7 @@ def classify_status(rep: dict, coin_concentration: dict, period_concentration: d
     held for the horizon `pattern` found significant at, resolved by
     measuring the real forward return/MFE/MAE, the same thing
     pattern_significance itself measures. This is NOT the same claim as
-    "validated": that word is reserved everywhere else in this project
+    "confirmed": that word is reserved everywhere else in this project
     for a candidate that has actually lived through its first 50
     resolved live tests (real, or in the replay, simulated) and still
     held 'accepted' status at that point -- see
@@ -1360,8 +1360,8 @@ def format_candidate_details(candidate: str, row: dict, definition: str | None =
     `milestone` is the caller's `all_latest_statuses()[candidate]`
     entry (`milestone_reported`/`milestone_cleared`/`last_checkpoint_n`)
     -- `status` alone (accepted/watch/rejected/...) is a DIFFERENT claim
-    than `validated` (see docs/case_study/methodology-decisions.md's
-    "accepted vs validated" entry): a real, observed case of exactly
+    than `confirmed` (see docs/case_study/methodology-decisions.md's
+    "accepted vs confirmed" entry): a real, observed case of exactly
     this confusion is why this parameter exists -- `status` can say
     'accepted' while the candidate is ALSO already validated, and
     nothing about the word 'accepted' alone tells a reader that.

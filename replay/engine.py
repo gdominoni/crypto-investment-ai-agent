@@ -35,7 +35,8 @@ from candidates.data_loading import load_daily, load_funding, load_hourly
 from candidates.definitions import CANDIDATE_DIRECTIONS, TRIGGER_DESCRIPTIONS, compute_triggers
 from candidates.methodology import (COMPRESSION_CONFIRM_DAYS, COMPRESSION_ZSCORE_THRESHOLD,
                                      compression_exit, format_prune_digest, path_outcome,
-                                     prospective_split, prune_recommendation,
+                                     MIN_INTERESTING_EFFECT, prospective_split,
+                                     prune_recommendation, required_n_for_power,
                                      vol_compression_series)
 from candidates.run_battery import COINS
 from execution import hyperopt_runner
@@ -114,7 +115,7 @@ def _open_live_test(candidate: str, coin: str, direction: str, decision_date: pd
 def _check_consecutive_failures(candidate: str, d: pd.Timestamp) -> None:
     """Mirrors execution/live_testing.py::_check_consecutive_failures
     exactly, against the replay's own simulated trade log/clock. Fires
-    immediately after a live test resolves, only for a VALIDATED
+    immediately after a live test resolves, only for a CONFIRMED
     candidate (milestone_cleared) -- a fast, purely informational
     early-warning for a genuine losing streak, since a well-established
     candidate's own aggregate significance test is, by design, resistant
@@ -142,7 +143,7 @@ def _check_consecutive_failures(candidate: str, d: pd.Timestamp) -> None:
     lines = [
         f"<b>{d.date()}</b>\n",
         f"<b>Consecutive-failure alert -- {escape_html(candidate)}</b>\n",
-        f"The last <b>{streak}</b> live test(s) for this VALIDATED candidate resolved negative in a row.\n",
+        f"The last <b>{streak}</b> live test(s) for this CONFIRMED candidate resolved negative in a row.\n",
         f"Last {len(window)} occurrence(s) for context:",
     ]
     for t in window:
@@ -154,6 +155,100 @@ def _check_consecutive_failures(candidate: str, d: pd.Timestamp) -> None:
                  f"short streak by design; this exists specifically to surface a genuine losing run long before "
                  f"the aggregate ever would.")
     _send("\n".join(lines))
+
+
+
+def _market_return_over(entry_loc: int, horizon: int, direction: str) -> float:
+    """Equal-weighted forward return of the whole coin universe over the same
+    window as one live test, signed by that test's direction.
+
+    The comparison a raw win rate cannot make. "The trend happened" and "the
+    trend happened because of this condition" are different claims, and across
+    2017-2026 a long-only rule is right most of the time for reasons that have
+    nothing to do with any macro release."""
+    import numpy as np
+
+    rets = []
+    for coin in COINS:
+        try:
+            ohlc = load_daily(coin)
+        except Exception:
+            continue
+        if entry_loc + horizon >= len(ohlc):
+            continue
+        entry = float(ohlc["open"].iloc[entry_loc])
+        exit_ = float(ohlc["close"].iloc[entry_loc + horizon])
+        if entry > 0:
+            rets.append(exit_ / entry - 1.0)
+    if not rets:
+        return float("nan")
+    r = float(np.mean(rets))
+    return r if direction == "long" else -r
+
+
+
+
+def _confirmation_block(candidate: str) -> str:
+    """The running confirmation record, appended to every resolved live test.
+
+    NOT a validation. At the horizons this project uses, `required_n_for_power`
+    puts the sample needed to demonstrate a 5% effect at 80% power in the
+    hundreds -- 307 occurrences at a 7-day horizon, 742 at 14. No count reachable
+    in a nine-year replay gets there. Showing the required number beside the
+    achieved one is the honest form: it says what this evidence can and cannot
+    settle, instead of letting an accumulating counter imply a proof.
+
+    Two win rates, because "the trend happened" and "the trend happened BECAUSE
+    of this condition" are different claims. Across 2017-2026 a long-only rule is
+    right most of the time for reasons that have nothing to do with any macro
+    release, so the raw rate is reported first (it is what was asked: did the
+    macro news plus indicator predict the move) and the market-adjusted rate
+    beside it (did it predict more than holding would have).
+    """
+    import numpy as np
+
+    closed = [t for t in state.load_trade_log()
+              if t["candidate"] == candidate and t["status"] == "closed"]
+    prior = state.load_confirmation_priors().get(candidate, 0)
+    n = _effective_milestone_count(candidate, prior, len(closed))
+    lines = [f"<b>Confirmation record -- {escape_html(candidate)}</b>"]
+
+    summary = (state.load_battery_status().get("summary") or {}).get(candidate, {})
+    sd = summary.get("pattern_oos_sd")
+    horizon = int(state.load_horizons().get(candidate, PLACEHOLDER_HORIZON_DAYS))
+    need = required_n_for_power(sd) if sd else float("nan")
+    if need == need:
+        lines.append(f"Occurrence <b>{n}</b> — {need:.0f} would be needed to demonstrate a "
+                     f"{MIN_INTERESTING_EFFECT:.0%} effect at 80% power over {horizon}d. "
+                     f"This is a CONFIRMATION record, not a proof.")
+    else:
+        lines.append(f"Occurrence <b>{n}</b>. (Required sample for a conclusive test not yet "
+                     f"computable — no volatility estimate for this candidate.)")
+    if prior:
+        lines.append(f"<i>{prior} of these predate registration but postdate the hypothesis: "
+                     f"they accumulated while the proposal waited for enough history to be "
+                     f"testable, so nothing about it could have been shaped by them.</i>")
+
+    if closed:
+        rets = [t["forward_return"] for t in closed]
+        wins = sum(1 for r in rets if r > 0)
+        adj = [t["forward_return"] - t["baseline_return"] for t in closed
+               if t.get("baseline_return") is not None and t["baseline_return"] == t["baseline_return"]]
+        adj_wins = sum(1 for r in adj if r > 0)
+        mfe = float(np.mean([t["mfe"] for t in closed]))
+        mae = float(np.mean([t["mae"] for t in closed]))
+        ratio = mfe / abs(mae) if mae else float("nan")
+        wr = f"Trend materialised: <b>{wins/len(closed):.0%}</b> of {len(closed)} resolved"
+        if adj:
+            wr += f" ({adj_wins/len(adj):.0%} after subtracting what holding the market did)"
+        lines.append(wr)
+        lines.append(f"Mean best point {mfe:+.2%}, mean worst {mae:+.2%}"
+                     + (f" — MFE/MAE {ratio:.2f}" if ratio == ratio else ""))
+    tpsl = hyperopt_runner.format_result(candidate)
+    if tpsl:
+        lines.append(tpsl)
+    return "\n".join(lines)
+
 
 
 def _check_live_tests(d: pd.Timestamp) -> None:
@@ -181,6 +276,12 @@ def _check_live_tests(d: pd.Timestamp) -> None:
         state.update_trade(trade["id"], {
             "status": "closed", "close_date": str(d.date()),
             "forward_return": outcome["forward_return"], "mfe": outcome["mfe"], "mae": outcome["mae"],
+            # What simply holding the whole coin universe over the same window
+            # did, signed the same way. Stored at resolution rather than
+            # recomputed later: it is the denominator for "did the trend happen
+            # BECAUSE of the condition", and in a rising market a positive long
+            # return on its own says very little.
+            "baseline_return": _market_return_over(trade["entry_loc"], trade["horizon"], trade["direction"]),
         })
         _send(f"<b>{d.date()}</b>\n\n"
               f"<b>Live test resolved -- {trade['direction'].upper()} {trade['coin']}</b>\n\n"
@@ -188,7 +289,8 @@ def _check_live_tests(d: pd.Timestamp) -> None:
               f"held {trade['horizon']}d, opened {trade['entry_date']})\n\n"
               f"Forward return: <b>{outcome['forward_return']:+.2%}</b>\n"
               f"Best point reached: {outcome['mfe']:+.2%}\n"
-              f"Worst point reached: {outcome['mae']:+.2%}")
+              f"Worst point reached: {outcome['mae']:+.2%}\n\n"
+              + _confirmation_block(trade["candidate"]))
         _check_consecutive_failures(trade["candidate"], d)
 
 
@@ -517,24 +619,38 @@ def _resolved_live_test_counts() -> dict[str, int]:
     return counts
 
 
-def _effective_milestone_count(candidate: str, backtest_n: int | None, live_n: int) -> int:
-    """Mirrors execution/live_testing.py::_effective_milestone_count
-    exactly. Static candidates (C1/C2/C6) were derived by directly mining
-    this project's own historical data -- a direct look-then-test risk,
-    so only genuinely prospective evidence (real, or here simulated,
-    resolved live tests) counts toward validating them. Dynamic
-    (Sonnet-proposed) candidates carry only a much weaker, diffuse
-    version of that risk (Sonnet never sees this project's own backtest
-    results before proposing), so they use a rolling window of the most
-    recent 50 occurrences, backtest and live mixed -- equivalent to
-    filling the window with live occurrences first and topping up with
-    the most recent backtest ones only while live_n hasn't reached 50
-    yet. Once a dynamic candidate accumulates 50 live tests on its own,
-    this collapses to the exact same live-only rule the static
-    candidates always use."""
-    if candidate in CANDIDATE_DIRECTIONS or live_n >= sh.MILESTONE_N:
+def _effective_milestone_count(candidate: str, prior_confirmations: int | None, live_n: int) -> int:
+    """How many occurrences count toward CONFIRMING this candidate.
+
+    An occurrence counts when it happened AFTER the hypothesis was written down.
+    That is the whole rule, and it puts two things on the same footing that the
+    code used to treat differently:
+
+      * occurrences accumulated while a proposal sat PARKED, waiting for enough
+        history to be testable. They are in the backtest, not the trade log, but
+        they postdate the hypothesis by construction -- nothing about the
+        condition could have been shaped by them. `prior_confirmations` is that
+        count, computed once at registration.
+      * live tests opened after registration, which are the same thing arriving
+        one day at a time.
+
+    WHAT THIS REPLACES, and why the old rule was wrong. Dynamic candidates used
+    to be topped up with their FULL backtest count -- so a condition with 120
+    historical occurrences reached the checkpoint with zero live evidence, on its
+    first day. The justification was that Sonnet never sees this project's
+    backtest results, so the look-then-test risk is weak. That is true and it is
+    not the point: an occurrence from 2019 cannot confirm a hypothesis written in
+    2023, however uncontaminated the model was. The distinction is not who saw
+    what, it is which came first.
+
+    Static candidates (C1/C2/C6) count live occurrences only, unchanged. They were
+    derived by mining this project's own history, so none of their historical
+    occurrences postdates the hypothesis -- the rule above gives them zero prior
+    confirmations, which is the same answer their special case gave.
+    """
+    if candidate in CANDIDATE_DIRECTIONS:
         return live_n
-    return min(backtest_n or 0, sh.MILESTONE_N - live_n) + live_n
+    return int(prior_confirmations or 0) + live_n
 
 
 def _check_n50_milestones(as_of: pd.Timestamp, status_summary: dict) -> None:
@@ -546,7 +662,7 @@ def _check_n50_milestones(as_of: pd.Timestamp, status_summary: dict) -> None:
     reverse, both worth logging explicitly), and asks the human whether
     to keep testing or drop it -- reusing the exact same keep/drop
     buttons _check_prune_decisions uses. This is the ONE place this
-    project calls a candidate "validated": that word is earned (or lost)
+    project calls a candidate "confirmed": that word is earned (or lost)
     fresh at each checkpoint by how the candidate actually performed
     over real (or, in the replay, simulated) live occurrences (plus, for
     dynamic candidates only, a rolling backtest top-up -- see
@@ -555,8 +671,9 @@ def _check_n50_milestones(as_of: pd.Timestamp, status_summary: dict) -> None:
     version -- see docs/case_study/methodology-decisions.md."""
     as_of_str = str(as_of.date())
     live_counts = _resolved_live_test_counts()
-    counts = {c: _effective_milestone_count(c, status_summary.get(c, {}).get("n"), live_counts.get(c, 0))
-              for c in set(live_counts) | set(status_summary)}
+    priors = state.load_confirmation_priors()
+    counts = {c: _effective_milestone_count(c, priors.get(c), live_counts.get(c, 0))
+              for c in set(live_counts) | set(status_summary) | set(priors)}
     for candidate in sh.candidates_due_for_milestone(counts):
         n_reached = (counts.get(candidate, 0) // sh.MILESTONE_N) * sh.MILESTONE_N
         live_n = live_counts.get(candidate, 0)
@@ -586,10 +703,14 @@ def _check_n50_milestones(as_of: pd.Timestamp, status_summary: dict) -> None:
                        f"up the count only until it has 50 live occurrences of its own)")
         message = (
             f"<b>{as_of_str}</b>\n\n"
-            f"<b>Checkpoint at {n_reached} occurrences -- {escape_html(candidate)}</b>\n\n"
+            f"<b>Confirmation checkpoint at {n_reached} occurrences -- {escape_html(candidate)}</b>\n\n"
             f"({escape_html(trigger_desc)})\n\n"
-            f"<b>{'VALIDATED' if cleared else 'NOT validated'}</b> -- {'cleared' if cleared else 'did not clear'} the "
-            f"acceptance bar as of this checkpoint ({count_basis}).\n"
+            f"<b>{'CONFIRMED' if cleared else 'NOT confirmed'}</b> at this checkpoint -- "
+            f"{'still clears' if cleared else 'no longer clears'} the acceptance bar ({count_basis}).\n"
+            f"<i>Confirmed, not validated: at this project's horizons a conclusive test would need "
+            f"occurrences in the hundreds (see each live-test message for the number). This says the "
+            f"condition has kept occurring and still passes on the enlarged sample -- persistence, "
+            f"not proof.</i>\n"
             f"{escape_html(criteria_str)}. (No single coin or period may carry more than 60% of the positive "
             f"return either, for either check to pass.)\n\n"
             f"Current status: <b>{escape_html(status)}</b>\n"
@@ -858,9 +979,9 @@ def _send_checkpoint_digest(start: pd.Timestamp, end: pd.Timestamp, n_events: in
             tag = "dropped"
         elif info.get("milestone_reported"):
             n_reached = info.get("last_checkpoint_n", sh.MILESTONE_N)
-            tag = "validated" if info.get("milestone_cleared") else f"did not validate at its {n_reached}-live-test checkpoint"
+            tag = "confirmed" if info.get("milestone_cleared") else f"not confirmed at its {n_reached}-occurrence checkpoint"
         elif info["status"] == "accepted":
-            tag = f"accepted, not yet validated (first checkpoint at {sh.MILESTONE_N} live tests)"
+            tag = f"accepted, no confirmation checkpoint yet (first at {sh.MILESTONE_N} post-hypothesis occurrences)"
         else:
             tag = "in progress"
         lines.append(f"  - <b>{escape_html(name)}</b> ({tag}): {escape_html(_trigger_description(name))}")
@@ -916,7 +1037,7 @@ def resolve_pending_test() -> str | None:
 
 def _cooccurrence_appendix(specs: list, coins: list[str], as_of: pd.Timestamp) -> list[str]:
     """A note on how often the proposals in a set have historically fired
-    together. NOT a result, NOT a candidate, and never validated.
+    together. NOT a result, NOT a candidate, and never confirmed.
 
     What this is for. A future reader deciding how to use these triggers wants to
     know whether they are two views of one situation or two independent ones, and
@@ -935,7 +1056,7 @@ def _cooccurrence_appendix(specs: list, coins: list[str], as_of: pd.Timestamp) -
         cannot even suspect the selection.
       * IT NEVER OPENS A TEST. The conjunction is a three-clause condition in all
         but name, with a measured median of 12 occurrences; a live test on it
-        could not validate anything and would sit in the trade log looking like
+        could not confirm anything and would sit in the trade log looking like
         one that could.
 
     Computed over the FULL history rather than over accumulated live
@@ -945,7 +1066,7 @@ def _cooccurrence_appendix(specs: list, coins: list[str], as_of: pd.Timestamp) -
         return []
     out = ["<i>Appendix -- how these two have historically occurred together. "
            "Informational only: no test is opened on the combination, and nothing "
-           "here is validated or counts toward validation.</i>"]
+           "here is confirmed or counts toward confirmation.</i>"]
     for a, b in itertools.combinations(specs, 2):
         together = ConditionSpec(label=f"{a.label}+{b.label}", direction=a.direction,
                                   clauses=tuple(a.clauses) + tuple(b.clauses))
@@ -979,6 +1100,19 @@ def _resolve_one_proposal(spec: "ConditionSpec", pending: dict, as_of: pd.Timest
     the two halves drift into being tested differently."""
     result = test_novel_condition(spec, pending["coins"], as_of=as_of)
     status = result["status"]
+
+    # Occurrences that already postdate the hypothesis at registration time. For a
+    # proposal that sat parked this is the whole parking period; for one testable
+    # immediately it is zero, which is correct -- it has nothing to be confirmed by
+    # yet.
+    proposed_at_for_prior = (pending.get("proposed_at")
+                             or next((d.get("parked_since") for d in (pending.get("specs") or [])
+                                      if d.get("label") == spec.label and d.get("parked_since")), None))
+    if proposed_at_for_prior:
+        prior = prospective_split(spec, pending["coins"], proposed_at_for_prior, as_of=as_of)["n_after"]
+    else:
+        prior = 0
+    state.save_confirmation_prior(spec.label, prior)
 
     registry = state.load_dynamic_candidates()
     registry[spec.label] = {"label": spec.label,
