@@ -29,8 +29,10 @@ from candidates.macro_vintage import recent_releases_summary
 from data_ingestion.news_sentiment.cryptocompare_fetcher import fetch_cryptocompare_news
 from llm_pipeline.context_builder import build_context_summary, build_technical_snapshot
 from llm_pipeline.novel_condition_tester import (
-    INDICATOR_PLAIN_NAMES, OPERATOR_PLAIN, ConditionSpec, build_indicator_leadup, proposable_indicators,
-    build_indicator_snapshot, clause_from_dict,
+    INDICATOR_PLAIN_NAMES, MIN_HISTORICAL_OCCURRENCES, OPERATOR_PLAIN, ConditionSpec,
+    build_indicator_leadup, build_indicator_snapshot, clause_from_dict,
+    filter_redundant_proposals, proposable_indicators, proposals_from_assessment,
+    spec_from_proposal, spec_to_dict,
 )
 from llm_pipeline.pending_tests import push_pending_test
 from llm_pipeline import usage as _usage
@@ -109,13 +111,35 @@ unless a CPI/macro clause is genuinely in it -- that is checked in code too.
 Return ONLY a JSON object with exactly these fields:
 - "assessment": 1-2 sentences
 - "recommended_action": one of "no_action", "propose_novel_test"
-- "novel_condition_spec": null, or {{"label": "...", "clauses": [{{"indicator": "...", \
-  "op": "<"/">"/"<="/">=", "threshold": <number>, "within_days": <integer 0-14, optional>}}, ...], \
-  "direction": "long"/"short", "coins": <optional list, see below>, \
-  "outcome": "raw"/"market_relative" (optional, default "raw", see below)}} \
-  (one clause is fine for a simple condition; multiple clauses are ANDed together for a compound \
-  one, e.g. an oversold technical reading combined with a macro surprise -- use as many as the \
-  actual evidence supports, not for its own sake)
+- "novel_condition_specs": null, or a list of ONE OR TWO specs, each \
+{{"label": "...", "clauses": [{{"indicator": "...", "op": "<"/">"/"<="/">=", "threshold": <number>, \
+"within_days": <integer 0-14, optional>}}, ...], "direction": "long"/"short", \
+"coins": <optional list>, "outcome": "raw"/"market_relative" (optional)}}
+
+AT MOST TWO CLAUSES PER SPEC -- one news/macro term and one market-state term. This is not a style \
+preference, it is what can be measured: each extra clause divides the number of historical \
+occurrences by roughly eight, and a three-clause condition has a median of 12 occurrences where \
+{MIN_HISTORICAL_OCCURRENCES} are needed to test anything at all. A spec with three clauses is rejected by code.
+
+PROPOSE TWO SPECS RATHER THAN ONE DEEPER CONDITION when the evidence supports more than one idea. \
+An idea you would have written as "rate cut in the last 7 days AND funding negative AND RSI below \
+30" should be sent as two: "rate cut in the last 7 days AND funding negative", and "rate cut in \
+the last 7 days AND RSI below 30". The three-clause version is one hypothesis that almost certainly \
+cannot be measured; the two are both measurable, and they are separately informative -- if only one \
+survives, that is a finding the conjunction would have hidden.
+
+The two must be GENUINELY DIFFERENT hypotheses, not one idea restated. Use your judgement about how \
+markets work to choose two mechanisms you have real reason to think might each matter, rather than \
+the same condition with a threshold nudged. Two specs that fire on the same days are checked for in \
+code and the second is discarded, so a near-duplicate simply wastes the slot. One good spec is \
+better than one good spec plus filler.
+
+PUT A LOOKBACK ON THE NEWS TERM. A macro release and a market state on the SAME day is a rare \
+coincidence: measured across this grammar, same-day conjunctions are measurable 5% of the time \
+against 52% when the news clause carries within_days=7, and two thirds cannot be rescued at all. \
+Unless you specifically mean "both on the same day", give the news clause a within_days of 3 to 7 \
+-- usually the more honest hypothesis anyway, since a release's effect is not confined to its \
+publication day.
 
 IMPORTANT -- is this event about ONE coin, or about the whole market? The two need different \
 settings, and getting it wrong wastes the test:
@@ -247,6 +271,23 @@ indicator reading, a headline, or a release you weren't shown. Recommend one of:
   live test, so how the system actually performed on a real resolution, in real time, can be \
   measured on its own.
 
+AT MOST TWO CLAUSES PER SPEC, and PROPOSE TWO SPECS rather than one deeper condition when the \
+evidence supports more than one idea. Each extra clause divides the number of historical \
+occurrences by roughly eight: a three-clause condition has a median of 12 where {MIN_HISTORICAL_OCCURRENCES} are \
+needed to measure anything, and is rejected by code. An idea you would have written as "rate cut in \
+the last 7 days AND funding negative AND RSI below 30" should be sent as two specs: "rate cut in \
+the last 7 days AND funding negative", and "rate cut in the last 7 days AND RSI below 30". The two \
+must be genuinely different hypotheses -- two specs firing on the same days are detected in code \
+and the second discarded, so a near-duplicate wastes the slot. One good spec beats one good spec \
+plus filler.
+
+PUT A LOOKBACK ON THE NEWS TERM. A macro release and a market state on the SAME day is a rare \
+coincidence: measured across this grammar, same-day conjunctions are measurable 5% of the time \
+against 52% when the news clause carries within_days=7, and two thirds of them cannot be rescued \
+at all. Unless you specifically mean "both on the same day", give the news clause a within_days of \
+3 to 7. This is also usually the more honest hypothesis -- a release's effect is not confined to \
+its publication day.
+
 
 HARD REQUIREMENT -- every proposal MUST contain at least one of these event indicators: \
 cpi_surprise, rate_surprise, jobless_claims_surprise. This is not a preference, it is \
@@ -266,7 +307,7 @@ unless a CPI/macro clause is genuinely in it -- that is checked in code too.
 
 TP/SL are never yours to set -- they only ever come from an accepted anchor set, never invented \
 here. Return ONLY a JSON object: "assessment" (1-2 sentences), "recommended_action" \
-("no_action"/"propose_novel_test"), "novel_condition_spec" (null or the spec above). No prose, no \
+("no_action"/"propose_novel_test"), "novel_condition_specs" (null, or a list of one or two specs). No prose, no \
 markdown fences."""
 
 def _strip_fences(text: str) -> str:
@@ -464,15 +505,20 @@ def format_compression_message(episode: dict, assessment: dict) -> str:
         f"<b>Broke out:</b> {episode['b_date'].date()} ({episode['b_return']:+.2%} that day)\n\n"
         f"<b>Assessment:</b> {escape_html(assessment['assessment'])}"
     )
-    if assessment["recommended_action"] == "propose_novel_test" and assessment.get("novel_condition_spec"):
-        spec = assessment["novel_condition_spec"]
-        base += (
-            f"\n\n<b>This needs your input.</b>\n\n"
-            f"<b>Proposed test: \"{escape_html(spec['label'])}\"</b>\n\n"
-            f"({format_spec_clauses(spec)} → {escape_html(spec['direction'])})\n\n"
-            f"Test It runs a real walk-forward backtest of this condition before it's tracked as a live "
-            f"test (no real money is ever placed on it). Don't Test It dismisses this proposal."
-        )
+    specs = assessment.get("novel_condition_specs") or (
+        [assessment["novel_condition_spec"]] if assessment.get("novel_condition_spec") else [])
+    if assessment["recommended_action"] == "propose_novel_test" and specs:
+        plural = len(specs) > 1
+        base += f"\n\n<b>{'These need' if plural else 'This needs'} your input.</b>\n\n"
+        for i, spec in enumerate(specs, 1):
+            head = f"<b>{i}. \"{escape_html(spec['label'])}\"</b>" if plural else \
+                   f"<b>Proposed test: \"{escape_html(spec['label'])}\"</b>"
+            base += f"{head}\n\n({format_spec_clauses(spec)} → {escape_html(spec['direction'])})\n\n"
+        base += (f"Test It runs a real walk-forward backtest of "
+                 f"{'each condition' if plural else 'this condition'} before "
+                 f"{'they are' if plural else "it's"} tracked as "
+                 f"{'live tests' if plural else 'a live test'} (no real money is ever placed). "
+                 f"Don't Test It dismisses {'them' if plural else 'this proposal'}.")
     else:
         base += "\n\n<i>No action taken -- nothing here worth testing.</i>"
     return base
@@ -505,15 +551,28 @@ def run_compression_scan(coins: list[str] | None = None) -> None:
         try:
             assessment = sonnet_compression_response(episode, client)
             reply_markup = None
-            if assessment["recommended_action"] == "propose_novel_test" and assessment.get("novel_condition_spec"):
-                spec, err = spec_from_proposal(assessment["novel_condition_spec"])
+            specs = []
+            for raw in proposals_from_assessment(assessment):
+                spec, err = spec_from_proposal(raw)
                 if spec is None:
                     print(f"Proposal rejected, not queued ({episode['symbol']}): {err}")
-                    mark_escalated(episode["symbol"], episode["b_date"])
                     continue
-                pending_id = push_pending_test(spec, scan_coins, live_coin=episode["symbol"],
+                specs.append(spec)
+            # Two proposals that fire on the same days are one hypothesis wearing
+            # two hats and would spend twice the alpha budget for one piece of
+            # information. Checked on behaviour, never on shared clauses -- the
+            # intended pattern is two proposals sharing their news term.
+            specs, notes = filter_redundant_proposals(specs, scan_coins)
+            for note in notes:
+                print(f"({episode['symbol']}) {note}")
+            if specs:
+                pending_id = push_pending_test(specs, scan_coins, live_coin=episode["symbol"],
                                                 signal_class="compression_exit")
                 reply_markup = PROPOSAL_KEYBOARD_TEMPLATE(pending_id)
+            elif assessment["recommended_action"] == "propose_novel_test":
+                mark_escalated(episode["symbol"], episode["b_date"])
+                continue
+            assessment["novel_condition_specs"] = [spec_to_dict(sp) for sp in specs]
             # Marked BEFORE the notification can fail: a send error must not leave
             # the episode un-ledgered and re-escalating every hour afterwards.
             mark_escalated(episode["symbol"], episode["b_date"])

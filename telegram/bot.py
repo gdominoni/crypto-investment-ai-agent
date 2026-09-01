@@ -322,8 +322,14 @@ def handle_propose_callback(callback_data: str) -> str:
     pending = pop_pending_test_by_id(pending_id)
     if pending is None:
         return "This proposal already expired or was already answered."
-    spec, coins, live_coin, signal_class = pending
-    return handle_test_it_confirmation(spec, coins, approved_by="telegram_user", live_coin=live_coin, signal_class=signal_class)
+    specs, coins, live_coin, signal_class = pending
+    # One button covers the whole proposal SET -- see push_pending_test. Each
+    # condition is still tested on its own; splitting one idea into two
+    # measurable halves only helps if both halves get tested.
+    return "\n\n".join(
+        handle_test_it_confirmation(sp, coins, approved_by="telegram_user",
+                                     live_coin=live_coin, signal_class=signal_class)
+        for sp in specs)
 
 
 def handle_replay_propose_callback(callback_data: str) -> str:

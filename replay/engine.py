@@ -24,6 +24,7 @@ every ~30 simulated days for a human checkpoint.
 """
 from __future__ import annotations
 
+import itertools
 import os
 
 import pandas as pd
@@ -40,7 +41,8 @@ from execution import hyperopt_runner
 from llm_pipeline.haiku_sonnet_pipeline import escape_html, format_spec_clauses
 from llm_pipeline.novel_condition_tester import (
     ConditionSpec, clause_signal_hourly, clause_to_dict, condition_desc, format_pattern_significance,
-    MIN_HISTORICAL_OCCURRENCES, count_occurrences, relax_to_testable,
+    filter_redundant_proposals, MIN_HISTORICAL_OCCURRENCES, count_occurrences,
+    proposals_from_assessment, relax_to_testable,
     spec_from_dict, spec_from_proposal, spec_to_dict,
     test_novel_condition,
 )
@@ -200,66 +202,88 @@ REPLAY_PROPOSAL_KEYBOARD = {
 }
 
 
+
+def _prepare_proposal(raw: dict, as_of: pd.Timestamp) -> dict | None:
+    """Validate one proposed condition and, if it is too rare, loosen it to the
+    nearest measurable version. Returns None when it cannot be tested at all.
+
+    Factored out of `_handle_assessment` when a call began returning more than
+    one proposal: the per-proposal work is identical and duplicating it is how
+    two paths drift into checking different things."""
+    spec, err = spec_from_proposal(raw)
+    if spec is None:
+        print(f"[{as_of.date()}] proposal '{raw.get('label')}' rejected, not tested: {err}")
+        return None
+    # Rarity, measured rather than approximated. 0.25s of local computation and no
+    # API call, so the thing that actually decides whether a hypothesis can
+    # produce a result is checked directly.
+    n = count_occurrences(spec, COINS, as_of=as_of)
+    relax_note = None
+    if n < MIN_HISTORICAL_OCCURRENCES:
+        # "Too rare" is a statement about the THRESHOLDS, not about the idea.
+        # Search locally for the nearest measurable version instead.
+        #
+        # This is a power calculation, not a result search: the search criterion
+        # is the occurrence count and nothing else -- no return, no p-value, no
+        # outcome is visible to `relax_to_testable`. Loosening until a condition
+        # fires often enough to be measured is a sample-size decision; loosening
+        # until it becomes significant would be p-hacking.
+        relaxed = relax_to_testable(spec, COINS, as_of=as_of)
+        if relaxed is None:
+            print(f"[{as_of.date()}] proposal '{raw.get('label')}' rejected, not tested: "
+                  f"occurred only {n} time(s) up to this date, below the "
+                  f"{MIN_HISTORICAL_OCCURRENCES} needed to measure anything, and no "
+                  f"loosening within the indicators' meaning reaches the floor.")
+            return None
+        spec, relax_note = relaxed
+        # Substituted, not silently: the condition about to be tested is NOT the
+        # one proposed, and both the human approving it and the stored record
+        # have to say so. `update` preserves keys the proposal carries beyond the
+        # spec fields (rationale, and anything added later).
+        raw.update(spec_to_dict(spec))
+        raw["relaxed_from"] = relax_note
+        print(f"[{as_of.date()}] proposal '{raw.get('label')}': {relax_note}")
+    return {"spec": spec, "dict": raw, "relaxed_from": relax_note}
+
+
 def _handle_assessment(as_of: pd.Timestamp, event_desc: str, assessment: dict, live_coin: str | None = None) -> str | None:
     """Returns "STOP" if the replay must halt for a human decision, else
     None. Sonnet never opens a trade here -- that's the mechanical scan's
     job (see _scan_mechanical_triggers); this only ever proposes a novel
     condition for human approval, or does nothing."""
-    if assessment["recommended_action"] == "propose_novel_test" and assessment.get("novel_condition_spec"):
-        s = assessment["novel_condition_spec"]
+    raw_proposals = proposals_from_assessment(assessment)
+    if raw_proposals:
         # Validate BEFORE storing/halting. An off-thesis proposal (no news/macro
-        # event clause -- see novel_condition_tester.NEWS_EVENT_INDICATORS) is
-        # discarded here rather than parked as pending: halting the walk for a
-        # human decision about a hypothesis the system will refuse to test is
-        # both a waste and, before this guard, a crash at resolve time.
-        _spec, _err = spec_from_proposal(s)
-        if _spec is None:
-            print(f"[{as_of.date()}] proposal '{s.get('label')}' rejected, not tested: {_err}")
+        # event clause, too many clauses, a banned indicator) is discarded here
+        # rather than parked as pending: halting the walk for a human decision
+        # about a hypothesis the system will refuse to test is both a waste and,
+        # before this guard, a crash at resolve time.
+        prepared = []
+        for raw in raw_proposals:
+            ready = _prepare_proposal(raw, as_of)
+            if ready is not None:
+                prepared.append(ready)
+        if not prepared:
             return None
-        # Rarity, measured rather than approximated by a clause count. 0.25s of
-        # local computation and no API call, so the thing that actually decides
-        # whether a hypothesis can produce a result is checked directly. A
-        # condition below the floor would consume a walk-forward test and return
-        # `insufficient_data` -- where 193 of 234 candidates ended in a real run.
-        _n = count_occurrences(_spec, COINS, as_of=as_of)
-        _relax_note = None
-        if _n < MIN_HISTORICAL_OCCURRENCES:
-            # Too rare to measure -- but "too rare" is a statement about the
-            # THRESHOLDS, not about the idea. Sonnet gets no feedback from this
-            # gate: it returns yes or no, so a proposal whose direction is
-            # sensible and whose numbers are merely extreme is discarded whole.
-            # Search locally for the nearest measurable version instead.
-            #
-            # This is a power calculation, not a result search, and the
-            # distinction is the only thing that makes it legitimate: the search
-            # criterion is the OCCURRENCE COUNT and nothing else. No return, no
-            # p-value, no outcome is consulted while choosing thresholds --
-            # `relax_to_testable` cannot see one. Loosening until a condition
-            # fires often enough to be measured is a sample-size decision;
-            # loosening until it becomes significant would be p-hacking.
-            _relaxed = relax_to_testable(_spec, COINS, as_of=as_of)
-            if _relaxed is None:
-                print(f"[{as_of.date()}] proposal '{s.get('label')}' rejected, not tested: "
-                      f"occurred only {_n} time(s) in the whole history, below the "
-                      f"{MIN_HISTORICAL_OCCURRENCES} needed to measure anything, and no "
-                      f"loosening within the indicators' meaning reaches the floor.")
-                return None
-            _spec, _relax_note = _relaxed
-            # Substituted, not silently: the condition about to be tested is NOT
-            # the one that was proposed, and both the human approving it and the
-            # record of the result have to say so.
-            # Mutated in place, not rebound: `s` IS assessment["novel_condition_spec"],
-            # and the Telegram message renders that dict. Rebinding the local name
-            # would send the human the original thresholds and test the relaxed
-            # ones -- approval for a condition that was never the one measured.
-            # `update` also preserves any keys the proposal carries beyond the
-            # spec fields (rationale, and anything added later).
-            s.update(spec_to_dict(_spec))
-            s["relaxed_from"] = _relax_note
-            print(f"[{as_of.date()}] proposal '{s.get('label')}': {_relax_note}")
-        state.save_pending_test({"spec": s, "coins": COINS, "live_coin": live_coin, "as_of": str(as_of.date()),
-                                 "relaxed_from": _relax_note})
-        _send(judgment.format_telegram_message(as_of, event_desc, assessment), reply_markup=REPLAY_PROPOSAL_KEYBOARD)
+        # Two proposals that fire on the same days are one hypothesis wearing two
+        # hats, and would spend twice the alpha budget for one piece of
+        # information. Checked on BEHAVIOUR, never on shared clauses -- the
+        # intended pattern is two proposals sharing their news term.
+        specs = [p["spec"] for p in prepared]
+        kept, notes = filter_redundant_proposals(specs, COINS, as_of=as_of)
+        for note in notes:
+            print(f"[{as_of.date()}] {note}")
+        prepared = [p for p in prepared if p["spec"] in kept]
+        # Stored as a SET: the human approves or dismisses them together, and
+        # each is then tested on its own. Splitting one idea into two testable
+        # halves only helps if both halves actually get tested.
+        state.save_pending_test({
+            "specs": [p["dict"] for p in prepared], "coins": COINS,
+            "live_coin": live_coin, "as_of": str(as_of.date()),
+        })
+        assessment["novel_condition_specs"] = [p["dict"] for p in prepared]
+        _send(judgment.format_telegram_message(as_of, event_desc, assessment),
+              reply_markup=REPLAY_PROPOSAL_KEYBOARD)
         return "STOP"
     # NO MESSAGE on no_action. A "nothing to see here" notification for every
     # routine macro release and every shock -- hundreds over a full replay --
@@ -803,9 +827,92 @@ def resolve_pending_test() -> str | None:
         return None
     _send("Received — this will be tested against the market.")
 
-    s = pending["spec"]
-    spec = spec_from_dict(s)
+    # Accepts both shapes: `specs` (a proposal SET, the current form) and `spec`
+    # (a single proposal, still present in stored state from earlier runs).
+    raw_specs = pending.get("specs") or ([pending["spec"]] if pending.get("spec") else [])
+    specs = [spec_from_dict(d) for d in raw_specs]
     as_of = pd.Timestamp(pending["as_of"])
+    reveal_date = as_of + pd.Timedelta(days=TEST_RESULT_DELAY_DAYS)
+
+    lines, statuses = [], []
+    for spec in specs:
+        status, block = _resolve_one_proposal(spec, pending, as_of, reveal_date)
+        statuses.append(status)
+        lines += block + [""]
+
+    # The informational appendix -- see _cooccurrence_appendix. Never a verdict,
+    # never a third candidate: a note attached to the two real results.
+    lines += _cooccurrence_appendix(specs, pending["coins"], as_of)
+
+    state.save_pending_test(None)
+    state.save_checkpoint(pending["as_of"], status="running")
+    state.queue_reveal("\n".join(lines), str(reveal_date.date()))
+    return statuses[0] if statuses else None
+
+
+def _cooccurrence_appendix(specs: list, coins: list[str], as_of: pd.Timestamp) -> list[str]:
+    """A note on how often the proposals in a set have historically fired
+    together. NOT a result, NOT a candidate, and never validated.
+
+    What this is for. A future reader deciding how to use these triggers wants to
+    know whether they are two views of one situation or two independent ones, and
+    whether their conjunction is even a thing that happens. That is genuinely
+    useful and it is not a hypothesis test.
+
+    Three rules keep it from becoming one, and each closes a specific failure:
+
+      * IT REPORTS A COUNT, never an outcome statistic. "These co-occurred 12
+        times" is a fact about frequency; "these won 8 times out of 10" is a
+        performance claim on a sample far too small to make one, and would be
+        read as evidence however it were captioned.
+      * IT LISTS EVERY PAIR that has ever co-fired, not the interesting ones.
+        Reporting only the promising combination shows the tail of a distribution
+        without showing the distribution -- and with no number attached, a reader
+        cannot even suspect the selection.
+      * IT NEVER OPENS A TEST. The conjunction is a three-clause condition in all
+        but name, with a measured median of 12 occurrences; a live test on it
+        could not validate anything and would sit in the trade log looking like
+        one that could.
+
+    Computed over the FULL history rather than over accumulated live
+    co-occurrences, which is what makes the count meaningful immediately instead
+    of in several years."""
+    if len(specs) < 2:
+        return []
+    out = ["<i>Appendix -- how these two have historically occurred together. "
+           "Informational only: no test is opened on the combination, and nothing "
+           "here is validated or counts toward validation.</i>"]
+    for a, b in itertools.combinations(specs, 2):
+        together = ConditionSpec(label=f"{a.label}+{b.label}", direction=a.direction,
+                                  clauses=tuple(a.clauses) + tuple(b.clauses))
+        n_both = count_occurrences(together, coins, as_of=as_of)
+        n_a = count_occurrences(a, coins, as_of=as_of)
+        n_b = count_occurrences(b, coins, as_of=as_of)
+        if n_both == 0:
+            out.append(f"• {escape_html(a.label)} and {escape_html(b.label)} have "
+                       f"<b>never</b> occurred on the same day ({n_a} and {n_b} times "
+                       f"separately). They describe different situations.")
+            continue
+        out.append(f"• {escape_html(a.label)} and {escape_html(b.label)} have occurred "
+                   f"together <b>{n_both}</b> time(s), against {n_a} and {n_b} "
+                   f"separately.")
+        if n_both < MIN_HISTORICAL_OCCURRENCES:
+            out.append(f"  Too few to say anything about the combination -- "
+                       f"{MIN_HISTORICAL_OCCURRENCES} occurrences are the minimum this "
+                       f"project will draw any conclusion from, and that is why no test "
+                       f"is opened on it.")
+    return out
+
+
+def _resolve_one_proposal(spec: "ConditionSpec", pending: dict, as_of: pd.Timestamp,
+                           reveal_date: pd.Timestamp) -> "tuple[str, list[str]]":
+    """Backtest one proposal from an approved set, record it, and return its
+    status plus the message block describing it.
+
+    Split out of `resolve_pending_test` when a call started returning two
+    proposals: every proposal gets the identical treatment, and the alternative
+    -- a loop body inlined in a function that also does set-level work -- is how
+    the two halves drift into being tested differently."""
     result = test_novel_condition(spec, pending["coins"], as_of=as_of)
     status = result["status"]
 
@@ -817,31 +924,29 @@ def resolve_pending_test() -> str | None:
     # Recorded here, not deferred to the next weekly battery refresh -- without
     # this, a just-discovered candidate is already registered (and can already
     # open live tests via the mechanical scan, which doesn't check status_history
-    # at all) but stays completely invisible to all_latest_statuses()/Sonnet's own
-    # context for up to ~7 simulated days, since that function skips any candidate
-    # with no status_log entry at all (a real, observed case this session: Sonnet
-    # correctly said "not listed... so I can't state its status" for a candidate
-    # that was already live-testing).
+    # at all) but stays invisible to all_latest_statuses()/Sonnet's own context
+    # for up to ~7 simulated days.
     sh.record_status(spec.label, status, pending["as_of"])
-    state.save_pending_test(None)
-    state.save_checkpoint(pending["as_of"], status="running")
 
     condition_str = f"{condition_desc(spec)} → {spec.direction}"
-    reveal_date = as_of + pd.Timedelta(days=TEST_RESULT_DELAY_DAYS)
     lines = [f"<b>{reveal_date.date()}</b>", "",
              f"<b>Historical backtest -- {escape_html(spec.label)}</b>", "",
              f"({escape_html(condition_str)})"]
+    if pending.get("relaxed_from") or any(d.get("relaxed_from") for d in (pending.get("specs") or [])
+                                           if d.get("label") == spec.label):
+        note = next((d.get("relaxed_from") for d in (pending.get("specs") or [])
+                     if d.get("label") == spec.label and d.get("relaxed_from")),
+                    pending.get("relaxed_from"))
+        if note:
+            lines += ["", f"<i>Thresholds were {escape_html(note)}.</i>"]
     pattern = result.get("pattern_significance") or {}
     if status == "insufficient_data":
-        # Without this the message was a header and a restatement of the
-        # condition, with no verdict and no numbers -- it told the reader
-        # nothing at all. Say what was missing instead.
         n_raw = result.get("n_raw_triggers", 0)
         lines += ["", f"<b>Verdict:</b> not enough history to judge -- "
                       f"{n_raw} occurrence(s) found, too few for a walk-forward test.",
                   "", "Re-checked automatically every 7 days; this can change as "
                       "more occurrences accumulate."]
-    if status not in ("insufficient_data",):
+    else:
         lines.append("")
         lines.append(format_pattern_significance(pattern))
         lines.append("")
@@ -871,18 +976,17 @@ def resolve_pending_test() -> str | None:
         lines.append("Now accepted into the battery -- its own trigger will fire live tests automatically going "
                      "forward, alongside every other accepted candidate.")
 
-    # The occurrence that actually prompted this proposal gets its own live
-    # test regardless of the verdict above -- testing starts the moment a
-    # trigger is identified, not only once it's already accepted.
+    # The occurrence that prompted this proposal gets its own live test regardless
+    # of the verdict -- testing starts the moment a trigger is identified, not
+    # only once it's already accepted.
     if pending.get("live_coin") and status != "insufficient_data":
         # Dated to the proposal's own `as_of` (point B), which for a compression
         # trigger is COMPRESSION_CONFIRM_DAYS before the replay's actual position.
         # Backdating is deliberate: the outcome is read at the end of the horizon,
-        # never before, and the model never saw the confirmation window -- its
-        # context is dated to B. The one case where that would not hold is a
-        # horizon shorter than the confirmation window, since the whole outcome
-        # would already be history at the moment the test opens; those start at
-        # the confirmation date instead.
+        # never before, and the model never saw the confirmation window. The one
+        # case where that would not hold is a horizon shorter than the
+        # confirmation window, since the whole outcome would already be history;
+        # those start at the confirmation date instead.
         horizon = int(state.load_horizons().get(spec.label, PLACEHOLDER_HORIZON_DAYS))
         open_at = as_of
         if horizon <= COMPRESSION_CONFIRM_DAYS:
@@ -892,8 +996,7 @@ def resolve_pending_test() -> str | None:
             lines.append("")
             lines.append(f"<b>Live test opened -- {spec.direction.upper()} {escape_html(pending['live_coin'])}</b>\n\n"
                          f"Held for <b>{execution['horizon']}d</b>, then resolved -- measuring the same pattern the backtest found.")
-    state.queue_reveal("\n".join(lines), str(reveal_date.date()))
-    return status
+    return status, lines
 
 
 def discard_pending_test() -> str | None:

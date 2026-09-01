@@ -17,7 +17,8 @@ from candidates.macro_vintage import recent_releases_summary
 from candidates.methodology import STATUS_PLAIN
 from candidates.run_battery import COINS
 from llm_pipeline.haiku_sonnet_pipeline import SONNET_MODEL, _strip_fences, cached_system, escape_html, extract_text, format_spec_clauses
-from llm_pipeline.novel_condition_tester import build_indicator_leadup, build_indicator_snapshot, proposable_indicators
+from llm_pipeline.novel_condition_tester import (MIN_HISTORICAL_OCCURRENCES, build_indicator_leadup,
+                                                  build_indicator_snapshot, proposable_indicators)
 from replay import state
 from replay import status_history as sh
 from replay.time_sandbox import daily_as_of
@@ -76,9 +77,35 @@ fine when nothing else in the given context looks relevant.
 Return ONLY a JSON object with exactly these fields:
 - "assessment": 1-2 sentences
 - "recommended_action": one of "no_action", "propose_novel_test"
-- "novel_condition_spec": null, or {{"label": "...", "clauses": [{{"indicator": "...", \
-"op": "<"/">"/"<="/">=", "threshold": <number>, "within_days": <integer 0-14, optional>}}, ...], \
-"direction": "long"/"short", "coins": <optional list>, "outcome": "raw"/"market_relative" (optional)}}
+- "novel_condition_specs": null, or a list of ONE OR TWO specs, each \
+{{"label": "...", "clauses": [{{"indicator": "...", "op": "<"/">"/"<="/">=", "threshold": <number>, \
+"within_days": <integer 0-14, optional>}}, ...], "direction": "long"/"short", \
+"coins": <optional list>, "outcome": "raw"/"market_relative" (optional)}}
+
+AT MOST TWO CLAUSES PER SPEC -- one news/macro term and one market-state term. This is not a style \
+preference, it is what can be measured: each extra clause divides the number of historical \
+occurrences by roughly eight, and a three-clause condition has a median of 12 occurrences where \
+{MIN_HISTORICAL_OCCURRENCES} are needed to test anything at all. A spec with three clauses is rejected by code.
+
+PROPOSE TWO SPECS RATHER THAN ONE DEEPER CONDITION when the evidence supports more than one idea. \
+An idea you would have written as "rate cut in the last 7 days AND funding negative AND RSI below \
+30" should be sent as two: "rate cut in the last 7 days AND funding negative", and "rate cut in \
+the last 7 days AND RSI below 30". The three-clause version is one hypothesis that almost certainly \
+cannot be measured; the two are both measurable, and they are separately informative -- if only one \
+survives, that is a finding the conjunction would have hidden.
+
+The two must be GENUINELY DIFFERENT hypotheses, not one idea restated. Use your judgement about how \
+markets work to choose two mechanisms you have real reason to think might each matter, rather than \
+the same condition with a threshold nudged. Two specs that fire on the same days are checked for in \
+code and the second is discarded, so a near-duplicate simply wastes the slot. One good spec is \
+better than one good spec plus filler.
+
+PUT A LOOKBACK ON THE NEWS TERM. A macro release and a market state on the SAME day is a rare \
+coincidence: measured across this grammar, same-day conjunctions are measurable 5% of the time \
+against 52% when the news clause carries within_days=7, and two thirds cannot be rescued at all. \
+Unless you specifically mean "both on the same day", give the news clause a within_days of 3 to 7 \
+-- usually the more honest hypothesis anyway, since a release's effect is not confined to its \
+publication day.
 
 CONDITIONS MAY BE SEQUENCED, not just simultaneous. Each clause takes an optional "within_days" \
 (0-14, default 0). 0 means "true on the day the condition fires"; K means "was true at any point in \
@@ -499,27 +526,36 @@ def format_telegram_message(as_of, event_description: str, assessment: dict) -> 
         f"<b>Assessment:</b> {escape_html(assessment['assessment'])}"
     )
     action = assessment["recommended_action"]
-    if action == "propose_novel_test" and assessment.get("novel_condition_spec"):
-        spec = assessment["novel_condition_spec"]
-        base += (
-            f"\n\n<b>This needs your input.</b>\n\n"
-            f"<b>Proposed test: \"{escape_html(spec['label'])}\"</b>\n\n"
-            f"<i>Exactly what would be tested:</i> {format_spec_clauses(spec)} → {escape_html(spec['direction'])}\n\n"        )
-        # The tested condition is not always the proposed one. When thresholds
-        # were loosened to reach a measurable sample, the human approving the
-        # test has to see that BEFORE pressing the button -- the clause line
-        # above already shows the new numbers, but not that they were changed
-        # or why, and silent substitution would make the approval meaningless.
-        if spec.get("relaxed_from"):
-            base += (
-                f"<i>Note: the thresholds originally proposed occurred too rarely to measure. "
-                f"They were {escape_html(spec['relaxed_from'])} — so this is the nearest "
-                f"testable version of the idea, not the original one.</i>\n\n"
-            )
-        base += (
-            f"Test It runs a real walk-forward backtest of this condition before it's tracked as a live test "
-            f"(no real money is ever placed on it). Don't Test It dismisses this proposal."
-        )
+    specs = assessment.get("novel_condition_specs")
+    if specs is None and assessment.get("novel_condition_spec"):
+        specs = [assessment["novel_condition_spec"]]
+    if action == "propose_novel_test" and specs:
+        # One approval covers the SET. Splitting one idea into two measurable
+        # halves only helps if both halves are actually tested, so the buttons
+        # accept or dismiss them together rather than asking twice.
+        plural = len(specs) > 1
+        base += (f"\n\n<b>{'These need' if plural else 'This needs'} your input.</b>\n\n"
+                 + (f"<b>{len(specs)} hypotheses proposed</b> — two measurable conditions rather "
+                    f"than one deeper combination that could not be measured.\n\n" if plural else ""))
+        for i, spec in enumerate(specs, 1):
+            prefix = f"<b>{i}. " if plural else "<b>Proposed test: "
+            base += (f"{prefix}\"{escape_html(spec['label'])}\"</b>\n\n"
+                     f"<i>Exactly what would be tested:</i> {format_spec_clauses(spec)} → "
+                     f"{escape_html(spec['direction'])}\n\n")
+            # The tested condition is not always the proposed one. When thresholds
+            # were loosened to reach a measurable sample, the human approving has
+            # to see that BEFORE pressing the button -- the clause line above
+            # shows the new numbers but not that they changed, and a silent
+            # substitution would make the approval meaningless.
+            if spec.get("relaxed_from"):
+                base += (f"<i>Note: the thresholds originally proposed occurred too rarely to "
+                         f"measure. They were {escape_html(spec['relaxed_from'])} — so this is the "
+                         f"nearest testable version of the idea, not the original one.</i>\n\n")
+        base += (f"Test It runs a real walk-forward backtest of "
+                 f"{'each condition' if plural else 'this condition'} before "
+                 f"{'they are' if plural else 'it is'} tracked as "
+                 f"{'live tests' if plural else 'a live test'} (no real money is ever placed). "
+                 f"Don't Test It dismisses {'them' if plural else 'this proposal'}.")
     else:
         base += "\n\n<i>No action taken -- logged, nothing further needed.</i>"
     return base

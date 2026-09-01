@@ -437,6 +437,118 @@ NON_PROPOSABLE_INDICATORS = frozenset({
     "is_macro_day", "shock_zscore", "daily_range_pct", "vol_compression_zscore",
 })
 
+# The most clauses an LLM proposal may contain. Two: one news/macro term and one
+# market-state term.
+#
+# THIS REVERSES AN EARLIER DECISION, and the reversal is the interesting part.
+# A clause cap was previously REMOVED in favour of measuring rarity directly, on
+# the grounds that it was a poor proxy: measured on 228 proposals from the old
+# grammar, 2-clause and 3-clause conditions were equally testable (18% each), so
+# the count correlated with rarity without determining it.
+#
+# That measurement was correct and is now obsolete, because the grammar it was
+# taken on no longer exists. Re-measured on the current one -- news term with
+# within_days=7, no `is_macro_day`, no `shock_zscore`:
+#
+#     clauses   testable as proposed   rescued   lost   median occurrences
+#           1                   100%      100%     0%                 1172
+#           2                    89%      100%     0%                  139
+#           3                    26%       75%    25%                   12
+#
+# Each added clause divides occurrences by roughly eight. On the old grammar the
+# count did not discriminate; on this one it separates cleanly, and a third
+# clause puts the median at 12 against a floor of 120.
+#
+# The cap does NOT replace the rarity gate -- both run, and the rarity gate is
+# still the thing that actually decides. The cap exists because a 3-clause
+# proposal is now almost always a wasted proposal, and the cheapest place to stop
+# it is before it is made.
+#
+# The intended replacement for the lost expressiveness is TWO proposals per call
+# rather than one deeper conjunction: "rate cut within 7 days AND funding
+# negative" and "rate cut within 7 days AND RSI below 30" are two measurable
+# hypotheses where their conjunction is one unmeasurable one.
+MAX_PROPOSABLE_CLAUSES = 2
+
+# How many hypotheses one call may return. Two, because the cap above removed a
+# third clause and this is where the lost expressiveness goes: "rate cut within 7
+# days AND funding negative" plus "rate cut within 7 days AND RSI below 30" are
+# two measurable hypotheses where their conjunction is one unmeasurable one.
+#
+# It is nearly free in dollars -- one call either way, a few hundred extra output
+# tokens -- but NOT free statistically. Under Benjamini-Hochberg the threshold
+# for the k-th smallest p-value is k*alpha/m, so doubling the family tightens the
+# bar for every hypothesis in it, including ones that would have been proposed
+# anyway. It is worth it here only because of what it replaces: a 3-clause
+# condition is testable 26% of the time with a median of 12 occurrences, while
+# each 2-clause half is testable 89% of the time with a median of 139. Two
+# measurable tests beat one that cannot produce a result, even at a stricter bar.
+MAX_PROPOSALS_PER_CALL = 2
+
+# Above this behavioural overlap, two proposals are one hypothesis wearing two
+# hats -- and paying twice the alpha for one piece of information.
+#
+# NOT a check on shared CLAUSES, which would be wrong: the intended pattern is
+# precisely two proposals sharing their news term and differing in the market
+# term. Measured, that pattern's overlap is 0.000 -- the two select disjoint sets
+# of days despite sharing a clause. Text similarity would reject exactly what
+# this design is for.
+#
+# 0.6 sits in a wide empty gap rather than at a hand-picked round number. Over
+# 120 random pairs of plausible proposals from the current grammar:
+#
+#     p50 0.000   p90 0.034   p99 0.212   max 0.390
+#
+# while a near-duplicate (the same condition with one threshold moved 5%) scores
+# 0.837 and an exact duplicate 1.000. A cut at 0.6 rejects none of the 120 and
+# catches both duplicates.
+MAX_PROPOSAL_OVERLAP = 0.6
+
+
+def proposals_from_assessment(assessment: dict) -> list[dict]:
+    """Every proposed condition in a model response, as a list.
+
+    Accepts both `novel_condition_specs` (the current schema, a list) and
+    `novel_condition_spec` (the previous one, a single object or null). Both
+    rather than a migration because stored replay state, pending-test queues and
+    the committed sweeps all carry the singular form, and a schema flag day would
+    break them for no gain -- the same reason `spec_from_dict` is one serializer
+    rather than a versioned pair."""
+    if assessment.get("recommended_action") != "propose_novel_test":
+        return []
+    many = assessment.get("novel_condition_specs")
+    if isinstance(many, list):
+        return [d for d in many if isinstance(d, dict)][:MAX_PROPOSALS_PER_CALL]
+    one = assessment.get("novel_condition_spec")
+    return [one] if isinstance(one, dict) else []
+
+
+def filter_redundant_proposals(specs: list, coins: list[str],
+                                as_of=None) -> "tuple[list, list[str]]":
+    """Keep proposals that are behaviourally distinct; report what was dropped.
+
+    Returns `(kept, notes)`. The FIRST of a redundant pair survives, not the
+    better-looking one: choosing between them on any measured quality would be
+    selecting a hypothesis on its outcome, which is the one thing this pipeline
+    must not do at proposal time.
+
+    Enforced in code rather than requested in the prompt for the standing reason
+    -- a prompt asking for "conceptually distinct" hypotheses is a request, and
+    two conjunctions that share a clause are exactly what a model produces when
+    asked to split one idea in half."""
+    kept, notes = [], []
+    for spec in specs:
+        clash = next((k for k in kept
+                      if (ov := behavioural_agreement(spec, k, coins, as_of=as_of)) == ov
+                      and ov > MAX_PROPOSAL_OVERLAP), None)
+        if clash is None:
+            kept.append(spec)
+        else:
+            ov = behavioural_agreement(spec, clash, coins, as_of=as_of)
+            notes.append(f"'{spec.label}' dropped: fires on {ov:.0%} of the same days as "
+                          f"'{clash.label}' -- one hypothesis, not two")
+    return kept, notes
+
 # The whitelist shown to the model, derived rather than written out by hand: an
 # indicator added to NON_PROPOSABLE_INDICATORS disappears from every prompt at
 # once. The hand-maintained version is how `is_macro_day` stayed advertised in
@@ -498,6 +610,11 @@ def spec_from_proposal(d: dict) -> "tuple[ConditionSpec | None, str | None]":
         spec = spec_from_dict(d)
     except (ValueError, KeyError, TypeError) as e:
         return None, str(e)
+    if len(spec.clauses) > MAX_PROPOSABLE_CLAUSES:
+        return None, (f"has {len(spec.clauses)} clauses; at most {MAX_PROPOSABLE_CLAUSES} are "
+                      f"allowed. Each added clause divides historical occurrences by roughly "
+                      f"eight, and a 3-clause condition's median is 12 -- far below what can be "
+                      f"measured. Split the idea into two separate 2-clause proposals instead.")
     banned = sorted({c.indicator for c in spec.clauses} & NON_PROPOSABLE_INDICATORS)
     if banned:
         return None, (f"uses {', '.join(banned)}, which is not proposable: it records that a "
@@ -524,7 +641,41 @@ def spec_from_proposal(d: dict) -> "tuple[ConditionSpec | None, str | None]":
 # classify_status's min_report_events, where it would be admitted here and then
 # rejected there. 35 gives ~23 OOS and a little margin, since the two-thirds
 # ratio is itself approximate.
-MIN_HISTORICAL_OCCURRENCES = 35
+# RAISED from 35 on 2026-09-01, on two independent measurements that agree.
+#
+# 35 did not do what its own reasoning claimed. Sampling conditions from the
+# current grammar by occurrence count and running the real test on each:
+#
+#     counted occurrences   ended insufficient_data
+#                   35-60                       90%
+#                  60-100                       40%
+#                 100-200                       10%
+#                    200+                        0%
+#
+# Nine of ten conditions admitted at the old floor produced no result at all --
+# the gate exists to prevent exactly that and, at its own threshold, allowed it
+# almost always. The stated derivation assumed ONE conversion (out-of-sample is
+# two thirds of occurrences); there are two, and measured, events reaching the
+# test are already 50-60% of counted occurrences before the fold split.
+#
+# Separately: at ~4.4 occurrences/year, a candidate admitted at 35 would need
+# 11.4 YEARS of live testing to reach MILESTONE_N = 50. At 120 it reaches it in
+# about three. The testability floor and the validation milestone disagreed;
+# 120 is where they agree, which is why it is 120 and not 100 or 150.
+#
+# THE COST, measured rather than assumed. The relaxation search still reaches
+# this floor with its existing steps, but only when the news clause carries a
+# lookback:
+#
+#     within_days   above floor   incl. relaxed   lost
+#               0            5%             31%    69%
+#               3           30%             90%    10%
+#               7           52%             99%     1%
+#
+# Same-day conjunctions become unusable. That is not a reason to lower the floor:
+# it is a reason the prompts now ask for a lookback on the news term, which is
+# the more honest hypothesis in any case.
+MIN_HISTORICAL_OCCURRENCES = 120
 
 
 def count_occurrences(spec: "ConditionSpec", coins: list[str],

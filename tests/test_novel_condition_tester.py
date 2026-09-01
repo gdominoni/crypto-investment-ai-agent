@@ -514,13 +514,23 @@ class TestRarityGateRespectsTheTimeSandbox:
         assert early < full / 5
 
     def test_the_replay_passes_its_simulated_date(self):
-        import inspect
+        """Checked across the whole module rather than inside one named function:
+        the gate moved from `_handle_assessment` to `_prepare_proposal` when a
+        call started returning two proposals, and a test pinned to a function
+        name fails on a refactor while missing the leak it exists to catch."""
+        import re
 
-        import replay.engine as E
-        src = inspect.getsource(E._handle_assessment)
-        assert "count_occurrences(_spec, COINS, as_of=as_of)" in src, (
-            "the replay must pass its simulated date, or the gate reads the future"
-        )
+        src = __import__("pathlib").Path("replay/engine.py").read_text()
+        calls = re.findall(r"count_occurrences\([^)]*\)", src)
+        assert calls, "the rarity gate is gone from the replay entirely"
+        for call in calls:
+            assert "as_of=as_of" in call, (
+                f"{call} omits as_of -- the replay must pass its simulated date, "
+                "or the gate reads the future to decide what to test"
+            )
+        # Same for the relaxation search, which chooses thresholds by counting.
+        for call in re.findall(r"relax_to_testable\([^)]*\)", src):
+            assert "as_of=as_of" in call, f"{call} omits as_of"
 
 
 def test_relaxation_never_crosses_an_indicator_s_neutral_point():
