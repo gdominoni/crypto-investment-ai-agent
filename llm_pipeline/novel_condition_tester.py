@@ -677,6 +677,40 @@ def spec_from_proposal(d: dict) -> "tuple[ConditionSpec | None, str | None]":
 # the more honest hypothesis in any case.
 MIN_HISTORICAL_OCCURRENCES = 120
 
+# The second floor, on INDEPENDENT episodes rather than raw firings. Both apply,
+# and they are not redundant -- they guard two different failures:
+#
+#   * MIN_HISTORICAL_OCCURRENCES guards whether the test can RUN. `build_events`
+#     makes one row per triggered bar and `classify_status` needs more than
+#     `min_report_events` (20) of them out-of-sample, so this is necessarily a
+#     count of raw events. Calibrated directly against the outcome it prevents:
+#     90% of conditions with 35-60 raw occurrences returned `insufficient_data`,
+#     10% at 100-200, none above 200.
+#
+#   * MIN_HISTORICAL_EPISODES guards whether the RESULT MEANS ANYTHING. Firings
+#     on consecutive days have forward windows overlapping almost entirely --
+#     measured, 79% of firings at within_days=7 overlap a previous one. They are
+#     one observation counted several times, and a p-value computed as though
+#     they were several is optimistic.
+#
+# Why 40. `min_report_events = 20` is the bar the test already sets for
+# out-of-sample events; out-of-sample is roughly half to two thirds of the
+# sample, so 40 total episodes targets 20-27 independent ones. The threshold is
+# anchored to a number the methodology already committed to, just measured on the
+# unit that carries the information, rather than picked for how much it admits.
+#
+# Share of the current grammar clearing 40 episodes, by news-clause lookback:
+#
+#     within_days      0      3      7     14
+#     clears 40      34%    63%    73%    87%
+#
+# The two floors bind in different regimes, which is why neither replaces the
+# other: at within_days=0 raw and episodes are equal, so the 120 raw floor binds
+# and admits little (median 24) -- honest scarcity, not a counting artefact. At
+# within_days=14 the raw floor is comfortable (median 387) while the episode
+# floor is what still has teeth (median 100).
+MIN_HISTORICAL_EPISODES = 40
+
 
 def count_occurrences(spec: "ConditionSpec", coins: list[str],
                        as_of: "pd.Timestamp | None" = None) -> int:
@@ -699,6 +733,54 @@ def count_occurrences(spec: "ConditionSpec", coins: list[str],
     IS everything knowable.
     """
     return len(occurrence_set(spec, coins, as_of))
+
+
+def episode_count(spec: "ConditionSpec", coins: list[str],
+                   as_of: "pd.Timestamp | None" = None,
+                   separation: int | None = None) -> int:
+    """How many INDEPENDENT times this condition has occurred -- firings on
+    consecutive or near-consecutive days collapsed into one.
+
+    This, not the raw occurrence count, is what the rarity gate measures, and the
+    difference is not cosmetic. `build_events` creates one row per triggered bar
+    with no deduplication, so a condition that stays true for several days in a
+    row produces several events whose forward windows overlap almost entirely.
+    They are one piece of evidence counted many times.
+
+    A clause's `within_days` is what makes this happen at scale: it holds the
+    news term true for K days, so the condition can fire on every day in that
+    window where the market term is also true. Measured on one hypothesis:
+
+        within_days   raw events   distinct episodes   inflation
+                  0           49                  49        1.0x
+                  3          198                  65        3.0x
+                  7          397                  82        4.8x
+                 14          856                 134        6.4x
+
+    Counting raw occurrences made `within_days` a way to clear the floor without
+    finding more evidence -- eight times the count for 1.7 times the independent
+    episodes. It also put the gate on a different unit from the milestone it
+    feeds: the live side already deduplicates, since `_scan_mechanical_triggers`
+    refuses to open a second test on a (candidate, coin) pair while one is open.
+    This makes both sides count the same thing.
+
+    `separation` defaults to the longest horizon a spec can be tested at, which
+    is the span over which two firings' outcomes genuinely overlap. Conservative
+    by design: a shorter separation would count partially-overlapping firings as
+    independent."""
+    sep = separation if separation is not None else max(spec.horizons)
+    total = 0
+    for coin in coins:
+        days = sorted(ts for c, ts in occurrence_set(spec, [coin], as_of) if c == coin)
+        if not days:
+            continue
+        total += 1
+        last = days[0]
+        for ts in days[1:]:
+            if (ts - last).days >= sep:
+                total += 1
+                last = ts
+    return total
 
 
 def occurrence_set(spec: "ConditionSpec", coins: list[str],
@@ -780,6 +862,26 @@ RELAXATION_NEUTRAL: dict[str, float] = {
 RELAXATION_STEPS = (0.10, 0.25, 0.50)
 
 
+
+def is_testable(spec: "ConditionSpec", coins: list[str],
+                 as_of: "pd.Timestamp | None" = None) -> str | None:
+    """None when this condition clears BOTH floors, otherwise the reason it does
+    not. One place, so the proposal path, the relaxation search and any future
+    caller cannot disagree about what "testable" means -- they did once, when the
+    relaxation targeted a floor the gate no longer used."""
+    raw = count_occurrences(spec, coins, as_of=as_of)
+    if raw < MIN_HISTORICAL_OCCURRENCES:
+        return (f"occurred {raw} time(s) up to this date, below the "
+                f"{MIN_HISTORICAL_OCCURRENCES} needed for a walk-forward test to run")
+    episodes = episode_count(spec, coins, as_of=as_of)
+    if episodes < MIN_HISTORICAL_EPISODES:
+        return (f"occurred {raw} time(s) but on only {episodes} separate occasion(s) -- "
+                f"firings on consecutive days share almost all of their outcome window, "
+                f"so this is {episodes} pieces of evidence, below the "
+                f"{MIN_HISTORICAL_EPISODES} needed for a result to mean anything")
+    return None
+
+
 def relax_to_testable(spec: "ConditionSpec", coins: list[str],
                       as_of: "pd.Timestamp | None" = None) -> "tuple[ConditionSpec, str] | None":
     """Loosen a too-rare condition just enough to be measurable, or give up.
@@ -817,7 +919,7 @@ def relax_to_testable(spec: "ConditionSpec", coins: list[str],
                                        outcome=spec.outcome, prior_weight=spec.prior_weight)
         except ValueError:
             return None
-        if count_occurrences(candidate, coins, as_of=as_of) >= MIN_HISTORICAL_OCCURRENCES:
+        if is_testable(candidate, coins, as_of=as_of) is None:
             changed = ", ".join(f"{a.indicator} {a.op} {a.threshold:g} -> {b.threshold:g}"
                                 for a, b in zip(spec.clauses, clauses) if a.threshold != b.threshold)
             return candidate, f"thresholds loosened by {step:.0%} to reach a measurable sample ({changed})"

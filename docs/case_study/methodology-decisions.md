@@ -1663,3 +1663,74 @@ binding constraint — a stricter gate cuts the sample the whole system is starv
 of. That is a real trade-off and belongs to the project's director, not to a
 tidying commit. What belongs on the record now is that 35 is not defensible on
 the reasoning currently written next to it.
+
+---
+
+## The rarity gate counts episodes as well as occurrences
+
+**Found by the project's director, asking whether `within_days` and the outcome
+horizon interact.** They are structurally independent -- one looks backward from
+the firing day, the other forward from entry -- but they are coupled through the
+gate, and the coupling had made a decision taken minutes earlier partly
+self-defeating.
+
+**The mechanism.** `build_events` creates one row per triggered bar with no
+deduplication. A clause's `within_days` holds the news term true for K days, so
+the condition fires on every day in that window where the market term is also
+true, and each firing's forward window overlaps the previous one almost
+entirely. Measured on one hypothesis:
+
+    within_days   raw events   distinct episodes   inflation   % overlapping
+              0           49                  49        1.0x              0%
+              3          198                  65        3.0x             67%
+              7          397                  82        4.8x             79%
+             14          856                 134        6.4x             84%
+
+Eight times the count for 1.7 times the independent evidence.
+
+**Why this mattered immediately.** The floor had just been raised to 120 to
+require more evidence, and the prompts had just been told to use a lookback of
+3-7 so proposals could clear it. Those two changes work against each other: the
+lookback clears the floor by counting the same evidence repeatedly. The
+guidance was removed and replaced with an explanation of what the two forms of
+the hypothesis MEAN, since choosing a lookback for testability is choosing it
+for nothing.
+
+**It also put the gate on a different unit from the milestone it feeds.** The
+live side already deduplicates -- `_scan_mechanical_triggers` will not open a
+second test on a (candidate, coin) pair while one is open -- so live occurrences
+were always episodes while the gate counted firings. The 11.4-years-to-validate
+figure recorded earlier was therefore optimistic by the inflation factor.
+
+**Two floors now, guarding two different failures.** Neither replaces the other,
+and they bind in different regimes:
+
+  * `MIN_HISTORICAL_OCCURRENCES = 120` (raw firings) guards whether the test can
+    RUN. `classify_status` needs more than `min_report_events = 20` out-of-sample
+    events and events are raw rows, so this necessarily counts firings.
+  * `MIN_HISTORICAL_EPISODES = 40` guards whether the RESULT MEANS ANYTHING.
+
+40 is anchored to a number the methodology already committed to rather than
+chosen for how much it admits: `min_report_events` is 20 out-of-sample, and
+out-of-sample is roughly half to two thirds of the sample, so 40 total episodes
+targets 20-27 independent ones. Share of the current grammar clearing it:
+
+    within_days      0      3      7     14
+    clears 40      34%    63%    73%    87%
+
+At `within_days=0` raw and episodes are equal, so the 120 raw floor binds and
+admits little (median 24 occurrences). That is honest scarcity rather than a
+counting artefact -- same-day conjunctions of a macro release and a market state
+genuinely are rare -- and it is the difference the episode count makes: the
+penalty is now a measurement rather than an artefact of the unit.
+
+**Both floors are checked in one function**, `is_testable`, called by the
+proposal gate and by the relaxation search. They disagreed once already, when
+the relaxation targeted a floor the gate had moved past.
+
+**Not verified, and recorded rather than assumed.** The moving-block bootstrap
+sizes its blocks to the horizon and so protects the BASELINE against
+autocorrelation. Whether the variance of the OBSERVED mean accounts for overlap
+among the sample's own events was not checked. If it does not, p-values are
+optimistic in proportion to the inflation factor above, and that would matter
+most exactly where the lookback is widest.

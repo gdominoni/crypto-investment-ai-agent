@@ -100,12 +100,16 @@ the same condition with a threshold nudged. Two specs that fire on the same days
 code and the second is discarded, so a near-duplicate simply wastes the slot. One good spec is \
 better than one good spec plus filler.
 
-PUT A LOOKBACK ON THE NEWS TERM. A macro release and a market state on the SAME day is a rare \
-coincidence: measured across this grammar, same-day conjunctions are measurable 5% of the time \
-against 52% when the news clause carries within_days=7, and two thirds cannot be rescued at all. \
-Unless you specifically mean "both on the same day", give the news clause a within_days of 3 to 7 \
--- usually the more honest hypothesis anyway, since a release's effect is not confined to its \
-publication day.
+CHOOSE within_days FOR WHAT THE HYPOTHESIS MEANS, not for how often it fires. "The print came out \
+today and the market was already oversold" and "a print came out this week, and the market is \
+oversold now" are different claims about how an effect travels, and only you can say which one you \
+mean. A lookback of 0 says the two things coincided; a lookback of K says the news came first and \
+the market condition followed within K days.
+
+Do not reach for a longer window to make a condition occur more often. Occurrences on consecutive \
+days are one episode counted several times, and the gate that decides whether a condition can be \
+tested counts EPISODES -- so a wider window buys almost no additional evidence, and the extra \
+firings it produces are the same evidence repeated.
 
 CONDITIONS MAY BE SEQUENCED, not just simultaneous. Each clause takes an optional "within_days" \
 (0-14, default 0). 0 means "true on the day the condition fires"; K means "was true at any point in \

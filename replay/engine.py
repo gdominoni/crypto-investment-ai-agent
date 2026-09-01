@@ -41,7 +41,7 @@ from execution import hyperopt_runner
 from llm_pipeline.haiku_sonnet_pipeline import escape_html, format_spec_clauses
 from llm_pipeline.novel_condition_tester import (
     ConditionSpec, clause_signal_hourly, clause_to_dict, condition_desc, format_pattern_significance,
-    filter_redundant_proposals, MIN_HISTORICAL_OCCURRENCES, count_occurrences,
+    MIN_HISTORICAL_OCCURRENCES, filter_redundant_proposals, count_occurrences, is_testable,
     proposals_from_assessment, relax_to_testable,
     spec_from_dict, spec_from_proposal, spec_to_dict,
     test_novel_condition,
@@ -217,9 +217,9 @@ def _prepare_proposal(raw: dict, as_of: pd.Timestamp) -> dict | None:
     # Rarity, measured rather than approximated. 0.25s of local computation and no
     # API call, so the thing that actually decides whether a hypothesis can
     # produce a result is checked directly.
-    n = count_occurrences(spec, COINS, as_of=as_of)
+    why_not = is_testable(spec, COINS, as_of=as_of)
     relax_note = None
-    if n < MIN_HISTORICAL_OCCURRENCES:
+    if why_not is not None:
         # "Too rare" is a statement about the THRESHOLDS, not about the idea.
         # Search locally for the nearest measurable version instead.
         #
@@ -231,9 +231,8 @@ def _prepare_proposal(raw: dict, as_of: pd.Timestamp) -> dict | None:
         relaxed = relax_to_testable(spec, COINS, as_of=as_of)
         if relaxed is None:
             print(f"[{as_of.date()}] proposal '{raw.get('label')}' rejected, not tested: "
-                  f"occurred only {n} time(s) up to this date, below the "
-                  f"{MIN_HISTORICAL_OCCURRENCES} needed to measure anything, and no "
-                  f"loosening within the indicators' meaning reaches the floor.")
+                  f"{why_not}, and no loosening within the indicators' meaning reaches "
+                  f"the floor.")
             return None
         spec, relax_note = relaxed
         # Substituted, not silently: the condition about to be tested is NOT the
