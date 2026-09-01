@@ -153,3 +153,33 @@ class TestConfirmationNotValidation:
         out = _confirmation_block("candidate_that_does_not_exist")
         assert "Confirmation record" in out
         assert "pending hyperopt" in out
+
+
+class TestTelegramRateLimit:
+    """Found by actually running the replay, which no unit test would have."""
+
+    def test_a_429_is_retried_not_swallowed(self):
+        """The first unattended run lost NINE messages in eight chunks: `_send`
+        printed the 429, set all_ok = False and continued. That loss is invisible
+        -- 44 of 47 call sites ignore the return value -- and the Telegram record
+        is this project's evidence."""
+        import inspect
+
+        import telegram.bot as B
+        src = inspect.getsource(B._send)
+        assert "retry_after" in src, "Telegram states how long to wait; honour it"
+        assert "_MAX_429_RETRIES" in src
+        assert "_throttle()" in src
+
+    def test_sends_are_spaced_before_the_limit_is_hit(self):
+        """Cheaper than any retry: a 429 costs `retry_after` seconds, observed at
+        174, against the ~1s wait that avoids it."""
+        import time
+
+        import telegram.bot as B
+        B._last_send_at = 0.0
+        start = time.monotonic()
+        B._throttle()
+        B._throttle()
+        elapsed = time.monotonic() - start
+        assert elapsed >= B._MIN_SEND_INTERVAL * 0.9

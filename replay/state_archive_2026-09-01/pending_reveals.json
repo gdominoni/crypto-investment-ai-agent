@@ -1,0 +1,6 @@
+[
+  {
+    "message": "<b>2020-01-17</b>\n\n<b>Historical backtest -- CPI surprise into overbought market (bollinger_pctb_20d&gt;1)</b>\n\n(CPI surprise (how far the new inflation print moved vs. recent prints, in std devs; only on CPI release days) above 0.0 AND position within the 20-day Bollinger Bands (0=lower band, 1=upper band) above 1.0 \u2192 short)\n\n<b>Verdict:</b> not enough history to judge -- 2 occurrence(s) found, too few for a walk-forward test.\n\nRe-checked automatically every 7 days; this can change as more occurrences accumulate.",
+    "reveal_date": "2020-01-17"
+  }
+]

@@ -145,6 +145,32 @@ def _safe_cut(line: str, limit: int) -> int:
     return limit  # no safe boundary found -- one unbroken token longer than the limit
 
 
+# Telegram allows roughly one message per second to a single chat, and answers a
+# burst with 429 plus a `retry_after` that grows the harder it is pushed --
+# observed at 174 seconds after a few dozen rapid sends.
+#
+# This matters far more in the replay than in production. Live, messages arrive
+# at the pace real events happen, which is nowhere near the limit; the replay
+# compresses nine years into hours, so it sends at a rate no human-paced system
+# ever would. In a first unattended run that cost NINE MESSAGES in eight chunks:
+# `_send` printed the 429, set all_ok = False and continued, so they were simply
+# lost -- and the Telegram record IS this project's evidence.
+_MIN_SEND_INTERVAL = 1.05
+_MAX_429_RETRIES = 3
+_last_send_at = 0.0
+
+
+def _throttle() -> None:
+    """Space sends out rather than discovering the limit by hitting it. Cheaper
+    than any retry: a 429 costs `retry_after` seconds, which has been observed
+    two orders of magnitude larger than the wait that avoids it."""
+    global _last_send_at
+    wait = _MIN_SEND_INTERVAL - (time.monotonic() - _last_send_at)
+    if wait > 0:
+        time.sleep(wait)
+    _last_send_at = time.monotonic()
+
+
 def _send(text: str, reply_markup: dict | None = None, pin: bool = False) -> bool:
     """`pin=True` best-effort pins the message after sending (Telegram's
     own `pinChatMessage`, no special permission needed in a private 1:1
@@ -166,12 +192,31 @@ def _send(text: str, reply_markup: dict | None = None, pin: bool = False) -> boo
         payload = {"chat_id": chat_id, "text": chunk, "parse_mode": "HTML"}
         if reply_markup is not None and i == len(chunks) - 1:
             payload["reply_markup"] = reply_markup
-        try:
-            resp = requests.post(url, json=payload, timeout=15)
-        except Exception as e:
-            # A network blip must not take down whatever was calling us --
-            # notably live_daemon's poll loop or a mid-run scheduled job.
-            print(f"SEND FAILED (network): {type(e).__name__}: {e}")
+        resp = None
+        for attempt in range(_MAX_429_RETRIES + 1):
+            _throttle()
+            try:
+                resp = requests.post(url, json=payload, timeout=15)
+            except Exception as e:
+                # A network blip must not take down whatever was calling us --
+                # notably live_daemon's poll loop or a mid-run scheduled job.
+                print(f"SEND FAILED (network): {type(e).__name__}: {e}")
+                return False
+            if resp.status_code != 429:
+                break
+            # Telegram states exactly how long to wait. Honouring it is the
+            # difference between a delayed message and a lost one -- and a lost
+            # one is invisible, since 44 of 47 call sites ignore the return value.
+            try:
+                wait = float(resp.json()["parameters"]["retry_after"])
+            except Exception:
+                wait = 5.0 * (attempt + 1)
+            if attempt == _MAX_429_RETRIES:
+                break
+            print(f"Rate limited by Telegram, waiting {wait:.0f}s before retry "
+                  f"{attempt + 1}/{_MAX_429_RETRIES}...")
+            time.sleep(min(wait, 300.0) + 0.5)
+        if resp is None:
             return False
         if not resp.ok:
             # Loud, and self-diagnosing. 44 of 47 call sites ignore this
