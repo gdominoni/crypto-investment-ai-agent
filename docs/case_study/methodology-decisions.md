@@ -1734,3 +1734,65 @@ autocorrelation. Whether the variance of the OBSERVED mean accounts for overlap
 among the sample's own events was not checked. If it does not, p-values are
 optimistic in proportion to the inflation factor above, and that would matter
 most exactly where the lookback is widest.
+
+---
+
+## The episode floor is currently inactive, and that is worth stating
+
+**Measured after the fact**, running the whole grammar through both gates. Of
+1,224 two-clause conditions, 38% clear both floors as proposed, 41% are rescued
+by relaxation, 21% are lost — and **every single loss is to the raw floor. Not
+one condition fails on episodes.**
+
+**Why, and it partly walks back the alarm that motivated the episode floor.**
+The inflation is real on the grammar as a whole — a seven-day lookback produces
+about three to five times the firings for the same independent evidence. But it
+does not translate into weak conditions PASSING. Among conditions that actually
+clear 120 raw occurrences:
+
+    within_days   passing   median episodes   minimum episodes
+              0         5               133                116
+              3        15               123                 46
+              7        18                99                 49
+             14        20               134                 72
+
+A condition frequent enough to fire 120 times is genuinely frequent, not merely
+repetitive, whatever its lookback. The raw floor already does the work the
+episode floor was added to do.
+
+**What follows.** `MIN_HISTORICAL_EPISODES = 40` is kept, and described honestly:
+it is insurance against a failure mode this grammar does not currently produce,
+not an active safeguard. The observed minimum of 46 is close enough to it that a
+different set of thresholds could bring it into play, and it costs nothing to
+leave armed. What it must not do is appear in a write-up as a gate that is
+filtering anything, because it is not.
+
+**The direction of the correction matters more than the number.** The concern was
+raised on the inflation factor alone, and the inflation factor was the wrong
+quantity to reason from -- what mattered was the episode count of the conditions
+that survive, which is a different distribution and had to be measured
+separately. Reasoning from the first to the second was the mistake.
+
+---
+
+## What the new grammar actually produces, measured before spending anything
+
+The whole redesign — compression trigger, two clauses, two proposals per call,
+floor at 120 — was checked against the question it exists to answer, offline and
+free, before any replay was run:
+
+    within_days   testable as proposed   rescued   lost
+              0                     5%       25%    70%
+              3                    30%       58%    13%
+              7                    51%       47%     2%
+             14                    67%       33%     1%
+          total                    38%       41%    21%
+
+**79% of the grammar is reachable.** Projected over the replay's 217 triggers at
+two proposals each, and the measured 56% rate at which a call yields a usable
+spec: **roughly 190 testable candidates**, against 118 accumulated by the
+previous system — which made about 1,200 calls to get them, against 217.
+
+More material, from a trigger measured to precede what the project is looking
+for, at roughly a sixth of the cost. That is the case for running it; it is not
+evidence that anything will be found.
