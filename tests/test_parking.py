@@ -183,3 +183,26 @@ class TestTelegramRateLimit:
         B._throttle()
         elapsed = time.monotonic() - start
         assert elapsed >= B._MIN_SEND_INTERVAL * 0.9
+
+    def test_a_network_failure_is_retried_not_abandoned(self):
+        """Eight transient DNS/timeout failures appeared in twenty minutes of a
+        dry run. `_send` used to `return False` on the first one, losing the
+        message -- and over a multi-hour unattended run these are a certainty."""
+        import inspect
+
+        import telegram.bot as B
+        src = inspect.getsource(B._send)
+        assert "retrying" in src
+        assert src.count("return False") <= 2, "a network blip must not abandon on first failure"
+
+    def test_the_bot_token_never_reaches_a_log(self):
+        """requests embeds the full request URL in its exception text, and the
+        URL carries the token -- so a routine network error was writing a live
+        credential into a log file in plaintext."""
+        import inspect
+
+        import telegram.bot as B
+        assert B._redact("hit /bot99:SECRET/sendMessage", "99:SECRET") == "hit /bot<BOT_TOKEN>/sendMessage"
+        assert B._redact("no token here", "") == "no token here"
+        src = inspect.getsource(B._send)
+        assert src.count("_redact(") >= 2, "both the network and the HTTP-error paths must redact"

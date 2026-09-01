@@ -160,6 +160,16 @@ _MAX_429_RETRIES = 3
 _last_send_at = 0.0
 
 
+def _redact(text: str, token: str) -> str:
+    """Strip the bot token out of anything that gets printed.
+
+    `requests` embeds the full request URL in its exception messages, and this
+    project's URL carries the token -- so a routine network error was writing a
+    live credential into a log file in plaintext. Cheap to prevent, and the kind
+    of thing that is only ever noticed after the log has been shared."""
+    return text.replace(token, "<BOT_TOKEN>") if token else text
+
+
 def _throttle() -> None:
     """Space sends out rather than discovering the limit by hitting it. Cheaper
     than any retry: a 429 costs `retry_after` seconds, which has been observed
@@ -198,10 +208,23 @@ def _send(text: str, reply_markup: dict | None = None, pin: bool = False) -> boo
             try:
                 resp = requests.post(url, json=payload, timeout=15)
             except Exception as e:
-                # A network blip must not take down whatever was calling us --
-                # notably live_daemon's poll loop or a mid-run scheduled job.
-                print(f"SEND FAILED (network): {type(e).__name__}: {e}")
-                return False
+                # RETRIED, not abandoned. A transient DNS failure or read timeout
+                # used to lose the message outright -- eight of them appeared in
+                # twenty minutes of a replay dry run, and over a multi-hour
+                # unattended run they are a certainty rather than a risk.
+                #
+                # The exception text is REDACTED because requests puts the full
+                # URL in it, and the URL contains the bot token. It was being
+                # printed in plaintext to a log file this project's own author
+                # would plausibly paste into an issue or a write-up.
+                detail = _redact(f"{type(e).__name__}: {e}", token)
+                if attempt == _MAX_429_RETRIES:
+                    print(f"SEND FAILED (network, {attempt + 1} attempts): {detail}")
+                    return False
+                print(f"Network error sending to Telegram ({detail}) -- retrying "
+                      f"{attempt + 1}/{_MAX_429_RETRIES}...")
+                time.sleep(2.0 * (attempt + 1))
+                continue
             if resp.status_code != 429:
                 break
             # Telegram states exactly how long to wait. Honouring it is the
@@ -225,7 +248,7 @@ def _send(text: str, reply_markup: dict | None = None, pin: bool = False) -> boo
             # precisely how an entire /replay_summary section went missing
             # once already. Callers that cannot act on it should at least
             # leave a searchable trace in the log.
-            detail = resp.text[:300]
+            detail = _redact(resp.text[:300], token)
             hint = ""
             if resp.status_code == 400 and "parse" in detail.lower():
                 hint = ("  <-- malformed HTML, most likely a chunk boundary splitting a tag; "
