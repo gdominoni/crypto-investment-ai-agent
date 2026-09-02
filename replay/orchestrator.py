@@ -17,6 +17,7 @@ from anthropic import Anthropic
 from dotenv import load_dotenv
 
 from llm_pipeline.haiku_sonnet_pipeline import escape_html
+from replay import state
 from replay.engine import advance, resolve_pending_test
 from replay.judgment import answer_market_question
 from telegram.bot import _send
@@ -30,6 +31,18 @@ CHECKIN_QUESTIONS = [
 
 
 def run_to_completion(max_chunks: int = 1500, ask_every: int = 4) -> dict:
+    # Exclusive lock on this replay's own state, for the whole run -- see
+    # state.acquire_replay_lock's docstring for the incident that made this
+    # necessary: two unlocked processes wrote the same checkpoint overnight and
+    # silently overwrote each other's progress, corrupting the run.
+    state.acquire_replay_lock()
+    try:
+        return _run_to_completion_locked(max_chunks, ask_every)
+    finally:
+        state.release_replay_lock()
+
+
+def _run_to_completion_locked(max_chunks: int, ask_every: int) -> dict:
     load_dotenv()
     client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 

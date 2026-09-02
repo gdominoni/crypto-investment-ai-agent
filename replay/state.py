@@ -188,3 +188,74 @@ def save_confirmation_prior(candidate: str, n: int) -> None:
     priors = load_confirmation_priors()
     priors[candidate] = int(n)
     _write(STATE_DIR / "confirmation_priors.json", priors)
+
+
+class ReplayAlreadyRunning(RuntimeError):
+    """Raised when a second `replay.orchestrator` tries to start while one is
+    already advancing this same state."""
+
+
+LOCK_PATH = STATE_DIR / "replay.lock"
+
+
+def acquire_replay_lock() -> int:
+    """Claims exclusive ownership of this replay's state, or raises
+    `ReplayAlreadyRunning`. Returns the PID written to the lock, for logging.
+
+    WHY THIS EXISTS -- a real incident, not a hypothetical. Two orchestrator
+    processes ran against the same state overnight with no lock between them.
+    Neither checkpoint's writer knew about the other, so `advance()`'s own
+    invariant (the checkpoint date only ever moves forward) held true FOR EACH
+    PROCESS INDIVIDUALLY but not for the file both were writing: whichever
+    process finished a chunk last simply overwrote the other's more recent
+    progress. The result was a checkpoint that visibly jumped backward between
+    log lines, ~300 near-duplicate proposals for the same handful of days (each
+    process discovering its own independent, non-deterministic Sonnet
+    proposals for the same episodes), and a trade log containing entries dated
+    AFTER the final checkpoint -- 218 of them, up to 8 days ahead, found only
+    by checking that invariant directly. Cost was inflated by roughly the same
+    factor as the duplication.
+
+    STALE LOCKS ARE RECLAIMED, not treated as permanent. A lock file naming a
+    PID that is no longer running (checked via `os.kill(pid, 0)`, which raises
+    without signalling anything if the process is gone) means the previous run
+    crashed or was killed without cleaning up -- reclaiming it is exactly right,
+    since honouring a dead process's lock forever would need a human to notice
+    and delete a file by hand every time.
+    """
+    import os
+
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    if LOCK_PATH.exists():
+        try:
+            holder = int(LOCK_PATH.read_text().strip())
+        except (ValueError, OSError):
+            holder = None
+        if holder is not None:
+            try:
+                os.kill(holder, 0)
+                alive = True
+            except ProcessLookupError:
+                alive = False
+            except PermissionError:
+                # Exists and is owned by someone else -- treat as alive rather
+                # than guess.
+                alive = True
+            if alive:
+                raise ReplayAlreadyRunning(
+                    f"Another replay orchestrator is already running (PID {holder}). "
+                    f"Two processes writing the same state at once is what corrupted "
+                    f"a run before -- see this function's docstring. If that PID is "
+                    f"genuinely gone, delete {LOCK_PATH} and retry.")
+    pid = os.getpid()
+    LOCK_PATH.write_text(str(pid))
+    return pid
+
+
+def release_replay_lock() -> None:
+    """Best-effort: a failure to remove the lock file must not mask whatever
+    exception the caller is already unwinding from."""
+    try:
+        LOCK_PATH.unlink(missing_ok=True)
+    except OSError:
+        pass

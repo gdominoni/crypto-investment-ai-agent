@@ -1,0 +1,1376 @@
+[1] {'stopped': None, 'current_date': '2017-09-25', 'events': 0, 'reached_end': False}
+[2] {'stopped': None, 'current_date': '2017-10-25', 'events': 0, 'reached_end': False}
+[3] {'stopped': None, 'current_date': '2017-11-24', 'events': 0, 'reached_end': False}
+[4] {'stopped': None, 'current_date': '2017-12-24', 'events': 0, 'reached_end': False}
+    asked: What's the crypto market situation right now?
+[5] {'stopped': None, 'current_date': '2018-01-23', 'events': 0, 'reached_end': False}
+[6] {'stopped': None, 'current_date': '2018-02-22', 'events': 0, 'reached_end': False}
+[2018-03-08] proposal 'jobless_claims_surprise_with_oversold_rsi_continuation' PARKED, not discarded: occurred 1 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2018-03-08] proposal 'jobless_claims_surprise_with_5d_selloff_reversion' PARKED, not discarded: occurred 17 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[7] {'stopped': None, 'current_date': '2018-03-24', 'events': 1, 'reached_end': False}
+Rate limited by Telegram, waiting 59s before retry 1/3...
+[2018-04-02] proposal 'hawkish_rate_surprise_oversold_bounce' PARKED, not discarded: occurred 13 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2018-04-02] proposal 'hawkish_rate_surprise_weak_volume_continuation' PARKED, not discarded: occurred 5 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[8] {'stopped': None, 'current_date': '2018-04-23', 'events': 1, 'reached_end': False}
+    asked: How are the currently active trades doing?
+[2018-04-25] no_action: No macro/news event with a quantifiable surprise occurred during or near this compression episode (jobless claims surpri
+[2018-04-25] no_action: No macro release occurred during the compression window itself (the jobless claims print predates the squeeze by five da
+[9] {'stopped': None, 'current_date': '2018-05-23', 'events': 2, 'reached_end': False}
+[2018-05-28] no_action: No macro release occurred during the compression window itself (jobless claims printed three days before compression beg
+[2018-06-10] proposal 'hawkish_claims_surprise_then_oversold_breakdown_continues' PARKED, not discarded: occurred 8 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2018-06-10] proposal 'dovish_rate_surprise_with_volume_spike_reversal' PARKED, not discarded: occurred 32 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2018-06-14] proposal 'dovish_rate_surprise_then_oversold_band' PARKED, not discarded: occurred 54 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2018-06-14] proposal 'claims_beat_then_oversold_rsi' PARKED, not discarded: occurred 59 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[10] {'stopped': None, 'current_date': '2018-06-22', 'events': 3, 'reached_end': False}
+[2018-07-16] proposal 'strong_labor_surprise_then_bollinger_breakout' PARKED, not discarded: occurred 15 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2018-07-16] proposal 'soft_cpi_surprise_then_rsi_recovery' PARKED, not discarded: occurred 19 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2018-07-16] no_action: No macro surprise data is available for this window (cpi_surprise and jobless_claims_surprise are both n/a, not computed
+[11] {'stopped': None, 'current_date': '2018-07-22', 'events': 2, 'reached_end': False}
+[2018-07-24] no_action: No macro release occurred during the compression window itself, and the only nearby print (jobless claims) has no surpri
+[2018-07-25] no_action: There is no macro release with a computable surprise in or near this compression window (jobless claims surprise is n/a,
+[2018-08-08] no_action: No macro releases occurred during the compression window itself, and the only nearby releases (Fed Funds Rate, Jobless C
+[2018-08-14] no_action: The macro surprises here are small (CPI -0.4sd, jobless claims -0.6sd) and the corresponding surprise indicators are fla
+[2018-08-15] proposal 'Hawkish rate surprise plus extreme oversold RSI -> continued downside' PARKED, not discarded: occurred 17 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2018-08-15] proposal 'Cooler CPI surprise plus volume spike at compression exit -> bounce' PARKED, not discarded: occurred 32 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[12] {'stopped': None, 'current_date': '2018-08-21', 'events': 5, 'reached_end': False}
+    asked: Which trigger conditions have been tested so far -- has anything been validated or dropped?
+[2018-09-05] proposal 'dovish_rate_surprise_into_range_expansion' PARKED, not discarded: occurred 0 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[13] {'stopped': 'waiting_for_human', 'current_date': '2018-09-10', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2018-09-05] proposal 'dovish rate surprise precedes volume-spike breakdown -> mean reversion long' PARKED, not discarded: occurred 15 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2018-09-05] proposal 'weak jobless claims surprise coincides with range expansion -> continuation short' PARKED, not discarded: occurred 23 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2018-09-17] no_action: No macro releases occurred within the compression window itself, and the only nearby CPI/jobless prints lack computed su
+[14] {'stopped': None, 'current_date': '2018-10-05', 'events': 2, 'reached_end': False}
+[2018-10-11] proposal 'soft_cpi_surprise_oversold_rsi' PARKED, not discarded: occurred 7 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2018-10-11] proposal 'weak_claims_surprise_lower_band' PARKED, not discarded: occurred 5 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2018-10-11] proposal 'soft_cpi_oversold_bounce' PARKED, not discarded: occurred 7 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2018-10-11] proposal 'weak_claims_range_expansion_continuation' PARKED, not discarded: occurred 6 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2018-10-15] proposal 'dovish_cpi_surprise_volume_breakout_long' PARKED, not discarded: occurred 6 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2018-10-15] proposal 'jobless_claims_surprise_range_expansion_short' PARKED, not discarded: occurred 22 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[15] {'stopped': None, 'current_date': '2018-11-04', 'events': 3, 'reached_end': False}
+[2018-11-06] no_action: No macro surprise data is available for this window (CPI, rate, and jobless claims surprises are all n/a, and no macro r
+[2018-11-14] proposal 'hawkish_rate_surprise_volume_breakout_short' PARKED, not discarded: occurred 7 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2018-11-14] proposal 'cpi_surprise_oversold_bounce_long' PARKED, not discarded: occurred 3 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2018-11-14] proposal 'hawkish CPI surprise then volume-confirmed breakout' PARKED, not discarded: occurred 7 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2018-11-14] proposal 'hawkish CPI surprise then oversold RSI breakout' PARKED, not discarded: occurred 4 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2018-11-14] proposal 'hawkish_rate_surprise_then_oversold_reversion' PARKED, not discarded: occurred 4 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2018-11-14] proposal 'hawkish_rate_surprise_then_volume_breakdown_continuation' PARKED, not discarded: occurred 7 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2018-11-19] proposal 'hawkish_rate_surprise_then_oversold_breakdown' PARKED, not discarded: occurred 6 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2018-11-19] proposal 'hawkish_rate_surprise_then_high_volume_breakdown' PARKED, not discarded: occurred 21 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2018-11-19] proposal 'CPI hawkish surprise then oversold RSI breakdown' PARKED, not discarded: occurred 0 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2018-11-19] proposal 'CPI hawkish surprise then high-volume capitulation' PARKED, not discarded: occurred 2 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[16] {'stopped': None, 'current_date': '2018-12-04', 'events': 6, 'reached_end': False}
+    asked: Profit and loss, win rate and sortino of all the trades so far, split by trigger?
+[17] {'stopped': None, 'current_date': '2019-01-03', 'events': 0, 'reached_end': False}
+[2019-01-17] parked proposal 'claims_beat_then_oversold_rsi' is now testable (proposed 2018-06-14) -- promoting.
+[18] {'stopped': 'waiting_for_human', 'current_date': '2019-01-17', 'events': 0}
+    auto-resolved pending test: insufficient_data
+[2019-02-08] proposal 'jobless_claims_improvement_then_volume_breakout' PARKED, not discarded: occurred 5 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-02-08] proposal 'jobless_claims_improvement_then_momentum_confirmation' PARKED, not discarded: occurred 30 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-02-08] proposal 'claims_improve_volume_breakout_long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise <= -0.5 -> -0.25, volume_zscore_30d >= 1 -> 0.5)
+[2019-02-08] proposal 'claims_improve_overbought_reversion_short' PARKED, not discarded: occurred 50 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[19] {'stopped': 'waiting_for_human', 'current_date': '2019-02-13', 'events': 2}
+    auto-resolved pending test: insufficient_data
+[2019-02-08] proposal 'jobless_claims_improvement_then_band_breakout' PARKED, not discarded: occurred 27 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-02-08] proposal 'jobless_claims_improvement_then_volume_surge': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise <= -0.5 -> -0.45, volume_zscore_30d >= 1.5 -> 1.35)
+[20] {'stopped': 'waiting_for_human', 'current_date': '2019-02-13', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-02-08] proposal 'jobless_claims_beat_plus_volume_breakout' PARKED, not discarded: occurred 16 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-02-08] proposal 'jobless_claims_beat_plus_bollinger_breakout' PARKED, not discarded: occurred 20 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-02-08] proposal 'jobless_claims_beat_then_volume_breakout' PARKED, not discarded: occurred 26 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-02-08] proposal 'jobless_claims_beat_then_upper_range' PARKED, not discarded: occurred 15 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-02-08] proposal 'labor-market miss + overbought breakout: mean reversion test' PARKED, not discarded: occurred 8 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-02-08] proposal 'hawkish rate surprise + volume-confirmed breakout: momentum continuation' PARKED, not discarded: occurred 15 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-02-18] proposal 'soft_cpi_then_volume_breakout' PARKED, not discarded: occurred 7 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-02-18] proposal 'jobless_surprise_then_upperband_breakout': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise <= -0.8 -> -0.4, bollinger_pctb_20d >= 1 -> 0.75)
+[21] {'stopped': 'waiting_for_human', 'current_date': '2019-02-23', 'events': 4}
+    auto-resolved pending test: insufficient_data
+[2019-02-18] proposal 'soft_cpi_then_volume_confirmed_breakout_long' PARKED, not discarded: occurred 7 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-02-18] proposal 'soft_cpi_then_overextended_breakout_short' PARKED, not discarded: occurred 5 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-02-21] proposal 'jobless_claims_beat_overbought_continuation' PARKED, not discarded: occurred 25 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-02-21] proposal 'jobless_claims_beat_choppy_fade': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise <= -1 -> -0.5)
+[22] {'stopped': 'waiting_for_human', 'current_date': '2019-02-26', 'events': 2}
+    auto-resolved pending test: insufficient_data
+[2019-02-18] proposal 'cpi_disinflation_surprise_volume_breakout_long' PARKED, not discarded: occurred 7 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-02-18] proposal 'cpi_disinflation_surprise_momentum_long' PARKED, not discarded: occurred 16 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-02-21] proposal 'good_claims_surprise_then_upper_band_long' PARKED, not discarded: occurred 1 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-02-21] proposal 'good_claims_surprise_then_choppy_fade_short' PARKED, not discarded: occurred 13 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[23] {'stopped': None, 'current_date': '2019-03-23', 'events': 2, 'reached_end': False}
+[2019-03-19] no_action: No macro release occurred during or shortly before this compression window with a computable surprise value (CPI/jobless
+Rate limited by Telegram, waiting 52s before retry 1/3...
+[2019-04-02] proposal 'dovish_rate_surprise_into_overbought_breakout' PARKED, not discarded: occurred 5 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-04-02] proposal 'claims_improvement_into_volume_breakout': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise <= -0.3 -> -0.15, volume_zscore_30d >= 2 -> 1)
+[24] {'stopped': 'waiting_for_human', 'current_date': '2019-04-07', 'events': 2}
+    auto-resolved pending test: insufficient_data
+[2019-04-02] proposal 'dovish_rate_surprise_then_overbought_rsi' PARKED, not discarded: occurred 9 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-04-02] proposal 'dovish_rate_surprise_then_volume_surge' PARKED, not discarded: occurred 12 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-04-02] proposal 'dovish_rate_surprise_then_volume_breakout' PARKED, not discarded: occurred 10 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-04-02] proposal 'dovish_rate_surprise_then_overbought_momentum' PARKED, not discarded: occurred 9 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-04-02] proposal 'dovish_rate_surprise_then_volume_breakout_long' PARKED, not discarded: occurred 14 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-04-02] proposal 'dovish_rate_surprise_then_overbought_short' PARKED, not discarded: occurred 13 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-04-02] proposal 'dovish_rate_surprise_then_overbought_breakout' PARKED, not discarded: occurred 9 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-04-02] proposal 'claims_beat_then_volume_expansion': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise <= -0.3 -> -0.15, volume_zscore_30d >= 1.5 -> 0.75)
+[25] {'stopped': 'waiting_for_human', 'current_date': '2019-04-07', 'events': 4}
+    auto-resolved pending test: insufficient_data
+[2019-04-02] proposal 'Dovish rate surprise followed by extreme overbought breakout' PARKED, not discarded: occurred 9 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-04-02] proposal 'Strong labor data surprise with persistent trending market' PARKED, not discarded: occurred 41 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-04-02] proposal 'dovish_rate_surprise_volume_breakout_long' PARKED, not discarded: occurred 12 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-04-02] proposal 'strong_claims_overbought_reversion_short' PARKED, not discarded: occurred 77 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-04-02] proposal 'dovish_rate_surprise_then_volume_breakout' PARKED, not discarded: occurred 12 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-04-02] proposal 'soft_claims_then_overbought_reversion' PARKED, not discarded: occurred 109 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-04-02] proposal 'dovish_rate_surprise_overbought_momentum' PARKED, not discarded: occurred 9 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-04-02] proposal 'claims_beat_volume_breakout': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise <= -0.3 -> -0.15, volume_zscore_30d >= 1.5 -> 0.75)
+[26] {'stopped': 'waiting_for_human', 'current_date': '2019-04-07', 'events': 4}
+    auto-resolved pending test: insufficient_data
+[2019-04-02] proposal 'dovish_rate_surprise_then_overbought_breakout' PARKED, not discarded: occurred 9 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-04-02] proposal 'claims_improve_then_volume_breakout': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise <= -0.3 -> -0.225, volume_zscore_30d >= 2 -> 1.5)
+[27] {'stopped': 'waiting_for_human', 'current_date': '2019-04-07', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-04-02] proposal 'dovish_rate_surprise_then_volume_breakout_long' PARKED, not discarded: occurred 14 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-04-02] proposal 'dovish_rate_surprise_then_overbought_exhaustion_short' PARKED, not discarded: occurred 7 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-04-02] proposal 'dovish_rate_surprise_breakout_volume' PARKED, not discarded: occurred 12 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-04-02] proposal 'claims_improve_overbought_momentum' PARKED, not discarded: occurred 79 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-04-02] proposal 'dovish_rate_surprise_volume_breakout_long' PARKED, not discarded: occurred 14 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-04-02] proposal 'dovish_rate_surprise_overbought_short' PARKED, not discarded: occurred 17 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-04-02] proposal 'Dovish rate surprise followed by overbought breakout' PARKED, not discarded: occurred 9 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-04-02] proposal 'Better-than-expected jobless claims with volume breakout': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise <= -0.3 -> -0.15, volume_zscore_30d >= 2 -> 1)
+[28] {'stopped': 'waiting_for_human', 'current_date': '2019-04-07', 'events': 4}
+    auto-resolved pending test: insufficient_data
+[2019-04-02] proposal 'Dovish Fed surprise preceding overbought breakout continuation' PARKED, not discarded: occurred 7 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-04-02] proposal 'Improving jobless claims preceding volume-confirmed breakout continuation': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise <= -0.3 -> -0.15, volume_zscore_30d >= 2.5 -> 1.25)
+[29] {'stopped': 'waiting_for_human', 'current_date': '2019-04-07', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-04-02] proposal 'dovish_rate_surprise_volume_breakout' PARKED, not discarded: occurred 14 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-04-02] proposal 'claims_improve_trending_breakout' PARKED, not discarded: occurred 41 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-04-02] proposal 'dovish_rate_surprise_plus_overbought_breakout' PARKED, not discarded: occurred 13 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-04-02] proposal 'soft_jobless_claims_plus_volume_breakout': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise <= -0.4 -> -0.3, volume_zscore_30d >= 2 -> 1.5)
+[30] {'stopped': 'waiting_for_human', 'current_date': '2019-04-07', 'events': 2}
+    auto-resolved pending test: insufficient_data
+[2019-04-02] proposal 'dovish_rate_surprise_then_overbought_reversion' PARKED, not discarded: occurred 4 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-04-02] proposal 'dovish_rate_surprise_then_volume_breakout_continuation' PARKED, not discarded: occurred 14 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-04-02] proposal 'dovish_rate_surprise_plus_volume_breakout' PARKED, not discarded: occurred 10 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-04-02] proposal 'improving_claims_plus_overbought_momentum' PARKED, not discarded: occurred 109 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-04-02] proposal 'dovish rate surprise ahead of upper-band breakout' PARKED, not discarded: occurred 1 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-04-02] proposal 'falling jobless claims ahead of volume-spike breakout' PARKED, not discarded: occurred 4 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-04-02] proposal 'dovish_rate_surprise_then_bollinger_extreme_breakout' PARKED, not discarded: occurred 1 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-04-02] proposal 'dovish_rate_surprise_then_volume_confirmed_breakout' PARKED, not discarded: occurred 2 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+Rate limited by Telegram, waiting 103s before retry 1/3...
+[31] {'stopped': None, 'current_date': '2019-05-02', 'events': 4, 'reached_end': False}
+[2019-05-08] proposal 'hawkish_rate_surprise_low_volume_continuation': thresholds loosened by 50% to reach a measurable sample (rate_surprise <= -0.5 -> -0.25, volume_zscore_30d <= -0.5 -> -0.25)
+[2019-05-08] proposal 'hawkish_rate_surprise_oversold_reversion' PARKED, not discarded: occurred 111 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[32] {'stopped': 'waiting_for_human', 'current_date': '2019-05-13', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-05-08] proposal 'dovish_rate_surprise_then_lowband_bounce' PARKED, not discarded: occurred 76 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-05-08] proposal 'dovish_rate_surprise_then_volume_dryup': thresholds loosened by 50% to reach a measurable sample (rate_surprise <= -0.5 -> -0.25, volume_zscore_30d <= -0.5 -> -0.25)
+[33] {'stopped': 'waiting_for_human', 'current_date': '2019-05-13', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-05-08] no_action: Both macro prints during this compression were minor, near-zero surprises (rate -0.8sd on a routine +1bp change, jobless
+[2019-05-10] proposal 'hot_cpi_stretched_band_short' PARKED, not discarded: occurred 15 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-05-10] proposal 'hot_cpi_volume_breakout_long' PARKED, not discarded: occurred 14 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[34] {'stopped': None, 'current_date': '2019-06-07', 'events': 2, 'reached_end': False}
+Rate limited by Telegram, waiting 69s before retry 1/3...
+SEND FAILED (400) on chunk 1/1: {"ok":false,"error_code":400,"description":"Bad Request: BUTTON_DATA_INVALID"}
+SEND FAILED (400) on chunk 1/1: {"ok":false,"error_code":400,"description":"Bad Request: BUTTON_DATA_INVALID"}
+[2019-07-05] parked proposal 'dovish_rate_surprise_with_volume_spike_reversal' is now testable (proposed 2018-06-10) -- promoting.
+[35] {'stopped': 'waiting_for_human', 'current_date': '2019-07-05', 'events': 0}
+    auto-resolved pending test: insufficient_data
+SEND FAILED (400) on chunk 1/1: {"ok":false,"error_code":400,"description":"Bad Request: BUTTON_DATA_INVALID"}
+Rate limited by Telegram, waiting 58s before retry 1/3...
+[2019-07-14] proposal 'dovish_cpi_oversold_reversion_long': thresholds loosened by 50% to reach a measurable sample (cpi_surprise <= -0.5 -> -0.25, rsi_14d <= 40 -> 45)
+[2019-07-14] proposal 'strong_labor_data_range_expansion_short': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise <= -0.8 -> -0.4, range_zscore_30d >= 1 -> 0.5)
+[36] {'stopped': 'waiting_for_human', 'current_date': '2019-07-19', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-07-14] no_action: The macro prints during this compression (CPI -0.6sd, jobless claims -1.1sd) were unremarkable in magnitude, and the cor
+Rate limited by Telegram, waiting 35s before retry 1/3...
+SEND FAILED (400) on chunk 1/1: {"ok":false,"error_code":400,"description":"Bad Request: BUTTON_DATA_INVALID"}
+SEND FAILED (400) on chunk 1/1: {"ok":false,"error_code":400,"description":"Bad Request: BUTTON_DATA_INVALID"}
+SEND FAILED (400) on chunk 1/1: {"ok":false,"error_code":400,"description":"Bad Request: BUTTON_DATA_INVALID"}
+Rate limited by Telegram, waiting 17s before retry 1/3...
+[37] {'stopped': None, 'current_date': '2019-08-13', 'events': 1, 'reached_end': False}
+[2019-08-09] proposal 'claims_improve_then_oversold_bounce' PARKED, not discarded: occurred 34 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-08-09] proposal 'claims_improve_then_lowvolume_continuation' PARKED, not discarded: occurred 51 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-08-10] no_action: The only macro print during the squeeze (jobless claims) was a mere -0.6 sd surprise, essentially noise, so there is no 
+[2019-08-11] no_action: The only macro input is a minor jobless-claims beat (-0.6 sd), too small a surprise to plausibly drive a sustained direc
+[2019-08-27] keep-or-drop digest: 6 reviewed, 0 dropped automatically
+Rate limited by Telegram, waiting 67s before retry 1/3...
+[2019-09-05] no_action: The only macro input here is a jobless claims surprise of just +0.25 sd — essentially a non-event — and the compression/
+[38] {'stopped': None, 'current_date': '2019-09-12', 'events': 4, 'reached_end': False}
+[2019-09-14] proposal 'jobless_claims_undershoot_then_volume_breakout': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise <= -1 -> -0.5, volume_zscore_30d >= 1 -> 0.5)
+[2019-09-14] proposal 'cpi_undershoot_then_bollinger_breakout' PARKED, not discarded: occurred 67 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[39] {'stopped': 'waiting_for_human', 'current_date': '2019-09-19', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-09-14] proposal 'hawkish_claims_surprise_with_volume_breakout': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise <= -1 -> -0.5, volume_zscore_30d >= 1 -> 0.5)
+[2019-09-14] proposal 'dovish_cpi_surprise_with_bollinger_breakout' PARKED, not discarded: occurred 40 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[40] {'stopped': 'waiting_for_human', 'current_date': '2019-09-19', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-09-14] proposal 'soft_jobless_claims_surprise_then_volume_breakout': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise <= -1 -> -0.5, volume_zscore_30d >= 1 -> 0.5)
+[2019-09-14] proposal 'soft_cpi_surprise_then_upper_band_breakout' PARKED, not discarded: occurred 53 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[41] {'stopped': 'waiting_for_human', 'current_date': '2019-09-19', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-09-14] proposal 'jobless_claims_surprise_then_volume_breakout': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise <= -1 -> -0.5, volume_zscore_30d >= 1 -> 0.5)
+[2019-09-14] proposal 'cpi_surprise_then_bollinger_breakout' PARKED, not discarded: occurred 53 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[42] {'stopped': 'waiting_for_human', 'current_date': '2019-09-19', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-09-14] proposal 'soft_cpi_surprise_then_neutral_rsi': thresholds loosened by 50% to reach a measurable sample (cpi_surprise <= -0.5 -> -0.25)
+[2019-09-14] proposal 'strong_claims_drop_then_volume_breakout': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise <= -1 -> -0.5, volume_zscore_30d >= 1 -> 0.5)
+[43] {'stopped': 'waiting_for_human', 'current_date': '2019-09-19', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-09-14] proposal 'soft_jobless_claims_surprise_then_volume_breakout': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise <= -0.5 -> -0.45, volume_zscore_30d > 1 -> 0.9)
+[2019-09-14] proposal 'soft_cpi_surprise_then_bollinger_breakout' PARKED, not discarded: occurred 53 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[44] {'stopped': 'waiting_for_human', 'current_date': '2019-09-19', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-09-14] proposal 'jobless_claims_beat_volume_confirmed_long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise <= -1 -> -0.5, volume_zscore_30d >= 1 -> 0.5)
+[2019-09-14] proposal 'cpi_cooler_low_efficiency_short': thresholds loosened by 50% to reach a measurable sample (cpi_surprise <= -0.5 -> -0.25)
+[45] {'stopped': 'waiting_for_human', 'current_date': '2019-09-19', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-09-14] proposal 'jobless_claims_beat_plus_volume_expansion': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise <= -1 -> -0.5, volume_zscore_30d >= 1 -> 0.5)
+[2019-09-14] proposal 'cpi_soft_surprise_plus_rsi_recovering': thresholds loosened by 50% to reach a measurable sample (cpi_surprise <= -0.5 -> -0.25, rsi_14d >= 40 -> 45)
+[46] {'stopped': 'waiting_for_human', 'current_date': '2019-09-19', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-09-14] proposal 'cooler_cpi_then_volume_breakout' PARKED, not discarded: occurred 12 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-09-14] proposal 'claims_beat_then_bollinger_breakout': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise <= -1 -> -0.5, bollinger_pctb_20d >= 0.55 -> 0.525)
+[47] {'stopped': 'waiting_for_human', 'current_date': '2019-09-19', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-09-14] proposal 'Stronger-than-expected labor data (claims surprise very negative) within 3d, XRP breaking upper Bollinger band -> continuation long, market-relative' PARKED, not discarded: occurred 11 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-09-14] proposal 'Cooler-than-expected CPI within 3d combined with low trend efficiency -> fade the breakout, market-relative' PARKED, not discarded: occurred 12 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+SEND FAILED (400) on chunk 1/1: {"ok":false,"error_code":400,"description":"Bad Request: BUTTON_DATA_INVALID"}
+SEND FAILED (400) on chunk 1/1: {"ok":false,"error_code":400,"description":"Bad Request: BUTTON_DATA_INVALID"}
+Rate limited by Telegram, waiting 153s before retry 1/3...
+SEND FAILED (400) on chunk 1/1: {"ok":false,"error_code":400,"description":"Bad Request: BUTTON_DATA_INVALID"}
+[2019-09-28] parked proposal 'hawkish_claims_surprise_then_oversold_breakdown_continues' is now testable (proposed 2018-06-10) -- promoting.
+[48] {'stopped': 'waiting_for_human', 'current_date': '2019-09-28', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-09-24] no_action: The only macro print during the squeeze (jobless claims, +0.5 sd) is a negligible surprise, and the subsequent -12.5% br
+[2019-09-24] no_action: The only macro print during this squeeze (Initial Jobless Claims, +0.5 sd) is a negligible surprise, well within normal 
+[2019-09-24] proposal 'cpi_cool_surprise_then_oversold_long': thresholds loosened by 50% to reach a measurable sample (cpi_surprise <= -0.5 -> -0.25, rsi_14d <= 35 -> 42.5)
+[49] {'stopped': 'waiting_for_human', 'current_date': '2019-09-29', 'events': 3}
+    auto-resolved pending test: insufficient_data
+[2019-09-23] no_action: The only macro print during this compression was a mere +0.5 sd jobless-claims surprise -- too weak to support a directi
+[2019-09-24] no_action: The only macro release during the squeeze (jobless claims, +0.5 sd surprise) is too small to plausibly be the driver of 
+[2019-09-24] no_action: The only macro release in the window (jobless claims, +0.5 sd surprise) is too small to plausibly explain BNB's idiosync
+Failed to judge event on 2019-09-29 (ADAUSDT compression), skipping: No text block in response.content: ['thinking']
+Failed to judge event on 2019-09-29 (LTCUSDT compression), skipping: Unterminated string starting at: line 1 column 725 (char 724)
+SEND FAILED (400) on chunk 1/1: {"ok":false,"error_code":400,"description":"Bad Request: BUTTON_DATA_INVALID"}
+[2019-10-01] parked proposal 'hawkish_rate_surprise_oversold_reversion' is now testable (proposed 2019-05-08) -- promoting.
+[50] {'stopped': 'waiting_for_human', 'current_date': '2019-10-01', 'events': 3}
+    auto-resolved pending test: insufficient_data
+[2019-10-15] parked proposal 'dovish_rate_surprise_then_oversold_band' is now testable (proposed 2018-06-14) -- promoting.
+[51] {'stopped': 'waiting_for_human', 'current_date': '2019-10-15', 'events': 0}
+    auto-resolved pending test: insufficient_data
+Rate limited by Telegram, waiting 99s before retry 1/3...
+[2019-10-22] parked proposal 'Cooler CPI surprise plus volume spike at compression exit -> bounce' is now testable (proposed 2018-08-15) -- promoting.
+[52] {'stopped': 'waiting_for_human', 'current_date': '2019-10-22', 'events': 0}
+    auto-resolved pending test: insufficient_data
+Rate limited by Telegram, waiting 72s before retry 1/3...
+[53] {'stopped': 'waiting_for_human', 'current_date': '2019-10-28', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[54] {'stopped': 'waiting_for_human', 'current_date': '2019-10-28', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[55] {'stopped': 'waiting_for_human', 'current_date': '2019-10-28', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-10-23] proposal 'weak_claims_surprise_then_oversold_reversion' PARKED, not discarded: occurred 51 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-10-23] proposal 'weak_claims_surprise_then_volume_breakdown_continuation' PARKED, not discarded: occurred 44 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+SEND FAILED (400) on chunk 1/1: {"ok":false,"error_code":400,"description":"Bad Request: BUTTON_DATA_INVALID"}
+[2019-10-25] no_action: The only macro print during compression was a trivial -0.3sd jobless claims surprise, far too weak to support a causal s
+SEND FAILED (400) on chunk 1/1: {"ok":false,"error_code":400,"description":"Bad Request: BUTTON_DATA_INVALID"}
+SEND FAILED (400) on chunk 1/1: {"ok":false,"error_code":400,"description":"Bad Request: BUTTON_DATA_INVALID"}
+Rate limited by Telegram, waiting 89s before retry 1/3...
+Rate limited by Telegram, waiting 165s before retry 1/3...
+SEND FAILED (400) on chunk 1/1: {"ok":false,"error_code":400,"description":"Bad Request: BUTTON_DATA_INVALID"}
+SEND FAILED (400) on chunk 1/1: {"ok":false,"error_code":400,"description":"Bad Request: BUTTON_DATA_INVALID"}
+SEND FAILED (400) on chunk 1/1: {"ok":false,"error_code":400,"description":"Bad Request: BUTTON_DATA_INVALID"}
+[56] {'stopped': None, 'current_date': '2019-11-22', 'events': 2, 'reached_end': False}
+    asked: What's the crypto market situation right now?
+[2019-11-21] proposal 'jobless_surprise_oversold_reversion': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[2019-11-21] proposal 'jobless_surprise_band_breakdown': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.75, bollinger_pctb_20d <= 0 -> 0.125)
+[57] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_rsi_long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_bollinger_break_short': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d <= 0 -> 0.25)
+[2019-11-21] 'jobless_claims_surprise_then_bollinger_break_short' dropped: fires on 65% of the same days as 'jobless_claims_surprise_then_oversold_rsi_long' -- one hypothesis, not two
+[58] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_surprise_then_oversold_reversion': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise > 1.5 -> 0.75, rsi_14d < 35 -> 42.5)
+[2019-11-21] proposal 'jobless_surprise_then_band_breakdown_momentum': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise > 1.5 -> 0.75, bollinger_pctb_20d < -0.1 -> 0.2)
+[59] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_bounce': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[60] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d < 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_belowband_short': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d < 0 -> 0.25)
+[2019-11-21] 'jobless_claims_surprise_then_belowband_short' dropped: fires on 65% of the same days as 'jobless_claims_surprise_then_oversold_long' -- one hypothesis, not two
+[61] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_rsi_long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_low_volume_short': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, volume_zscore_30d <= -0.2 -> -0.18)
+[62] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_rsi_long' PARKED, not discarded: occurred 16 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless_claims_surprise_then_donchian_breakdown_short' PARKED, not discarded: occurred 12 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'bad_claims_surprise_then_oversold_rsi': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'bad_claims_surprise_then_choppy_market': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35)
+[63] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 2}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_shock_then_oversold_bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_shock_then_low_volume_continuation': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, volume_zscore_30d <= -0.25 -> -0.225)
+[64] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_reversal': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[65] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless claims surprise then oversold RSI - risk-off continuation': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless claims surprise then choppy low-efficiency regime - mean reversion': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35)
+[66] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_rsi_long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_downtrend_continuation_short': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, close_return_5d <= -0.05 -> -0.045)
+[67] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_shock_oversold_reversion' PARKED, not discarded: occurred 16 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless_claims_shock_low_efficiency_reversion' PARKED, not discarded: occurred 24 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_RSI_meanrev_long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_bollinger_breakdown_short': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d <= -0.1 -> 0.2)
+[68] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 2}
+    auto-resolved pending test: insufficient_data
+[69] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'bad_claims_surprise_then_belowmid_bollinger_continuation_short': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d <= 0 -> 0.25)
+[2019-11-21] proposal 'bad_claims_surprise_then_oversold_rsi_reversion_long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] 'bad_claims_surprise_then_oversold_rsi_reversion_long' dropped: fires on 65% of the same days as 'bad_claims_surprise_then_belowmid_bollinger_continuation_short' -- one hypothesis, not two
+[70] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'claims_surprise_then_oversold_bollinger' PARKED, not discarded: occurred 1 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'claims_surprise_then_low_efficiency' PARKED, not discarded: occurred 8 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_downtrend_continuation': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.125, close_return_5d <= -0.1 -> -0.075)
+[71] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 2}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_rsi_long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_belowband_short': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d <= 0 -> 0.25)
+[2019-11-21] 'jobless_claims_surprise_then_belowband_short' dropped: fires on 65% of the same days as 'jobless_claims_surprise_then_oversold_rsi_long' -- one hypothesis, not two
+[72] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_weakness_continuation': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.75, bollinger_pctb_20d <= 0 -> 0.125)
+[73] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_surprise_oversold_reversion': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d < 35 -> 42.5)
+[2019-11-21] proposal 'jobless_surprise_momentum_continuation': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, close_return_5d <= -0.05 -> -0.045)
+[74] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d < 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_downtrend_short': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, close_return_5d <= -0.05 -> -0.045)
+[75] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_reversion': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d < 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_downtrend_continuation': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, close_return_5d <= -0.05 -> -0.045)
+[76] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_bounce': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d < 35 -> 36.5)
+[77] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_long': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.125, rsi_14d < 40 -> 42.5)
+[2019-11-21] proposal 'None' rejected, not tested: 'label'
+[78] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_reversion': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_momentum_continuation': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, close_return_5d <= -0.05 -> -0.045)
+[79] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'claims_surprise_oversold_bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'claims_surprise_low_efficiency_drift': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35)
+[80] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_bounce': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[81] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'claims_surprise_then_oversold_continuation': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[2019-11-21] proposal 'claims_surprise_then_band_extreme_reversion': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.5, bollinger_pctb_20d <= -0.1 -> 0.2)
+[82] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_reversal': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_momentum_continuation': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, close_return_5d <= -0.05 -> -0.045)
+[83] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_rsi_reversion': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d < 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_range_expansion_continuation': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.125, range_zscore_30d > 0.8 -> 0.6)
+[84] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless claims surprise then oversold RSI': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless claims surprise then low-volume drift': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, volume_zscore_30d <= -0.2 -> -0.18)
+[85] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'bad_claims_then_oversold_rsi_long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'bad_claims_then_price_weakness_short': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, close_return_5d <= -0.05 -> -0.045)
+[86] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_rsi_doge' PARKED, not discarded: occurred 16 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless_claims_surprise_then_low_volume_doge' PARKED, not discarded: occurred 16 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d < 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_volatility_breakout_continuation': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, range_zscore_30d > 1 -> 0.5)
+[87] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 2}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_surprise_then_oversold_rsi_long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_surprise_then_below_band_short': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d <= 0 -> 0.25)
+[2019-11-21] 'jobless_surprise_then_below_band_short' dropped: fires on 65% of the same days as 'jobless_surprise_then_oversold_rsi_long' -- one hypothesis, not two
+[88] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_rsi': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.125, rsi_14d <= 40 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_lower_band': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.125, bollinger_pctb_20d <= 0.1 -> 0.2)
+[89] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_rsi_long' PARKED, not discarded: occurred 1 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless_claims_surprise_then_weak_volume_breakdown_long' PARKED, not discarded: occurred 6 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless_claims_surprise_oversold_bounce': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d < 35 -> 36.5)
+[2019-11-21] proposal 'jobless_claims_surprise_range_continuation': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.5, range_zscore_30d > 1.5 -> 0.75)
+[90] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 2}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d < 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_lowerband_continuation': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d < 0 -> 0.25)
+[2019-11-21] 'jobless_claims_surprise_then_lowerband_continuation' dropped: fires on 65% of the same days as 'jobless_claims_surprise_then_oversold_bounce' -- one hypothesis, not two
+[91] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_continuation' PARKED, not discarded: occurred 17 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless_claims_surprise_then_lowvolume_reversion' PARKED, not discarded: occurred 21 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'bad_jobless_claims_then_oversold_bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'None' rejected, not tested: 'label'
+[92] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 2}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_downtrend_continuation': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.125, close_return_5d <= -0.08 -> -0.06)
+[93] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_oversold_reversion': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_bollinger_breakdown_continuation': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d <= 0 -> 0.25)
+[2019-11-21] 'jobless_claims_surprise_bollinger_breakdown_continuation' dropped: fires on 65% of the same days as 'jobless_claims_surprise_oversold_reversion' -- one hypothesis, not two
+[94] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_rsi_short': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_low_bollinger_long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d <= -0.1 -> 0.2)
+[95] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_rsi': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[96] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d < 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_band_break_continuation': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d < 0 -> 0.25)
+[2019-11-21] 'jobless_claims_surprise_then_band_break_continuation' dropped: fires on 65% of the same days as 'jobless_claims_surprise_then_oversold_bounce' -- one hypothesis, not two
+[97] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_shock_then_oversold_reversion_long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_shock_then_lowerband_continuation_short': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d <= 0 -> 0.25)
+[2019-11-21] 'jobless_shock_then_lowerband_continuation_short' dropped: fires on 65% of the same days as 'jobless_shock_then_oversold_reversion_long' -- one hypothesis, not two
+[98] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_reversion': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_band_breakdown_continuation': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d <= 0 -> 0.25)
+[2019-11-21] 'jobless_claims_surprise_then_band_breakdown_continuation' dropped: fires on 65% of the same days as 'jobless_claims_surprise_then_oversold_reversion' -- one hypothesis, not two
+[99] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_surprise_then_oversold_bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_surprise_then_band_breakdown': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d <= 0 -> 0.25)
+[2019-11-21] 'jobless_surprise_then_band_breakdown' dropped: fires on 65% of the same days as 'jobless_surprise_then_oversold_bounce' -- one hypothesis, not two
+[100] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_rsi_long': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[101] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_spike_then_oversold_reversion': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_spike_then_momentum_continuation': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, close_return_5d <= -0.05 -> -0.045)
+[102] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'claims_shock_then_oversold_long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'claims_shock_then_lowvolume_short': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, volume_zscore_30d <= -0.2 -> -0.18)
+[103] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_shock_then_oversold_rsi' PARKED, not discarded: occurred 1 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless_claims_shock_then_low_volume' PARKED, not discarded: occurred 5 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'claims_surprise_oversold_reversion_long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'claims_surprise_volatility_expansion_short': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, range_zscore_30d >= 1.3 -> 0.65)
+[104] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 2}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_bounce' PARKED, not discarded: occurred 1 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless_claims_surprise_then_weak_volume_continuation' PARKED, not discarded: occurred 6 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'claims_surprise_then_oversold_bounce': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d < 35 -> 36.5)
+[105] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 2}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_reversion': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d < 35 -> 36.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_range_expansion_continuation': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, range_zscore_30d > 0.8 -> 0.72)
+[106] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'claims_surprise_then_oversold_long': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[107] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_reversion': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_range_expansion_continuation': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.125, range_zscore_30d >= 0.8 -> 0.6)
+[108] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_with_oversold_rsi_continuation': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[2019-11-21] proposal 'jobless_claims_surprise_with_low_bollinger_reversion': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.75, bollinger_pctb_20d <= 0 -> 0.125)
+[109] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_rsi_long': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[110] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_rsi' PARKED, not discarded: occurred 16 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless_claims_surprise_then_below_lower_band' PARKED, not discarded: occurred 2 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d < 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_range_expansion_continuation': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, range_zscore_30d > 1.5 -> 0.75)
+[111] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 2}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless claims surprise then oversold RSI - mean reversion': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless claims surprise then extended down move - continuation': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, close_return_5d <= -0.05 -> -0.045)
+[112] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[113] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_lowerband_short': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.75, bollinger_pctb_20d < 0 -> 0.125)
+[114] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_downtrend_short': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, close_return_5d <= -0.05 -> -0.045)
+[115] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless claims surprise then oversold RSI': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless claims surprise then choppy low-efficiency market': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35)
+[116] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'post_claims_shock_oversold_bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'post_claims_shock_momentum_continuation': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, close_return_5d <= -0.05 -> -0.045)
+[117] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless claims miss followed by oversold RSI': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[2019-11-21] proposal 'jobless claims miss followed by lower-band breach': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.75, bollinger_pctb_20d <= 0 -> 0.125)
+[118] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_lowerband_short': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d <= -0.1 -> 0.2)
+[119] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_band_reversion': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.75, bollinger_pctb_20d <= 0 -> 0.125)
+[120] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_rsi_long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_bollinger_breakdown_short': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d <= 0 -> 0.25)
+[2019-11-21] 'jobless_claims_surprise_then_bollinger_breakdown_short' dropped: fires on 65% of the same days as 'jobless_claims_surprise_then_oversold_rsi_long' -- one hypothesis, not two
+[121] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'weak_jobless_claims_then_oversold_rsi_short': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'weak_jobless_claims_then_below_boll_mid_long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d <= 0 -> 0.25)
+[2019-11-21] 'weak_jobless_claims_then_below_boll_mid_long' dropped: fires on 61% of the same days as 'weak_jobless_claims_then_oversold_rsi_short' -- one hypothesis, not two
+[122] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless claims surprise then oversold RSI mean-reversion': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless claims surprise then negative momentum continuation': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, close_return_5d <= -0.05 -> -0.045)
+[123] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_rsi_bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_momentum_continuation_down': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, close_return_5d <= -0.05 -> -0.045)
+[124] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_miss_then_oversold_reversal': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[125] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_rsi': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[126] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_reversion': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_band_breakdown_continuation': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d <= 0 -> 0.25)
+[2019-11-21] 'jobless_claims_surprise_then_band_breakdown_continuation' dropped: fires on 65% of the same days as 'jobless_claims_surprise_then_oversold_reversion' -- one hypothesis, not two
+[127] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_long': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_low_bollinger_short': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.75, bollinger_pctb_20d <= 0 -> 0.125)
+[128] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'claims_surprise_then_oversold_reversion' PARKED, not discarded: occurred 1 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'claims_surprise_then_low_volume_breakdown' PARKED, not discarded: occurred 8 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_momentum_short': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_bollinger_breakdown_meanrevert_long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d <= -0.1 -> 0.2)
+[129] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 2}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_up_surprise_then_oversold_bounce': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[130] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_shock_then_oversold': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_shock_then_low_trendiness': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35)
+[131] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_band_breakdown_short': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d <= 0 -> 0.25)
+[2019-11-21] 'jobless_claims_surprise_then_band_breakdown_short' dropped: fires on 65% of the same days as 'jobless_claims_surprise_then_oversold_long' -- one hypothesis, not two
+[132] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_rsi': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_choppy_market': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35)
+[133] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_reversion': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d < 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_trend_continuation': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, close_return_5d <= -0.05 -> -0.045)
+[134] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[135] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_shock_then_oversold_continuation': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_shock_then_lowerband_reversion': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d <= 0 -> 0.25)
+[2019-11-21] 'jobless_claims_shock_then_lowerband_reversion' dropped: fires on 65% of the same days as 'jobless_claims_shock_then_oversold_continuation' -- one hypothesis, not two
+[136] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[137] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_rsi_long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_range_expansion_short': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.125, range_zscore_30d >= 0.75 -> 0.5625)
+[138] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d < 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_bollinger_breakdown_continuation': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d < 0 -> 0.25)
+[2019-11-21] 'jobless_claims_surprise_then_bollinger_breakdown_continuation' dropped: fires on 65% of the same days as 'jobless_claims_surprise_then_oversold_bounce' -- one hypothesis, not two
+[139] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold' PARKED, not discarded: occurred 17 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless_claims_surprise_then_choppy' PARKED, not discarded: occurred 24 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_downtrend_continuation': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.125, close_return_5d <= -0.1 -> -0.075)
+[140] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 2}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_miss_then_oversold_rsi_long': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[2019-11-21] proposal 'None' rejected, not tested: 'label'
+[141] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_shock_then_oversold_reversion_long': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[2019-11-21] proposal 'jobless_shock_then_belowband_momentum_short': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.75, bollinger_pctb_20d <= 0 -> 0.125)
+[142] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_rsi': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[143] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_long': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_below_band_short': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.75, bollinger_pctb_20d <= 0 -> 0.125)
+[144] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d < 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_downtrend_continuation': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, close_return_5d <= -0.05 -> -0.045)
+[145] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_downtrend_short': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, close_return_5d <= -0.05 -> -0.045)
+[146] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_reversion' PARKED, not discarded: occurred 1 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless_claims_surprise_then_weak_bollinger_continuation' PARKED, not discarded: occurred 1 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless claims surprise then oversold RSI (mean reversion)': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[2019-11-21] proposal 'jobless claims surprise then elevated range expansion (breakout continuation)': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.5, range_zscore_30d >= 1.5 -> 0.75)
+[147] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 2}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_rsi': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_low_volume_selloff': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, volume_zscore_30d <= -0.5 -> -0.45)
+[148] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_continuation': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_band_snapback': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.75, bollinger_pctb_20d <= 0 -> 0.125)
+[149] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_reversion_long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_during_5d_downtrend_continuation_short': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, close_return_5d <= -0.05 -> -0.045)
+[150] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless claims surprise then oversold RSI - mean reversion long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless claims surprise then extended 5d decline - momentum continuation short': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, close_return_5d <= -0.05 -> -0.045)
+[151] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_long' PARKED, not discarded: occurred 1 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless_claims_surprise_then_band_breakdown_short' PARKED, not discarded: occurred 1 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless_surprise_oversold_continuation': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_surprise_low_efficiency_reversion': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35)
+[152] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 2}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_bounce' PARKED, not discarded: occurred 1 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless_claims_surprise_then_momentum_continuation' PARKED, not discarded: occurred 4 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_bounce' PARKED, not discarded: occurred 22 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless_claims_surprise_then_band_breakdown_continuation' PARKED, not discarded: occurred 6 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-22] no_action: The only macro print during this compression (jobless claims) carried a negligible +0.1 sd surprise, essentially a non-e
+[2019-11-22] proposal 'jobless_claims_surprise_then_oversold_bounce' PARKED, not discarded: occurred 4 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-22] proposal 'jobless_claims_surprise_then_volume_capitulation_continuation' PARKED, not discarded: occurred 8 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-22] proposal 'bad_jobless_claims_then_oversold_bnb' PARKED, not discarded: occurred 1 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-22] proposal 'bad_jobless_claims_then_volume_spike_bnb' PARKED, not discarded: occurred 13 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-24] proposal 'jobless_claims_spike_then_oversold_bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-24] proposal 'jobless_claims_spike_then_momentum_continuation': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, close_return_5d <= -0.1 -> -0.09)
+[153] {'stopped': 'waiting_for_human', 'current_date': '2019-11-29', 'events': 6}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_continuation': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_choppy_reversion': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35)
+[154] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'bad_claims_surprise_oversold_bounce' PARKED, not discarded: occurred 1 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'bad_claims_surprise_breakdown_continuation' PARKED, not discarded: occurred 4 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_range_expansion_continuation': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, range_zscore_30d >= 1.5 -> 0.75)
+[155] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 2}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_band_breakdown_short': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d <= 0 -> 0.25)
+[2019-11-21] 'jobless_claims_surprise_then_band_breakdown_short' dropped: fires on 65% of the same days as 'jobless_claims_surprise_then_oversold_long' -- one hypothesis, not two
+[156] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_shock_then_oversold_long': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.125, rsi_14d <= 40 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_shock_then_band_breakdown_short': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d <= 0 -> 0.25)
+[157] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'weak_claims_surprise_then_oversold_continuation' PARKED, not discarded: occurred 1 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'weak_claims_surprise_then_lowerband_reversion' PARKED, not discarded: occurred 3 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless_claims_shock_momentum_continuation': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, close_return_5d <= -0.05 -> -0.045)
+[2019-11-21] proposal 'jobless_claims_shock_oversold_reversion': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[158] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 2}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_rsi_long' PARKED, not discarded: occurred 16 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless_claims_surprise_then_weak_volume_short' PARKED, not discarded: occurred 16 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'bad_jobless_claims_then_oversold_bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'bad_jobless_claims_then_momentum_continuation': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.125, close_return_5d <= -0.1 -> -0.075)
+[159] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 2}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_rsi_continuation': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d < 35 -> 36.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_bollinger_oversold_reversion': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.75, bollinger_pctb_20d < 0 -> 0.125)
+[160] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_miss_then_oversold_rsi_short': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.125, rsi_14d < 40 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_miss_then_thin_volume_short': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, volume_zscore_30d < -0.3 -> -0.27)
+[161] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_downtrend_continuation': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, close_return_5d <= -0.05 -> -0.045)
+[162] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_long': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[163] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'weak_jobless_claims_then_oversold_breakdown' PARKED, not discarded: occurred 1 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'weak_jobless_claims_then_low_volume_selloff' PARKED, not discarded: occurred 6 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_reversion' PARKED, not discarded: occurred 4 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless_claims_surprise_then_band_breakdown_continuation' PARKED, not discarded: occurred 1 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-22] no_action: The only macro print during the squeeze (jobless claims) carried a negligible +0.1 sd surprise, essentially no informati
+[2019-11-22] proposal 'claims_surprise_then_oversold_reversal': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 30 -> 40)
+[2019-11-22] proposal 'claims_surprise_then_volume_panic_continuation': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, volume_zscore_30d >= 2 -> 1)
+[164] {'stopped': 'waiting_for_human', 'current_date': '2019-11-27', 'events': 4}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_trend_continuation_short': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, close_return_5d <= -0.05 -> -0.045)
+[2019-11-21] proposal 'jobless_claims_surprise_oversold_reversion_long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[165] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_reversion': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d < 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_momentum_continuation': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, close_return_5d <= -0.05 -> -0.045)
+[166] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless claims surprise then oversold RSI -> bounce' PARKED, not discarded: occurred 1 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless claims surprise then thin volume decline -> reversal' PARKED, not discarded: occurred 5 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'bad_jobless_claims_then_oversold_continuation': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[2019-11-21] proposal 'bad_jobless_claims_then_range_expansion_reversal': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.5, range_zscore_30d >= 1.5 -> 0.75)
+[167] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 2}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_rsi_long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_low_volume_short': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, volume_zscore_30d <= -0.5 -> -0.45)
+[168] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_spike_then_oversold_long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d < 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_spike_then_down_momentum_short': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, close_return_5d <= -0.05 -> -0.045)
+[169] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_bounce': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[170] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_miss_oversold_bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_miss_downside_momentum': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.125, close_return_5d <= -0.08 -> -0.06)
+[171] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless claims surprise followed by oversold RSI at compression exit -- continuation short': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless claims surprise with low trend efficiency -- mean-reversion long': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35)
+[172] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_band_break_continuation': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.75, bollinger_pctb_20d <= 0 -> 0.125)
+[173] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_rsi_long': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d < 35 -> 36.5)
+[2019-11-21] proposal 'None' rejected, not tested: 'label'
+[174] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] 'bad_jobless_surprise_then_range_low_continuation' dropped: fires on 67% of the same days as 'bad_jobless_surprise_then_oversold_bounce' -- one hypothesis, not two
+[175] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_continuation': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_band_bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d <= 0 -> 0.25)
+[2019-11-21] 'jobless_claims_surprise_then_band_bounce' dropped: fires on 65% of the same days as 'jobless_claims_surprise_then_oversold_continuation' -- one hypothesis, not two
+[176] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_reversion' PARKED, not discarded: occurred 1 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless_claims_surprise_then_momentum_continuation' PARKED, not discarded: occurred 4 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless claims surprise then lower Bollinger breach - mean reversion long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.5, bollinger_pctb_20d <= -0.1 -> 0.2)
+[177] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 2}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless claims miss followed by oversold RSI at compression exit -> mean reversion': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless claims miss followed by price below Bollinger midline -> risk-off continuation': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d <= 0 -> 0.25)
+[2019-11-21] 'jobless claims miss followed by price below Bollinger midline -> risk-off continuation' dropped: fires on 65% of the same days as 'jobless claims miss followed by oversold RSI at compression exit -> mean reversion' -- one hypothesis, not two
+[178] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_surprise_oversold_bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_surprise_band_breakdown_continuation': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d <= 0 -> 0.25)
+[2019-11-21] 'jobless_surprise_band_breakdown_continuation' dropped: fires on 65% of the same days as 'jobless_surprise_oversold_bounce' -- one hypothesis, not two
+[179] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_rsi_long': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_low_bollinger_short': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.75, bollinger_pctb_20d <= 0 -> 0.125)
+[180] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_rsi': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[181] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_oversold_reversion': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d < 35 -> 36.5)
+[182] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_lowerband_continuation': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d <= 0 -> 0.25)
+[2019-11-21] 'jobless_claims_surprise_then_lowerband_continuation' dropped: fires on 65% of the same days as 'jobless_claims_surprise_then_oversold_bounce' -- one hypothesis, not two
+[183] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'claims_surprise_then_oversold_continuation' PARKED, not discarded: occurred 1 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'claims_surprise_then_band_break_reversion' PARKED, not discarded: occurred 1 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_reversion' PARKED, not discarded: occurred 4 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless_claims_surprise_then_lowerband_breakdown' PARKED, not discarded: occurred 1 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-22] no_action: The only macro print during the squeeze (jobless claims) was a negligible +0.1 sd surprise, essentially no news signal t
+[2019-11-22] proposal 'jobless_claims_surprise_then_oversold_bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 30 -> 40)
+[2019-11-22] proposal 'jobless_claims_surprise_then_volume_breakout_continuation': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, volume_zscore_30d >= 2 -> 1)
+[184] {'stopped': 'waiting_for_human', 'current_date': '2019-11-27', 'events': 4}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_spike_then_oversold_rsi_long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_spike_then_low_bollinger_short': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d <= 0 -> 0.25)
+[2019-11-21] 'jobless_claims_spike_then_low_bollinger_short' dropped: fires on 65% of the same days as 'jobless_claims_spike_then_oversold_rsi_long' -- one hypothesis, not two
+[185] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'bad_jobless_claims_then_oversold_reversion': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.125, rsi_14d < 40 -> 42.5)
+[2019-11-21] proposal 'bad_jobless_claims_then_momentum_continuation': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, close_return_5d <= -0.05 -> -0.045)
+[186] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'None' rejected, not tested: 'label'
+[187] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_range_expansion_continuation': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.125, range_zscore_30d >= 0.8 -> 0.6)
+[188] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_bounce': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_band_breakdown_continuation': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.75, bollinger_pctb_20d <= 0 -> 0.125)
+[189] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_oversold_reversion': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_bollinger_breakdown_continuation': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d <= 0 -> 0.25)
+[2019-11-21] 'jobless_claims_surprise_bollinger_breakdown_continuation' dropped: fires on 65% of the same days as 'jobless_claims_surprise_oversold_reversion' -- one hypothesis, not two
+[190] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_miss_then_oversold_rsi': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_miss_then_weak_volume': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, volume_zscore_30d <= -0.2 -> -0.18)
+[191] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'labor_surprise_then_oversold_bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'labor_surprise_then_lowvolume_fade': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, volume_zscore_30d <= -0.2 -> -0.18)
+[192] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_volatility_expansion_continuation': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.125, range_zscore_30d >= 0.8 -> 0.6)
+[193] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_shock_then_oversold_bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_shock_then_trend_continuation': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, close_return_5d <= -0.05 -> -0.045)
+[194] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_rsi_continuation_short': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_low_bollinger_meanreversion_long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.5, bollinger_pctb_20d <= -0.1 -> 0.2)
+[195] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_spike_then_oversold_reversion': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_spike_then_band_breakdown_continuation': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d <= -0.1 -> 0.2)
+[196] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_lowerband_long': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.75, bollinger_pctb_20d <= -0.05 -> 0.0875)
+[197] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_continuation': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d < 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_choppy_mean_reversion': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35)
+[198] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'claims_surprise_then_oversold_bounce' PARKED, not discarded: occurred 1 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'claims_surprise_then_band_breakdown_continuation' PARKED, not discarded: occurred 1 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'claims_surprise_then_oversold_reversal' PARKED, not discarded: occurred 4 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'claims_surprise_then_downside_continuation' PARKED, not discarded: occurred 9 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-22] no_action: The only macro print during the squeeze (jobless claims) carried a negligible +0.1 sd surprise, essentially a non-event,
+[2019-11-22] proposal 'jobless_claims_surprise_then_oversold_rsi': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 30 -> 40)
+[2019-11-22] proposal 'jobless_claims_surprise_then_volume_capitulation': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, volume_zscore_30d >= 2 -> 1)
+[199] {'stopped': 'waiting_for_human', 'current_date': '2019-11-27', 'events': 4}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless claims miss during compression + oversold RSI at exit' PARKED, not discarded: occurred 16 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless claims miss during compression + volatility expansion at breakout' PARKED, not discarded: occurred 4 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_rsi': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_low_trend_efficiency': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35)
+[200] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 2}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_momentum_short': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, close_return_5d <= -0.05 -> -0.045)
+[201] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_surprise_oversold_reversion': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[2019-11-21] proposal 'jobless_surprise_breakdown_continuation': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.5, bollinger_pctb_20d <= -0.1 -> 0.2)
+[202] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_bounce': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d < 35 -> 36.5)
+[203] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_downtrend_continuation': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, close_return_5d <= -0.05 -> -0.045)
+[204] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'claims_surprise_then_oversold_rsi_bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'claims_surprise_then_low_efficiency_meanrevert': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35)
+[205] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_miss_then_oversold_bounce': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.125, rsi_14d <= 40 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_miss_then_weak_momentum_continuation': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, close_return_5d <= -0.05 -> -0.045)
+[206] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_reversal': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d < 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_lowband_continuation': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d < 0 -> 0.25)
+[2019-11-21] 'jobless_claims_surprise_then_lowband_continuation' dropped: fires on 65% of the same days as 'jobless_claims_surprise_then_oversold_reversal' -- one hypothesis, not two
+[207] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_below_midband_continuation': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d <= 0 -> 0.25)
+[2019-11-21] 'jobless_claims_surprise_then_below_midband_continuation' dropped: fires on 65% of the same days as 'jobless_claims_surprise_then_oversold_bounce' -- one hypothesis, not two
+[208] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'None' rejected, not tested: 'label'
+[209] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_rsi': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d < 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_low_bollinger': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d < 0 -> 0.25)
+[2019-11-21] 'jobless_claims_surprise_then_low_bollinger' dropped: fires on 65% of the same days as 'jobless_claims_surprise_then_oversold_rsi' -- one hypothesis, not two
+[210] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless claims surprise then oversold RSI - mean reversion long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless claims surprise then thin volume - continuation short': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, volume_zscore_30d <= -0.5 -> -0.45)
+[211] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_rsi': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_band_breakdown': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d <= 0 -> 0.25)
+[2019-11-21] 'jobless_claims_surprise_then_band_breakdown' dropped: fires on 65% of the same days as 'jobless_claims_surprise_then_oversold_rsi' -- one hypothesis, not two
+[212] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_rsi_long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_range_expansion_short' PARKED, not discarded: occurred 11 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[213] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'claims_miss_oversold_meanrevert' PARKED, not discarded: occurred 16 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'claims_miss_low_band_momentum' PARKED, not discarded: occurred 2 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+Failed to judge event on 2019-11-26 (LTCUSDT compression), skipping: Unterminated string starting at: line 1 column 969 (char 968)
+[2019-11-22] no_action: The only macro print during the squeeze (jobless claims) had a negligible +0.1 sd surprise, essentially a non-event, so 
+[2019-11-22] proposal 'jobless_surprise_then_oversold_bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 30 -> 40)
+[2019-11-22] proposal 'jobless_surprise_then_volume_spike_continuation': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, volume_zscore_30d >= 2 -> 1)
+[214] {'stopped': 'waiting_for_human', 'current_date': '2019-11-27', 'events': 3}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_reversion': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_low_volume_continuation': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, volume_zscore_30d <= -0.2 -> -0.18)
+[215] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_miss_then_oversold_rsi': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_miss_then_weak_volume': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35)
+[216] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_rsi_bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_lower_band_breakdown': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d <= 0 -> 0.25)
+[2019-11-21] 'jobless_claims_surprise_then_lower_band_breakdown' dropped: fires on 65% of the same days as 'jobless_claims_surprise_then_oversold_rsi_bounce' -- one hypothesis, not two
+[217] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_long' PARKED, not discarded: occurred 1 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless_claims_surprise_then_below_basis_short' PARKED, not discarded: occurred 1 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless_claims_miss_then_oversold_rsi_meanrev_long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_miss_then_belowband_continuation_short': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d <= -0.1 -> 0.2)
+[218] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 2}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless claims surprise then oversold RSI - mean reversion long': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[219] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_rsi_breakdown_short': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.125, rsi_14d < 40 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_bollinger_reversion_long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d < 0 -> 0.25)
+[220] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_shock_oversold_bounce': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[221] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_oversold_reversion': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_weak_volume_continuation': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, close_return_5d <= -0.05 -> -0.045)
+[222] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless claims surprise then oversold RSI mean reversion': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless claims surprise then band breakdown continuation': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d <= -0.1 -> 0.2)
+[223] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'claims_surprise_then_oversold_reversion': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'claims_surprise_then_range_expansion_momentum': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.125, range_zscore_30d >= 0.8 -> 0.6)
+[224] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'claims_surprise_then_oversold_rsi_long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'claims_surprise_then_5d_selloff_short': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, close_return_5d <= -0.05 -> -0.045)
+[225] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless claims surprise then oversold RSI - momentum continuation': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[2019-11-21] proposal 'jobless claims surprise then lower-band touch - mean reversion': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.5, bollinger_pctb_20d <= -0.1 -> 0.2)
+[226] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_lowerband_continuation': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d <= 0 -> 0.25)
+[2019-11-21] 'jobless_claims_surprise_then_lowerband_continuation' dropped: fires on 65% of the same days as 'jobless_claims_surprise_then_oversold_bounce' -- one hypothesis, not two
+[227] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'claims_surprise_then_oversold_continuation': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'claims_surprise_thin_volume_reversal': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, volume_zscore_30d <= -0.2 -> -0.18)
+[228] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_rsi': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_choppy_market': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35)
+[229] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_shock_then_oversold_bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_shock_then_choppy_continuation': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35)
+[230] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_band_breakdown_short': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d <= 0 -> 0.25)
+[2019-11-21] 'jobless_claims_surprise_then_band_breakdown_short' dropped: fires on 65% of the same days as 'jobless_claims_surprise_then_oversold_long' -- one hypothesis, not two
+[231] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'claims_surprise_then_oversold_continuation': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'claims_surprise_then_lowvolume_reversion': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, volume_zscore_30d <= -0.3 -> -0.27)
+[232] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_oversold_reversal': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_momentum_continuation': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, close_return_5d <= -0.05 -> -0.045)
+[233] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_downtrend_continuation': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, close_return_5d <= -0.05 -> -0.045)
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_reversion': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[234] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_surprise_then_oversold_bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_surprise_then_band_breakdown': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d <= 0 -> 0.25)
+[2019-11-21] 'jobless_surprise_then_band_breakdown' dropped: fires on 65% of the same days as 'jobless_surprise_then_oversold_bounce' -- one hypothesis, not two
+[235] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'claims_surprise_then_oversold_rsi': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[236] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_long': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[237] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_reversion': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_range_expansion_continuation': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.125, range_zscore_30d >= 0.8 -> 0.6)
+[238] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_shock_then_oversold_bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_shock_then_breakdown_continuation': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d <= -0.1 -> 0.2)
+[239] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_momentum': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_lowerband_reversion': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.75, bollinger_pctb_20d <= 0 -> 0.125)
+[240] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_rsi': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_weekly_decline': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, close_return_5d <= -0.05 -> -0.045)
+[241] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'bad_jobless_claims_then_oversold_bounce': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d < 35 -> 36.5)
+[2019-11-21] proposal 'bad_jobless_claims_then_band_break_continuation': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.5, bollinger_pctb_20d < -0.1 -> 0.2)
+[242] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'claims_surprise_then_rsi_oversold_long' PARKED, not discarded: occurred 16 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'claims_surprise_then_bollinger_breakdown_short' PARKED, not discarded: occurred 2 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'bad_claims_surprise_plus_weak_momentum_continuation': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.125, close_return_5d <= -0.08 -> -0.06)
+[2019-11-21] proposal 'bad_claims_surprise_plus_oversold_meanreversion': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[243] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 2}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_rsi_long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_thin_volume_long': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, volume_zscore_30d <= -0.3 -> -0.27)
+[244] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_long': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[245] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'claims_surprise_then_oversold_bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'claims_surprise_choppy_continuation': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35)
+[246] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'claims surprise then oversold RSI - continuation short': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[247] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'claims_surprise_then_oversold_bounce' PARKED, not discarded: occurred 0 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'claims_surprise_then_choppy_continuation' PARKED, not discarded: occurred 6 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'weak_jobs_surprise_then_oversold_bounce': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[2019-11-21] proposal 'weak_jobs_surprise_then_range_expansion_continuation': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.5, range_zscore_30d >= 1.5 -> 0.75)
+[248] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 2}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'claims surprise then DOGE oversold RSI' PARKED, not discarded: occurred 1 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'claims surprise then DOGE low trendiness' PARKED, not discarded: occurred 8 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'weak_claims_then_oversold_bounce': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[2019-11-21] proposal 'weak_claims_then_momentum_continuation': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, close_return_5d <= -0.1 -> -0.09)
+[249] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 2}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_band_breakdown_short': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.75, bollinger_pctb_20d < 0 -> 0.125)
+[250] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_oversold_bounce': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d < 35 -> 36.5)
+[2019-11-21] proposal 'jobless_claims_surprise_band_breakdown': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.75, bollinger_pctb_20d < 0 -> 0.125)
+[251] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_miss_then_oversold_bounce': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[252] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_downtrend_short': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, close_return_5d <= -0.05 -> -0.045)
+Rate limited by Telegram, waiting 5s before retry 1/3...
+SEND FAILED (502) on chunk 1/1: {"ok":false,"error_code":502,"description":"Bad Gateway"}
+[253] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+Network error sending to Telegram (ReadTimeout: HTTPSConnectionPool(host='api.telegram.org', port=443): Read timed out. (read timeout=15)) -- retrying 1/3...
+Network error sending to Telegram (ReadTimeout: HTTPSConnectionPool(host='api.telegram.org', port=443): Read timed out. (read timeout=15)) -- retrying 2/3...
+Network error sending to Telegram (ReadTimeout: HTTPSConnectionPool(host='api.telegram.org', port=443): Read timed out. (read timeout=15)) -- retrying 3/3...
+SEND FAILED (network, 4 attempts): ReadTimeout: HTTPSConnectionPool(host='api.telegram.org', port=443): Read timed out. (read timeout=15)
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_long' PARKED, not discarded: occurred 1 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless_claims_surprise_then_range_expansion_short' PARKED, not discarded: occurred 1 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless_claims_hot_surprise_then_oversold_reversion': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d < 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_hot_surprise_then_band_breakdown_continuation': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d < -0.1 -> 0.2)
+[254] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 2}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_rsi': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_low_volume': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, volume_zscore_30d <= -0.5 -> -0.45)
+[255] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_shock_oversold_reversion' PARKED, not discarded: occurred 0 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless_claims_shock_downtrend_continuation' PARKED, not discarded: occurred 2 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_long': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[256] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 2}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_surprise_then_oversold_reversion' PARKED, not discarded: occurred 1 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless_surprise_then_momentum_continuation' PARKED, not discarded: occurred 4 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'claims_surprise_then_oversold_reversion' PARKED, not discarded: occurred 4 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'claims_surprise_then_range_expansion_continuation' PARKED, not discarded: occurred 3 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-22] no_action: The only macro print in this window was a jobless claims report with a negligible surprise (+0.1 sd, unchanged from prio
+[2019-11-22] proposal 'jobless_claims_surprise_then_oversold_reversal': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-22] proposal 'jobless_claims_surprise_then_volume_breakdown_continuation': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, volume_zscore_30d >= 1.5 -> 0.75)
+[257] {'stopped': 'waiting_for_human', 'current_date': '2019-11-27', 'events': 4}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_rsi': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_momentum_continuation': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, close_return_5d <= -0.05 -> -0.045)
+[258] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'Jobless claims surprise elevated then oversold RSI -> mean reversion long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'Jobless claims surprise elevated then volume exhaustion -> continuation short': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, volume_zscore_30d <= -0.5 -> -0.45)
+[259] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_surprise_then_oversold_bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_surprise_then_band_break_continuation': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d <= 0 -> 0.25)
+[2019-11-21] 'jobless_surprise_then_band_break_continuation' dropped: fires on 65% of the same days as 'jobless_surprise_then_oversold_bounce' -- one hypothesis, not two
+[260] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_continuation': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_choppy_reversion': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35)
+[261] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_oversold_reversion': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d < 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_momentum_continuation': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, close_return_5d <= -0.05 -> -0.045)
+[262] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_downtrend_continuation': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, close_return_5d <= -0.05 -> -0.045)
+[263] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'claims_surprise_then_oversold_rsi_bounce' PARKED, not discarded: occurred 1 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'claims_surprise_then_range_expansion_continuation' PARKED, not discarded: occurred 1 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless_claims_surprise_then_5d_selloff_continuation': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.125, close_return_5d <= -0.1 -> -0.075)
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[264] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 2}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless claims surprise then oversold RSI - mean reversion long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless claims surprise with weak volume - continuation short': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, volume_zscore_30d <= -0.2 -> -0.18)
+[265] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'claims_surprise_then_oversold_reversion': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'claims_surprise_then_low_volume_continuation': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, volume_zscore_30d <= -0.3 -> -0.27)
+[266] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless claims surprise spike then oversold RSI - continuation': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless claims surprise spike then low Bollinger %b - mean reversion': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d <= -0.1 -> 0.2)
+[267] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_momentum_down': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, close_return_5d <= -0.05 -> -0.045)
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_bounce': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.125, rsi_14d <= 40 -> 42.5)
+[268] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless claims surprise then oversold RSI - mean reversion long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless claims surprise then volatility-range breakout - momentum short': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.125, range_zscore_30d >= 0.8 -> 0.6)
+[269] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless claims surprise then oversold RSI (mean reversion)' PARKED, not discarded: occurred 1 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless claims surprise then bollinger breakdown (continuation)' PARKED, not discarded: occurred 1 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_reversion': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_range_expansion_continuation': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.75, range_zscore_30d >= 1.3 -> 0.975)
+[270] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 2}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'claims_surprise_then_momentum_down_short': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, close_return_5d <= -0.05 -> -0.045)
+[2019-11-21] proposal 'claims_surprise_then_oversold_bounce_long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[271] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_spike_then_oversold_rsi' PARKED, not discarded: occurred 1 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless_claims_spike_then_5d_decline_continuation' PARKED, not discarded: occurred 4 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless_claims_shock_then_oversold_long': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[2019-11-21] proposal 'jobless_claims_shock_then_range_expansion_short': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.5, range_zscore_30d >= 1.5 -> 0.75)
+[272] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 2}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless claims surprise with price below lower Bollinger band -> trend continuation short': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.75, bollinger_pctb_20d < 0 -> 0.125)
+[273] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'claims_surprise_then_oversold_long': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[274] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_rsi': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.5, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_below_mid_band': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.75, bollinger_pctb_20d <= 0 -> 0.125)
+[275] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'post-jobless-surprise oversold bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'post-jobless-surprise breakout continuation': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.125, range_zscore_30d >= 0.8 -> 0.6)
+[276] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_rsi_long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_momentum_down_short': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, close_return_5d <= -0.05 -> -0.045)
+[277] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'post-claims-surprise oversold reversal': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[278] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless claims surprise followed by oversold RSI (mean reversion)': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless claims surprise with price under lower bollinger band (continuation)': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d <= 0 -> 0.25)
+[2019-11-21] 'jobless claims surprise with price under lower bollinger band (continuation)' dropped: fires on 65% of the same days as 'jobless claims surprise followed by oversold RSI (mean reversion)' -- one hypothesis, not two
+[279] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_choppy_continuation': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35)
+[280] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_bounce' PARKED, not discarded: occurred 1 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless_claims_surprise_then_low_volume_continuation' PARKED, not discarded: occurred 6 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless_claims_miss_oversold_continuation': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_miss_band_extreme_reversion': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d <= -0.1 -> 0.2)
+[281] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 2}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless claims surprise then oversold RSI - continuation': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless claims surprise then low trend efficiency - reversion': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35)
+[282] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_rsi_long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_5d_decline_short': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.125, close_return_5d <= -0.08 -> -0.06)
+[283] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_range_low_breakdown': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, donchian_pct_20d <= 0.3 -> 0.32)
+[284] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_rsi': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_low_bollinger': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d <= 0 -> 0.25)
+[2019-11-21] 'jobless_claims_surprise_then_low_bollinger' dropped: fires on 65% of the same days as 'jobless_claims_surprise_then_oversold_rsi' -- one hypothesis, not two
+[285] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[286] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless claims surprise then oversold RSI - mean reversion long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless claims surprise then low-volume breakdown - continuation short': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, volume_zscore_30d <= -0.5 -> -0.45)
+[287] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_surprise_then_oversold_rsi_long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_surprise_then_belowband_short': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d <= 0 -> 0.25)
+[2019-11-21] 'jobless_surprise_then_belowband_short' dropped: fires on 65% of the same days as 'jobless_surprise_then_oversold_rsi_long' -- one hypothesis, not two
+[288] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_oversold_reversion': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[289] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_rsi_reversion': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_5d_decline_continuation': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, close_return_5d <= -0.05 -> -0.045)
+[290] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_rsi_long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_low_volume_short': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, volume_zscore_30d <= -0.3 -> -0.27)
+[291] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless claims miss then oversold RSI -> short continuation': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[2019-11-21] proposal 'jobless claims miss then bollinger band compression -> long reversion': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.75, bollinger_pctb_20d <= 0 -> 0.125)
+[292] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'claims_surprise_then_oversold_bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'claims_surprise_then_band_breakdown': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d <= 0 -> 0.25)
+[2019-11-21] 'claims_surprise_then_band_breakdown' dropped: fires on 65% of the same days as 'claims_surprise_then_oversold_bounce' -- one hypothesis, not two
+[293] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless claims surprise then oversold RSI - reversion long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d < 35 -> 42.5)
+[2019-11-21] proposal 'jobless claims surprise then 5-day decline - continuation short': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, close_return_5d <= -0.05 -> -0.045)
+[294] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'claims_surprise_then_oversold_meanrev': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.5, rsi_14d <= 35 -> 42.5)
+[295] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'Jobless claims miss followed by oversold RSI -> mean reversion long': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[296] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'claims_surprise_then_oversold_continuation': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[2019-11-21] proposal 'claims_surprise_then_band_undershoot_bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.5, bollinger_pctb_20d <= -0.1 -> 0.2)
+[297] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_continuation': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_choppy_reversion': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35)
+[298] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_bounce': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_vol_expansion_continuation': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, range_zscore_30d >= 0.8 -> 0.72)
+[299] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_bounce': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_low_volume_breakdown': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35)
+[300] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_below_band_short': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d <= -0.1 -> 0.2)
+[301] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_rsi_long': thresholds loosened by 25% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.125, rsi_14d <= 40 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_weak_volume_short': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, volume_zscore_30d <= -0.3 -> -0.27)
+[302] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless claims surprise then oversold RSI': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d <= 35 -> 36.5)
+[303] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'claims_surprise_then_oversold_rsi': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'claims_surprise_then_below_lower_band': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, bollinger_pctb_20d <= 0 -> 0.25)
+[2019-11-21] 'claims_surprise_then_below_lower_band' dropped: fires on 65% of the same days as 'claims_surprise_then_oversold_rsi' -- one hypothesis, not two
+[304] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_miss_then_oversold_rsi_continuation' PARKED, not discarded: occurred 1 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless_claims_miss_then_lower_band_reversion' PARKED, not discarded: occurred 3 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+Failed to judge event on 2019-11-26 (LTCUSDT compression), skipping: Unterminated string starting at: line 1 column 15 (char 14)
+[2019-11-22] no_action: The only macro print during the squeeze (jobless claims, +0.1 sd surprise) is essentially noise, so there is no genuine 
+[2019-11-22] proposal 'jobless_claims_surprise_then_oversold': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 30 -> 40)
+[2019-11-22] proposal 'jobless_claims_surprise_then_volume_spike': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, volume_zscore_30d >= 2 -> 1)
+[305] {'stopped': 'waiting_for_human', 'current_date': '2019-11-27', 'events': 3}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_rsi_long': thresholds loosened by 50% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 0.75, rsi_14d <= 35 -> 42.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_thin_volume_breakdown_short': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1.5 -> 1.35, volume_zscore_30d <= -0.5 -> -0.45)
+[306] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 1}
+    auto-resolved pending test: insufficient_data
+[2019-11-21] proposal 'jobless claims surprise then oversold RSI on DOGE (mean reversion)' PARKED, not discarded: occurred 1 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless claims surprise then continued 5-day weakness on DOGE (momentum continuation)' PARKED, not discarded: occurred 4 time(s) up to this date, below the 120 needed for a walk-forward test to run. Re-checked weekly as history accumulates.
+[2019-11-21] proposal 'jobless_claims_surprise_then_oversold_reversion': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, rsi_14d < 35 -> 36.5)
+[2019-11-21] proposal 'jobless_claims_surprise_then_downtrend_continuation': thresholds loosened by 10% to reach a measurable sample (jobless_claims_surprise >= 1 -> 0.9, close_return_5d <= -0.1 -> -0.09)
+[307] {'stopped': 'waiting_for_human', 'current_date': '2019-11-26', 'events': 2}
+    auto-resolved pending test: insufficient_data
