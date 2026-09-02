@@ -6,9 +6,8 @@ COINS = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "XRPUSDT", "DOGEUSDT", "ADAUSDT", "LTC
 
 
 @pytest.fixture(autouse=True)
-def _isolated_state(tmp_path, monkeypatch):
-    from replay import state
-    monkeypatch.setattr(state, "STATE_DIR", tmp_path)
+def _isolated(isolated_replay_state):
+    """Shared fixture -- patching STATE_DIR alone leaks, see tests/conftest.py."""
 
 
 class TestParking:

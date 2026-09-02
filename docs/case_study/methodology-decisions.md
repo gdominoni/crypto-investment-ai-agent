@@ -2099,3 +2099,37 @@ reintroducing the bug and confirming the test fails.
 what it is: precautionary. The state files have no concurrency protection at
 all, so two orchestrators would in fact corrupt each other — that just is not
 what happened here, and the lock would not have prevented what did.
+
+---
+
+## Tests could write to the live replay's own state, and one did
+
+**Found while fixing the checkpoint rollback**, by noticing the supposedly-wiped
+state directory had a candidate in it named `x` — the dummy label from a test
+written minutes earlier.
+
+**Why the isolation failed.** `replay/state.py` computes each path once at
+import:
+
+    STATE_DIR = Path(__file__).resolve().parent / "state"
+    CHECKPOINT_PATH = STATE_DIR / "checkpoint.json"
+
+Patching `STATE_DIR` afterwards changes nothing — every `*_PATH` constant
+already holds an absolute path into the real directory. The test looked
+isolated, passed, and wrote to live state. `replay/status_history.py` is worse:
+its `HISTORY_PATH` never referenced `STATE_DIR` at all, so patching that one
+could never have helped.
+
+**This is not untidiness.** A test run while a replay is advancing would corrupt
+a nine-year run in progress, and the corruption would look exactly like a
+statistical result.
+
+**Two fixes, because one is opt-in.** `isolated_replay_state` in
+`tests/conftest.py` redirects every path constant by name rather than trusting
+`STATE_DIR`. And an `autouse` backstop compares modification times across the
+real state directory around every single test, failing with the offending
+filename — because a fixture only protects the tests that remember to ask for
+it, and the one that caused this did ask, incorrectly.
+
+Verified by writing a probe test that deliberately writes real state and
+confirming the backstop catches it.

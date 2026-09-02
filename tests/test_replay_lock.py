@@ -15,10 +15,8 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
-def _isolated_state(tmp_path, monkeypatch):
+def _isolated(isolated_replay_state):
     from replay import state
-    monkeypatch.setattr(state, "STATE_DIR", tmp_path)
-    monkeypatch.setattr(state, "LOCK_PATH", tmp_path / "replay.lock")
     yield
     state.release_replay_lock()
 
