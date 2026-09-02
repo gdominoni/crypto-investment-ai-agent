@@ -888,6 +888,42 @@ def advance(chunk_days: int = CHUNK_DAYS) -> dict:
         for message in state.due_reveals(d):  # a held-back test result surfacing on its own scheduled day
             _send(message)
 
+        # A parked proposal whose history has caught up goes through the same human
+        # gate a fresh one would -- it was never shown to anyone, since it was
+        # refused before it could be.
+        #
+        # CHECKED DAILY, not on the weekly battery refresh where this used to sit.
+        # The queue drains one per check, and the rate matters: in 2021 the
+        # walk-forward crosses its four-distinct-years threshold and a large block
+        # of parked proposals becomes testable at once. At one per week, ~107
+        # parked would take two simulated YEARS to clear -- a hypothesis testable
+        # in January 2021 not actually tested until late 2022, losing exactly the
+        # prospective evidence parking exists to preserve. Daily is 7x faster and
+        # costs nothing: promotion runs no API call, only a local backtest at
+        # resolve time.
+        #
+        # Deliberately still ONE per check rather than a batch. Approving fifty
+        # unrelated hypotheses with a single button would empty the human gate of
+        # meaning, and the gate is the point. Draining several within one simulated
+        # day would need the day re-entered, which is the mechanism that caused a
+        # rollback loop once already -- not worth repeating for a queue that daily
+        # checking already drains in months rather than years.
+        if state.load_pending_test() is None:
+            promoted = _check_parked_proposals(d)
+            if promoted is not None:
+                state.save_pending_test(promoted)
+                _send(judgment.format_telegram_message(
+                    d, f"A hypothesis proposed on {promoted['proposed_at']} now has enough "
+                       f"history behind it to be tested.",
+                    {"assessment": "Parked when first proposed because it had not occurred often "
+                                    "enough to measure. It has now.",
+                     "recommended_action": "propose_novel_test",
+                     "novel_condition_specs": promoted["specs"]}),
+                    reply_markup=REPLAY_PROPOSAL_KEYBOARD)
+                state.save_checkpoint(str(d.date()), status="waiting_for_human")
+                return {"stopped": "waiting_for_human", "current_date": str(d.date()),
+                        "events": events_this_chunk}
+
         if (d - last_battery_refresh).days >= 7:
             status_summary = run_replay_battery(d)
             _check_prune_decisions(d, status_summary)
@@ -900,24 +936,6 @@ def advance(chunk_days: int = CHUNK_DAYS) -> dict:
                           f"Now held for <b>{info['horizon_changed_to']}d</b> going forward (empirically "
                           f"re-derived from accumulated history, replacing the previous value).")
             last_battery_refresh = d
-            # A parked proposal whose history has caught up goes through the same
-            # human gate a fresh one would -- it was never shown to anyone, since
-            # it was refused before it could be.
-            if state.load_pending_test() is None:
-                promoted = _check_parked_proposals(d)
-                if promoted is not None:
-                    state.save_pending_test(promoted)
-                    _send(judgment.format_telegram_message(
-                        d, f"A hypothesis proposed on {promoted['proposed_at']} now has enough "
-                           f"history behind it to be tested.",
-                        {"assessment": "Parked when first proposed because it had not occurred often "
-                                        "enough to measure. It has now.",
-                         "recommended_action": "propose_novel_test",
-                         "novel_condition_specs": promoted["specs"]}),
-                        reply_markup=REPLAY_PROPOSAL_KEYBOARD)
-                    state.save_checkpoint(str(d.date()), status="waiting_for_human")
-                    return {"stopped": "waiting_for_human", "current_date": str(d.date()),
-                            "events": events_this_chunk}
 
         # THE ONLY TRIGGER. Macro releases and volatility shocks were both
         # removed, on the same principle and each with its own measurement:

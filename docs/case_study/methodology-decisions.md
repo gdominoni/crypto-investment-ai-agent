@@ -2133,3 +2133,37 @@ it, and the one that caused this did ask, incorrectly.
 
 Verified by writing a probe test that deliberately writes real state and
 confirming the backstop catches it.
+
+---
+
+## Parked proposals are re-checked daily, not weekly
+
+**The original placement was a rationalisation.** The check sat inside the weekly
+battery refresh, justified as "a queue would add complexity for no benefit". The
+real constraint was mechanical: the replay holds a single pending slot and halts
+on it, so one promotion per entry to that block was simply the easy thing.
+
+**The cost is concentrated exactly where it hurts.** In 2021 the walk-forward
+crosses its four-distinct-years threshold and a large block of parked proposals
+becomes testable at once. At one per weekly refresh, ~107 parked entries would
+take two simulated YEARS to clear — a hypothesis testable in January 2021 not
+actually tested until late 2022, losing precisely the prospective evidence
+parking exists to preserve.
+
+Moving the check into the daily loop is a one-line relocation, drains the queue
+7x faster (months rather than years), and costs nothing: promotion makes no API
+call, only a local backtest at resolve time.
+
+**Still one per check, deliberately, and not a batch.** Promoting every testable
+proposal into a single pending set would work — `resolve_pending_test` already
+loops over a set — but one button approving fifty unrelated hypotheses empties
+the human gate of meaning, and that gate is the point of the design. Draining
+several within one simulated day would instead require re-entering the same day,
+which is the exact mechanism behind the checkpoint rollback loop that destroyed
+an overnight run. Not worth repeating for a queue that daily checking already
+clears in months.
+
+**"Oldest first" survives but barely matters now.** With a daily check the queue
+rarely accumulates enough for ordering to be significant. It stays because the
+alternative — promoting by any measured quality — would be selecting a hypothesis
+on its outcome at proposal time.

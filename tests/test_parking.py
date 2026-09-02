@@ -205,3 +205,39 @@ class TestTelegramRateLimit:
         assert B._redact("no token here", "") == "no token here"
         src = inspect.getsource(B._send)
         assert src.count("_redact(") >= 2, "both the network and the HTTP-error paths must redact"
+
+
+class TestPromotionCadence:
+    def test_parked_proposals_are_checked_daily_not_weekly(self):
+        """The rate is the whole point. In 2021 the walk-forward crosses its
+        four-distinct-years threshold and a large block of parked proposals
+        becomes testable at once; at one per weekly refresh, ~107 parked would
+        take two simulated YEARS to clear -- losing exactly the prospective
+        evidence parking exists to preserve."""
+        import inspect
+        import re
+
+        from replay import engine
+        src = inspect.getsource(engine.advance)
+
+        # The promotion block must sit in the daily loop, not inside the
+        # `(d - last_battery_refresh).days >= 7` branch.
+        weekly_start = src.index("if (d - last_battery_refresh).days >= 7:")
+        weekly_end = src.index("last_battery_refresh = d") + len("last_battery_refresh = d")
+        weekly_block = src[weekly_start:weekly_end]
+        assert "_check_parked_proposals" not in weekly_block, \
+            "promotion is back inside the weekly refresh -- the queue drains 7x slower"
+
+        promo = src.index("_check_parked_proposals")
+        loop = src.index("while d <= chunk_end:")
+        assert promo > loop, "promotion must run inside the daily loop"
+
+    def test_promotion_resumes_from_the_same_day_never_earlier(self):
+        """A parked promotion's as_of and the replay clock are the same day, so
+        resuming must not rewind -- the failure mode that cost an overnight run."""
+        import inspect
+
+        from replay import engine
+        src = inspect.getsource(engine._check_parked_proposals)
+        assert '"resume_from": str(as_of.date())' in src
+        assert '"as_of": str(as_of.date())' in src
