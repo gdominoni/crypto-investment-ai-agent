@@ -1,12 +1,13 @@
 """The lock against two orchestrator processes running concurrently.
 
-A real incident, not a hypothetical: two unlocked instances wrote the same
-replay state overnight, silently overwriting each other's progress. The
-symptom was a checkpoint date that visibly jumped backward between log lines,
-~300 near-duplicate proposals for the same handful of days, and 218 trade-log
-entries dated up to 8 days after the final checkpoint -- found only by
-checking that the checkpoint-never-moves-backward invariant directly against
-the trade log.
+Precautionary. None of the replay's state files has any concurrency
+protection -- every writer does read-modify-write on whole-file JSON -- so two
+orchestrators against the same directory would silently overwrite each other.
+This makes that impossible rather than merely unlikely.
+
+Not to be confused with the overnight corruption that actually happened, which
+was a single process rolling its own checkpoint backward and which this lock
+would not have prevented -- see tests/test_checkpoint_monotonic.py.
 """
 import os
 
@@ -56,9 +57,8 @@ def test_a_lock_naming_this_process_s_own_pid_is_refused():
 
 
 def test_run_to_completion_holds_the_lock_for_its_whole_run(monkeypatch):
-    """The lock must wrap the whole batch run, not just its first chunk --
-    that was the actual gap: a per-call lock would still let two full runs
-    interleave chunk by chunk."""
+    """The lock must wrap the whole batch run, not just its first chunk: a
+    per-call lock would still let two full runs interleave chunk by chunk."""
     import inspect
 
     from replay import orchestrator

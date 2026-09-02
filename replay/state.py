@@ -202,26 +202,25 @@ def acquire_replay_lock() -> int:
     """Claims exclusive ownership of this replay's state, or raises
     `ReplayAlreadyRunning`. Returns the PID written to the lock, for logging.
 
-    WHY THIS EXISTS -- a real incident, not a hypothetical. Two orchestrator
-    processes ran against the same state overnight with no lock between them.
-    Neither checkpoint's writer knew about the other, so `advance()`'s own
-    invariant (the checkpoint date only ever moves forward) held true FOR EACH
-    PROCESS INDIVIDUALLY but not for the file both were writing: whichever
-    process finished a chunk last simply overwrote the other's more recent
-    progress. The result was a checkpoint that visibly jumped backward between
-    log lines, ~300 near-duplicate proposals for the same handful of days (each
-    process discovering its own independent, non-deterministic Sonnet
-    proposals for the same episodes), and a trade log containing entries dated
-    AFTER the final checkpoint -- 218 of them, up to 8 days ahead, found only
-    by checking that invariant directly. Cost was inflated by roughly the same
-    factor as the duplication.
+    PRECAUTIONARY, not a response to an observed incident. None of these state
+    files has any concurrency protection -- every writer does read-modify-write
+    on whole-file JSON -- so two orchestrators against the same directory would
+    silently overwrite each other. That has not happened; this makes it
+    impossible rather than unlikely, which is worth the twenty lines given the
+    files are a nine-year run's only record.
 
-    STALE LOCKS ARE RECLAIMED, not treated as permanent. A lock file naming a
-    PID that is no longer running (checked via `os.kill(pid, 0)`, which raises
-    without signalling anything if the process is gone) means the previous run
-    crashed or was killed without cleaning up -- reclaiming it is exactly right,
-    since honouring a dead process's lock forever would need a human to notice
-    and delete a file by hand every time.
+    (An earlier version of this docstring described a specific overnight
+    corruption as the reason. That corruption was real but had a different
+    cause entirely -- a single process rolling its own checkpoint backward, see
+    `resolve_pending_test` and `tests/test_checkpoint_monotonic.py`. The lock
+    would not have prevented it. Corrected rather than deleted because a
+    plausible-sounding wrong explanation in a comment is worse than none.)
+
+    STALE LOCKS ARE RECLAIMED, not honoured forever. A lock naming a PID that
+    is no longer running (checked with `os.kill(pid, 0)`, which signals nothing
+    and raises if the process is gone) means a previous run was killed without
+    cleaning up -- requiring a human to notice and delete a file by hand before
+    the next run would be the worse failure.
     """
     import os
 

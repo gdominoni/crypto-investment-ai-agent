@@ -380,16 +380,21 @@ def _check_parked_proposals(as_of: pd.Timestamp, live_coin: str | None = None) -
         print(f"[{as_of.date()}] parked proposal '{spec.label}' is now testable "
               f"(proposed {entry.get('proposed_at')}) -- promoting.")
         return {"specs": [entry["spec"]], "coins": COINS, "live_coin": live_coin,
-                "as_of": str(as_of.date()), "proposed_at": entry.get("proposed_at")}
+                "as_of": str(as_of.date()), "resume_from": str(as_of.date()),
+                "proposed_at": entry.get("proposed_at")}
     return None
 
 
 
-def _handle_assessment(as_of: pd.Timestamp, event_desc: str, assessment: dict, live_coin: str | None = None) -> str | None:
+def _handle_assessment(as_of: pd.Timestamp, event_desc: str, assessment: dict, live_coin: str | None = None,
+                        resume_from: pd.Timestamp | None = None) -> str | None:
     """Returns "STOP" if the replay must halt for a human decision, else
     None. Sonnet never opens a trade here -- that's the mechanical scan's
     job (see _scan_mechanical_triggers); this only ever proposes a novel
     condition for human approval, or does nothing."""
+    # Equal on every path where the replay's clock IS the data cutoff; they
+    # differ only for the compression trigger, which asks at C about B.
+    resume_from = resume_from if resume_from is not None else as_of
     raw_proposals = proposals_from_assessment(assessment)
     if raw_proposals:
         # Validate BEFORE storing/halting. An off-thesis proposal (no news/macro
@@ -416,9 +421,23 @@ def _handle_assessment(as_of: pd.Timestamp, event_desc: str, assessment: dict, l
         # Stored as a SET: the human approves or dismisses them together, and
         # each is then tested on its own. Splitting one idea into two testable
         # halves only helps if both halves actually get tested.
+        # TWO DATES, deliberately, and conflating them cost a whole overnight run.
+        # `as_of` is the DATA CUTOFF for the backtest -- point B, the compression
+        # exit, five days before the replay's actual position, because the
+        # hypothesis must not be tested on the confirmation window that decided
+        # whether to ask. `resume_from` is where the replay CLOCK is: point C.
+        #
+        # They used to be the same field, and resolve_pending_test wrote it
+        # straight back as the checkpoint -- which rolled the clock back five
+        # days, walked forward into the same compression exit, proposed again,
+        # and rolled back again. A deterministic infinite loop: ~300 near-
+        # duplicate proposals for one episode, live tests dated after the
+        # checkpoint that was supposedly ahead of them, and roughly 3x the
+        # expected spend before it was caught.
         state.save_pending_test({
             "specs": [p["dict"] for p in prepared], "coins": COINS,
             "live_coin": live_coin, "as_of": str(as_of.date()),
+            "resume_from": str(resume_from.date()),
         })
         assessment["novel_condition_specs"] = [p["dict"] for p in prepared]
         _send(judgment.format_telegram_message(as_of, event_desc, assessment),
@@ -938,7 +957,8 @@ def advance(chunk_days: int = CHUNK_DAYS) -> dict:
                 continue
             consecutive_failures = 0
             events_this_chunk += 1
-            if _handle_assessment(as_of_b, event_desc, assessment, live_coin=coin) == "STOP":
+            if _handle_assessment(as_of_b, event_desc, assessment, live_coin=coin,
+                                   resume_from=d) == "STOP":
                 state.save_checkpoint(str(d.date()), status="waiting_for_human")
                 return {"stopped": "waiting_for_human", "current_date": str(d.date()), "events": events_this_chunk}
 
@@ -1038,7 +1058,10 @@ def resolve_pending_test() -> str | None:
     lines += _cooccurrence_appendix(specs, pending["coins"], as_of)
 
     state.save_pending_test(None)
-    state.save_checkpoint(pending["as_of"], status="running")
+    # The CLOCK, not the data cutoff -- see save_pending_test above for what
+    # writing `as_of` here cost. Falls back to `as_of` for a pending entry
+    # written before the two were separated.
+    state.save_checkpoint(pending.get("resume_from") or pending["as_of"], status="running")
     state.queue_reveal("\n".join(lines), str(reveal_date.date()))
     return statuses[0] if statuses else None
 
@@ -1237,6 +1260,6 @@ def discard_pending_test() -> str | None:
     if pending is None:
         return None
     state.save_pending_test(None)
-    state.save_checkpoint(pending["as_of"], status="running")
+    state.save_checkpoint(pending.get("resume_from") or pending["as_of"], status="running")
     _send("Dismissed -- this condition won't be tested. Reply 'replay continue' to keep going.")
     return "dismissed"

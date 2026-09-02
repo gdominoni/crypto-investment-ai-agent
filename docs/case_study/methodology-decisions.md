@@ -2052,3 +2052,50 @@ about $3.
 `replay/post_replay_hyperopt.py` runs it once, after the replay reaches the
 present, over the candidates that survived. Live-test messages meanwhile print
 `TP/SL: pending hyperopt cross-check`, which is accurate.
+
+---
+
+## The replay clock and the backtest's data cutoff are two different dates
+
+**A nine-year run destroyed overnight, and a first diagnosis that was wrong.**
+
+The compression trigger asks at point C — the confirmation date — about point
+B, the compression exit five days earlier. `as_of` must be B: the hypothesis is
+tested on history up to the exit, never on the confirmation window that decided
+whether to ask at all. That part was right.
+
+What was wrong is that the pending test carried only that one date, and
+`resolve_pending_test` wrote it straight back as the checkpoint. So the replay's
+own clock was rolled back five days on every resolved proposal, walked forward
+into the same compression exit, proposed again, and rolled back again.
+
+**A deterministic single-process infinite loop.** Its signature in the log is
+unmistakable once you know what to look for: forty consecutive chunks all
+reporting the same simulated date, ~300 near-duplicate proposals for one
+episode (Sonnet is not deterministic, so each re-ask returned a slightly
+different label for the same idea), and a trade log with 218 entries dated up
+to eight days AFTER the final checkpoint. Cost ran to $16.78 against an
+estimated $5-7 — the overrun was the duplication factor, nothing else.
+
+**The first diagnosis blamed two concurrent processes**, on the strength of the
+checkpoint appearing to move backward and the trade-log dates being ahead of it.
+Both facts were real; the inference was not. The decisive evidence against it
+was already in the log and went unexamined: the gap between the checkpoint
+(2019-11-21) and the date every chunk reported (2019-11-26) was exactly five
+days — `COMPRESSION_CONFIRM_DAYS` — and forty consecutive chunks reported the
+*same* date, which is what a deterministic loop looks like and is not what two
+independent processes interleaving would produce.
+
+**The fix is one field.** A pending test now records `as_of` (the data cutoff,
+point B) and `resume_from` (the replay's clock, point C) separately, and the
+checkpoint resumes from the clock. Entries written before the split still
+resolve, falling back to `as_of`.
+
+**The invariant that would have caught it** — the replay clock never moves
+backward — is now a test (`tests/test_checkpoint_monotonic.py`), verified by
+reintroducing the bug and confirming the test fails.
+
+**A lock was also added** during the wrong diagnosis and is kept, relabelled as
+what it is: precautionary. The state files have no concurrency protection at
+all, so two orchestrators would in fact corrupt each other — that just is not
+what happened here, and the lock would not have prevented what did.
