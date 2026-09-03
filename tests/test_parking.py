@@ -33,24 +33,65 @@ class TestParking:
 
     def test_promotion_takes_the_oldest_never_the_best(self):
         """Choosing which parked hypothesis to promote by any measured quality
-        would be selecting on the outcome at proposal time."""
+        would be selecting on the outcome at proposal time.
+
+        Ordering is oldest-first among the proposals examined on a given day
+        (see `_parked_due_today`); what must hold unconditionally is that no
+        MEASURED quantity takes part in the ordering."""
         import inspect
 
         import replay.engine as E
         src = inspect.getsource(E._check_parked_proposals)
-        assert 'sorted(parked, key=lambda e: e.get("proposed_at", "")' in src
+        assert 'sorted(due, key=lambda es: es[0].get("proposed_at", "")' in src
         for forbidden in ("p_value", "excess_return", "significant", "accepted"):
             assert forbidden not in src
 
+    def test_every_parked_proposal_is_examined_within_the_recheck_window(self):
+        """The stagger bounds cost; it must not let a proposal starve. Each is
+        seen exactly once per PARKED_RECHECK_DAYS, so deferring a check costs
+        latency and never a lost hypothesis -- occurrence counts only grow."""
+        import collections
+
+        import replay.engine as E
+        entries = [self._entry(f"p{i}") for i in range(40)]
+        seen = collections.Counter()
+        for i in range(E.PARKED_RECHECK_DAYS):
+            day = pd.Timestamp("2021-01-01") + pd.Timedelta(days=i)
+            for e in entries:
+                if E._parked_due_today(e, day):
+                    seen[e["spec"]["label"]] += 1
+        assert len(seen) == len(entries), "a parked proposal is never examined"
+        assert set(seen.values()) == {1}, "examined more than once per window"
+
+    def test_the_stagger_is_stable_as_the_queue_changes(self):
+        """Hashed on the label, not on list position -- otherwise promoting or
+        parking one proposal reshuffles everyone else's slot and the 'seen once
+        per window' guarantee above stops meaning anything mid-run."""
+        import replay.engine as E
+        e = self._entry("keeps-its-slot")
+        day = pd.Timestamp("2021-06-15")
+        before = E._parked_due_today(e, day)
+        for _ in range(5):
+            assert E._parked_due_today(e, day) == before
+
     def test_a_proposal_the_grammar_no_longer_accepts_is_dropped_not_stuck(self):
-        """Otherwise one stale entry blocks the queue for the rest of the run."""
+        """Otherwise one stale entry blocks the queue for the rest of the run.
+
+        Dropped on ANY day, not only on the entry's own staggered re-check day:
+        this costs one `spec_from_dict` and no history scan, so it runs over the
+        whole queue every day. Only the expensive `is_testable` is staggered."""
         from replay import state
         import replay.engine as E
         bad = self._entry("stale")
         bad["spec"]["clauses"] = [{"indicator": "is_macro_day", "op": ">=", "threshold": 1.0}]
         state.park_proposal(bad)
-        assert E._check_parked_proposals(pd.Timestamp("2024-01-01")) is None
-        assert state.load_parked_proposals() == []
+        # Every day in a full re-check window, including the days this entry is
+        # NOT due for its is_testable check, must still clean it up.
+        for i in range(E.PARKED_RECHECK_DAYS):
+            state.park_proposal(bad)
+            day = pd.Timestamp("2024-01-01") + pd.Timedelta(days=i)
+            assert E._check_parked_proposals(day) is None
+            assert state.load_parked_proposals() == [], f"stale entry survived day {i}"
 
 
 class TestProspectiveSplit:

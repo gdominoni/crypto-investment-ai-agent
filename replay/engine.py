@@ -24,6 +24,7 @@ every ~30 simulated days for a human checkpoint.
 """
 from __future__ import annotations
 
+import hashlib
 import itertools
 import os
 
@@ -330,14 +331,15 @@ def _prepare_proposal(raw: dict, as_of: pd.Timestamp) -> dict | None:
             # away most of what the first four years of a replay discovers, and
             # threw it away permanently -- nothing stored it.
             #
-            # `_check_parked_proposals` re-checks them at the weekly battery
-            # refresh, which costs no API call. And the wait makes the eventual
-            # test stronger: a hypothesis written in 2019 and tested in 2022 is
-            # tested partly on data that did not exist when it was written.
+            # `_check_parked_proposals` re-checks them daily, in advance()'s own
+            # loop (not the weekly battery refresh), which costs no API call. And
+            # the wait makes the eventual test stronger: a hypothesis written in
+            # 2019 and tested in 2022 is tested partly on data that did not exist
+            # when it was written.
             state.park_proposal({"spec": spec_to_dict(spec), "proposed_at": str(as_of.date()),
                                   "reason": why_not})
             print(f"[{as_of.date()}] proposal '{raw.get('label')}' PARKED, not discarded: "
-                  f"{why_not}. Re-checked weekly as history accumulates.")
+                  f"{why_not}. Re-checked daily as history accumulates.")
             return None
         spec, relax_note = relaxed
         # Substituted, not silently: the condition about to be tested is NOT the
@@ -351,28 +353,83 @@ def _prepare_proposal(raw: dict, as_of: pd.Timestamp) -> dict | None:
 
 
 
+# How often any ONE parked proposal is re-examined. The queue as a whole is
+# still checked every day -- see _check_parked_proposals for why the two are
+# different things and why only the second one was ever load-bearing.
+PARKED_RECHECK_DAYS = 7
+
+
+def _parked_due_today(entry: dict, as_of: pd.Timestamp) -> bool:
+    """Whether this parked proposal is in today's slice of the re-check queue.
+
+    Hashed on the label rather than taken from the list order so the stagger is
+    STABLE: a proposal keeps its own slot as the queue grows and shrinks around
+    it, instead of the whole schedule shifting every time one is promoted or a
+    new one is parked."""
+    label = (entry.get("spec") or {}).get("label", "")
+    h = int(hashlib.sha256(label.encode()).hexdigest()[:8], 16)
+    return (as_of.toordinal() + h) % PARKED_RECHECK_DAYS == 0
+
+
 def _check_parked_proposals(as_of: pd.Timestamp, live_coin: str | None = None) -> dict | None:
     """Promote the OLDEST parked proposal that has become testable, if any.
 
-    One per refresh, deliberately. The replay holds a single pending slot and
-    halts on it, so promoting several at once would need a queue for no benefit
-    -- with a weekly refresh there are roughly 470 opportunities across a nine
-    year run, far more than the number of proposals that will ever be parked.
+    Called once per simulated DAY (from advance()'s own loop), not at the
+    weekly battery refresh where this used to sit -- moved because ~107 parked
+    proposals become testable at once when the walk-forward crosses its
+    four-distinct-years threshold in 2021, and one promotion per WEEK would
+    take two simulated years to drain that backlog, losing exactly the
+    prospective evidence parking exists to preserve. Daily draining is 7x
+    faster (see docs/case_study/methodology-decisions.md).
+
+    Still one per check, deliberately, even at daily cadence: the replay holds
+    a single pending slot and halts on it, and batching several promotions into
+    one approval would empty the human gate of meaning. Draining more than one
+    within a single simulated day would require re-entering that day, which is
+    the exact mechanism behind a checkpoint-rollback bug this project hit once
+    already -- not worth repeating for a queue daily checking already drains in
+    months rather than years.
 
     Oldest first, not best first: choosing which parked hypothesis to promote by
     any measured quality would be selecting on the outcome, which is the one
-    thing the proposal path must never do."""
+    thing the proposal path must never do. The stagger below weakens that to
+    "oldest first among those examined today" -- stated plainly rather than
+    glossed, and it preserves the property that actually matters: the ordering
+    is still independent of any measured outcome, since a hash of the label
+    cannot know how a condition performed."""
     parked = state.load_parked_proposals()
     if not parked:
         return None
-    for entry in sorted(parked, key=lambda e: e.get("proposed_at", "")):
+    # CHEAP PASS, over the whole queue, every day. Dropping a proposal the
+    # grammar can no longer express costs a spec_from_dict and nothing else, so
+    # it must not wait for a slot in the staggered rotation below -- a stale
+    # entry lingering is exactly what parking exists to prevent.
+    live: list[tuple[dict, object]] = []
+    for entry in parked:
         try:
-            spec = spec_from_dict(entry["spec"])
+            live.append((entry, spec_from_dict(entry["spec"])))
         except ValueError:
-            # Written under an older grammar and no longer expressible -- drop it
-            # rather than let it block the queue forever.
             state.unpark_proposal(entry["spec"].get("label", ""))
-            continue
+
+    # EXPENSIVE PASS, only on today's slice. `is_testable` costs ~146ms (it
+    # counts occurrences over real history), and on a day when nothing has
+    # become testable -- overwhelmingly the common case in the early years --
+    # this used to pay that for EVERY parked proposal. At the 68 parked reached
+    # by 2020 that is 10 seconds per simulated day, and the queue keeps growing:
+    # measured on a dry run, it projected to ~9 HOURS of the run spent re-asking
+    # a question whose answer changes slowly.
+    #
+    # Staggering by a stable hash spreads the queue over PARKED_RECHECK_DAYS, so
+    # ~1/7th is examined each day and every proposal is still seen once per
+    # window. It costs a proposal up to 6 days of extra LATENCY before it is
+    # noticed, which is the right thing to trade: what the daily cadence was for
+    # is the DRAIN RATE (one promotion per day rather than one per week, so the
+    # ~107 that become testable together in 2021 clear in months rather than two
+    # years), and the drain rate is unchanged -- a promotion can still happen on
+    # any day. Occurrence counts only ever grow, so nothing is missed by
+    # deferring a check, only seen a few days later.
+    due = [(e, s) for e, s in live if _parked_due_today(e, as_of)]
+    for entry, spec in sorted(due, key=lambda es: es[0].get("proposed_at", "")):
         if is_testable(spec, COINS, as_of=as_of) is not None:
             continue
         state.unpark_proposal(spec.label)
