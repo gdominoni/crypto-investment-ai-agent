@@ -600,7 +600,9 @@ def test_the_prompt_s_hard_requirement_matches_what_the_code_enforces():
     from llm_pipeline.novel_condition_tester import NON_PROPOSABLE_INDICATORS
     from replay import judgment
 
-    sources = [H.SONNET_SYSTEM_PROMPT, judgment.REPLAY_SYSTEM_PROMPT]
+    # Was SONNET_SYSTEM_PROMPT; that prompt belonged to the Haiku headline
+    # path, removed 2026-09-02. COMPRESSION_SYSTEM_PROMPT is the live one.
+    sources = [H.COMPRESSION_SYSTEM_PROMPT, judgment.REPLAY_SYSTEM_PROMPT]
     for text in sources:
         for banned in NON_PROPOSABLE_INDICATORS:
             assert banned not in text, f"prompt still offers {banned}"

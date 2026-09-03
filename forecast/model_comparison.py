@@ -229,8 +229,15 @@ def main() -> int:
     ap.add_argument("--dry-run", action="store_true", help="sample and cost only")
     args = ap.parse_args()
 
-    from llm_pipeline.haiku_sonnet_pipeline import HAIKU_MODEL, SONNET_MODEL
+    # HAIKU_MODEL is defined here rather than imported: the Haiku HEADLINE path
+    # was removed from the pipeline on 2026-09-02, and this experiment -- which
+    # asks the separate question of whether Haiku could replace Sonnet as the
+    # JUDGE -- is its only remaining caller. Kept so the committed result set
+    # (forecast/model_comparison.json) stays reproducible.
+    from llm_pipeline.haiku_sonnet_pipeline import SONNET_MODEL
     from replay import judgment
+
+    HAIKU_MODEL = "claude-haiku-4-5"
 
     per_event = 2 * SONNET_PER_CALL + HAIKU_PER_CALL
     max_events = int(args.max_spend / per_event)

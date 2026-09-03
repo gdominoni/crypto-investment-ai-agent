@@ -37,7 +37,6 @@ from dotenv import load_dotenv
 from candidates.atomic_json import write_json
 from execution.live_testing import run_once as run_live_testing
 from llm_pipeline.haiku_sonnet_pipeline import run_compression_scan
-from llm_pipeline.haiku_sonnet_pipeline import run_once as run_headline_scan
 from scheduler.weekly_revalidation import run_weekly_revalidation
 from telegram.bot import _dispatch_update, _get_updates, _send
 
@@ -112,7 +111,10 @@ def run_forever() -> None:
         now = datetime.now(timezone.utc)
         if now - last_hourly >= HOURLY_INTERVAL:
             _run_isolated("mechanical trigger scan", run_live_testing)
-            _run_isolated("headline scan", run_headline_scan)
+            # The hourly Haiku headline scan was removed on 2026-09-02: nothing
+            # it surfaced could enter a testable hypothesis, and a backfill was
+            # measured not to fix that. See llm_pipeline/haiku_sonnet_pipeline.py's
+            # module docstring and docs/case_study/methodology-decisions.md.
             _run_isolated("compression scan", run_compression_scan)
             last_hourly = now
             state["last_hourly"] = now.isoformat()

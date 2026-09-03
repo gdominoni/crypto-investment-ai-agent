@@ -91,11 +91,12 @@ class TestSchema:
 
 class TestPromptsMatchTheCode:
     def test_every_prompt_states_the_cap_and_asks_for_a_set(self):
-        from llm_pipeline.haiku_sonnet_pipeline import (COMPRESSION_SYSTEM_PROMPT,
-                                                         SONNET_SYSTEM_PROMPT)
+        # Two prompts, not three: SONNET_SYSTEM_PROMPT belonged to the Haiku
+        # headline path, removed 2026-09-02.
+        from llm_pipeline.haiku_sonnet_pipeline import COMPRESSION_SYSTEM_PROMPT
         from replay.judgment import REPLAY_SYSTEM_PROMPT
 
-        for prompt in (REPLAY_SYSTEM_PROMPT, COMPRESSION_SYSTEM_PROMPT, SONNET_SYSTEM_PROMPT):
+        for prompt in (REPLAY_SYSTEM_PROMPT, COMPRESSION_SYSTEM_PROMPT):
             assert "novel_condition_specs" in prompt
             assert "AT MOST TWO CLAUSES" in prompt
             assert "FOR WHAT THE HYPOTHESIS MEANS" in prompt

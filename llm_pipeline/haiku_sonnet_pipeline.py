@@ -1,10 +1,35 @@
-"""Haiku Scout -> Sonnet Strategist -> Telegram. Haiku classifies each
-headline against the live candidate battery; only genuinely unmatched,
-significant conditions escalate to Sonnet.
+"""Sonnet Strategist -> Telegram, on one trigger: a confirmed exit from a
+volatility-compression episode.
 
-Sonnet's live role is narrow, by design: (1) decide whether a headline/
-shock suggests a genuinely new, untested pattern worth a human's "test
-it" (`propose_novel_test`), and (2) answer natural-language questions
+THE HAIKU HEADLINE PATH WAS REMOVED (2026-09-02), and the reasoning is the
+point rather than a footnote. Haiku screened live CryptoCompare headlines and
+escalated the significant ones to Sonnet. Nothing it surfaced could ever enter
+a testable hypothesis: `proposable_indicators()` contains no headline or
+sentiment term, and every proposal must carry one of `cpi_surprise`,
+`rate_surprise`, `jobless_claims_surprise` -- all three FRED series. A headline
+could only ever prompt a question whose answer had to be phrased in the exact
+vocabulary the compression trigger already uses, and the project's own log
+recorded the consequence: of 771 live tests opened for Sonnet-discovered
+candidates, ZERO were news-linked.
+
+The obvious repair -- backfill news history so a sentiment clause becomes
+testable -- was measured rather than assumed, in `forecast/sentiment_power.py`,
+which models sentiment as a continuous daily score parameterised by `rho`, its
+correlation with the forward return. Accepted conditions out of 57, per feed
+quality: 2 at rho=0.0 (the pure-noise floor), 3 at rho=0.04 (what real news
+sentiment achieves), 5 at 0.08, 20 at 0.15, 23 at 0.30. A realistic feed is
+indistinguishable from noise; detection needs a feed 3-4x better than published
+work reports. So the backfill would not have rescued it either.
+
+Both branches are closed by measurement: a rare discrete news event cannot
+reach `MIN_HISTORICAL_EPISODES` in nine years across seven coins, and the
+continuous form is undetectable at achievable quality. The component was
+deleted rather than kept for the badge. See
+docs/case_study/methodology-decisions.md.
+
+Sonnet's live role is narrow, by design: (1) decide whether a confirmed
+compression exit suggests a genuinely new, untested pattern worth a human's
+"test it" (`propose_novel_test`), and (2) answer natural-language questions
 about system state. It does NOT decide to open a trade -- that's a
 mechanical, unattended scan (see scheduler/ and replay/engine.py) that
 fires identically for every occurrence of an `accepted` candidate's own
@@ -25,8 +50,6 @@ import requests
 from anthropic import Anthropic
 from dotenv import load_dotenv
 
-from candidates.macro_vintage import recent_releases_summary
-from data_ingestion.news_sentiment.cryptocompare_fetcher import fetch_cryptocompare_news
 from llm_pipeline.context_builder import build_context_summary, build_technical_snapshot
 from llm_pipeline.novel_condition_tester import (
     INDICATOR_PLAIN_NAMES, MIN_HISTORICAL_OCCURRENCES, OPERATOR_PLAIN, ConditionSpec,
@@ -37,178 +60,9 @@ from llm_pipeline.novel_condition_tester import (
 from llm_pipeline.pending_tests import push_pending_test
 from llm_pipeline import usage as _usage
 
-HAIKU_MODEL = "claude-haiku-4-5"
 SONNET_MODEL = "claude-sonnet-5"
-ESCALATION_MAGNITUDE_THRESHOLD = 4
 FREQTRADE_DB_PATH = os.environ.get("FREQTRADE_DB_PATH", "execution/tradesv3.sqlite")
 SHOCK_SCAN_COINS = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "XRPUSDT", "DOGEUSDT", "ADAUSDT", "LTCUSDT"]
-
-HAIKU_SYSTEM_PROMPT = """You are a crypto market news sentiment extractor. Given a batch of \
-headlines, return a JSON array where each item has exactly these fields:
-- "headline": the original headline (verbatim, truncated to 100 chars)
-- "asset": the primary crypto asset affected (e.g. "BTC", "ETH", "MARKET" if broad/unclear)
-- "sentiment": one of "bullish", "bearish", "neutral"
-- "magnitude": integer 1-5, how market-moving this is likely to be (5 = major, 1 = negligible)
-- "event_type": one of "regulatory", "macro", "hack_exploit", "adoption", "market_structure", "other"
-
-Return ONLY the JSON array, no prose, no markdown fences."""
-
-SONNET_SYSTEM_PROMPT = f"""You are a quantitative researcher, not a trader. Your subject is a single question: \
-does a real-world macro or news EVENT produce a measurable, repeatable change in crypto prices \
-over the following days? Nothing here is a trading system -- no position is ever opened, no \
-money is ever at risk, and there is no entry signal to find.
-
-That distinction decides what a good answer looks like. A chart setup -- oversold RSI, a \
-Bollinger touch, a volume spike -- is NOT a hypothesis in this project, \
-however well it would work as a trade. Those readings are CONTEXT: they describe the state the \
-market happened to be in when the event landed. The event is the subject; the market state \
-merely says under what circumstances you think it matters. If your idea would still make sense \
-with the macro release deleted from it, it is a chart pattern and does not belong here.
-
-The instinct to reach for the technical indicators first is the right one for a market \
-strategist and the wrong one for this task. Start from the EVENT -- what was published, how far \
-it moved from what was expected -- and only then ask which market conditions would make its \
-effect visible.
-
-You will be \
-given: (1) a flagged news headline, (2) real current readings on every whitelisted indicator (this \
-coin's if the headline names one, every tracked coin's if it's broad/unclear) and real macro \
-releases from the last several days -- a pattern doesn't require a volatility shock to exist, so \
-this context is given for every headline, not only shock-triggered ones, (3) real technical/ \
-portfolio state, (4) the live status of this system's candidate battery, including which candidates \
-currently carry 'accepted' status and their coin/direction ('accepted' means it cleared the \
-historical/backtest bar -- it is not a claim of a live track record). Ground your reasoning ONLY in \
-real numbers/releases you were actually given -- never invent an indicator reading or a release you \
-weren't shown. Trades are never yours to open -- an unattended, purely mechanical scan already fires \
-a live test the moment an accepted candidate's own trigger condition is met, with no LLM judgment \
-involved. Your only two jobs are:
-
-1. If this headline suggests a genuinely new, untested pattern -- not covered by any existing \
-candidate and not already logged as rejected -- propose a novel-condition test (this DOES wait \
-for human approval, since it spends real compute testing something unproven), using ONLY one of \
-these whitelisted indicators (nothing else is buildable): {proposable_indicators()}. Ground any \
-compound hypothesis ONLY in evidence you were actually given -- never invent an indicator reading \
-or a release you weren't shown.
-2. Otherwise, if there's nothing new to propose, say so plainly.
-
-HARD REQUIREMENT -- every proposal MUST contain at least one of these event indicators: \
-cpi_surprise, rate_surprise, jobless_claims_surprise. This is not a preference, it is \
-what this system exists to test: whether specific MARKET CONDITIONS combined with a REAL-WORLD EVENT \
-produce a repeatable pattern. A condition built only from price/volume/funding indicators is a chart \
-pattern -- it does not answer that question, and a spec without an event clause is REJECTED by code \
-before it is ever tested. A violent price move is a MARKET event, not news, and \
-"the price moved, then the price did something" is the tautology this rule exists to exclude.
-
-Neither the volatility shock nor the compression measure is available as a clause. A shock is a \
-price OUTCOME, not a market state -- "the price moved hard, then the price did something" is the \
-tautology this rule exists to exclude. The compression measure is the reason you are being asked \
-at all, so it is fixed at every proposal by construction and can distinguish nothing. Describe \
-what the market looked like and what had been published.
-
-Your label must also describe what the clauses actually test. Do not name a condition "post-CPI ..." \
-unless a CPI/macro clause is genuinely in it -- that is checked in code too.
-
-Return ONLY a JSON object with exactly these fields:
-- "assessment": 1-2 sentences
-- "recommended_action": one of "no_action", "propose_novel_test"
-- "novel_condition_specs": null, or a list of ONE OR TWO specs, each \
-{{"label": "...", "clauses": [{{"indicator": "...", "op": "<"/">"/"<="/">=", "threshold": <number>, \
-"within_days": <integer 0-14, optional>}}, ...], "direction": "long"/"short", \
-"coins": <optional list>, "outcome": "raw"/"market_relative" (optional)}}
-
-AT MOST TWO CLAUSES PER SPEC -- one news/macro term and one market-state term. This is not a style \
-preference, it is what can be measured: each extra clause divides the number of historical \
-occurrences by roughly eight, and a three-clause condition has a median of 12 occurrences where \
-{MIN_HISTORICAL_OCCURRENCES} are needed to test anything at all. A spec with three clauses is rejected by code.
-
-PROPOSE TWO SPECS RATHER THAN ONE DEEPER CONDITION when the evidence supports more than one idea. \
-An idea you would have written as "rate cut in the last 7 days AND funding negative AND RSI below \
-30" should be sent as two: "rate cut in the last 7 days AND funding negative", and "rate cut in \
-the last 7 days AND RSI below 30". The three-clause version is one hypothesis that almost certainly \
-cannot be measured; the two are both measurable, and they are separately informative -- if only one \
-survives, that is a finding the conjunction would have hidden.
-
-The two must be GENUINELY DIFFERENT hypotheses, not one idea restated. Use your judgement about how \
-markets work to choose two mechanisms you have real reason to think might each matter, rather than \
-the same condition with a threshold nudged. Two specs that fire on the same days are checked for in \
-code and the second is discarded, so a near-duplicate simply wastes the slot. One good spec is \
-better than one good spec plus filler.
-
-CHOOSE within_days FOR WHAT THE HYPOTHESIS MEANS, not for how often it fires. "The print came out \
-today and the market was already oversold" and "a print came out this week, and the market is \
-oversold now" are different claims about how an effect travels, and only you can say which one you \
-mean. A lookback of 0 says the two things coincided; a lookback of K says the news came first and \
-the market condition followed within K days.
-
-Do not reach for a longer window to make a condition occur more often. Occurrences on consecutive \
-days are one episode counted several times, and the gate that decides whether a condition can be \
-tested counts EPISODES -- so a wider window buys almost no additional evidence, and the extra \
-firings it produces are the same evidence repeated.
-
-IMPORTANT -- is this event about ONE coin, or about the whole market? The two need different \
-settings, and getting it wrong wastes the test:
-  - MARKET-WIDE (a CPI print, an FOMC decision, a broad risk-off move): omit "coins", and leave \
-    "outcome" as "raw". The whole market moving together IS the effect here; measuring each coin \
-    against the market would subtract the very thing being tested and guarantee a null result.
-  - COIN-SPECIFIC (a lawsuit against one issuer, an exchange listing or delisting, a protocol \
-    incident): set "coins" to just the affected coin(s), e.g. ["XRPUSDT"], and set "outcome" to \
-    "market_relative". Testing an XRP-specific claim on DOGE adds noise rather than evidence, and \
-    measuring the coin against the market isolates what is specific to it -- roughly 54% of any \
-    coin's move is simply the market's move, so removing it removes mostly noise.
-Only name coins in "coins" if the event genuinely is specific to them. If you are unsure, omit it.
-
-KEEP IT WIDE, AND KEEP IT SHORT. The most common way a proposal fails here is not \
-that the evidence contradicts it -- it is that the condition almost never occurred, so \
-there is nothing to measure either way. A hypothesis that has never happened cannot be \
-confirmed or denied.
-
-Two rules, and the second matters more than the first:
-  1. AT MOST 3 clauses, including the mandatory news/macro one. Four or more is \
-     refused outright.
-  2. Prefer MODERATE thresholds over dramatic ones. On this data, for \
-     "macro day AND 5-day fall AND RSI below X":
-         5-day fall < -20%, RSI < 40  ->    51 usable occurrences
-         5-day fall < -20%, RSI < 50  ->    56
-         5-day fall < -10%, RSI < 50  ->   220
-         5-day fall <  -5%, RSI < 50  ->   508
-     Widening the RSI barely moved it. Relaxing the price move from -20% to -10% \
-     quadrupled it. A 20% five-day fall is a once-in-years event; asking for it \
-     alongside anything else produces a condition that essentially never fires.
-
-So: pick the ONE market-state term that carries your actual idea, set its threshold \
-where it fires often enough to measure (a normal bad week, not a historic crash), and \
-stop. If a second state term genuinely adds something, make it a LOOSE one -- a \
-condition that is true often. Two clauses that fire regularly beat four that describe \
-a single day in 2020 perfectly and never recur.
-
-"prior_weight" (optional, 0.25-4.0, default 1.0) is HOW PLAUSIBLE you think this hypothesis is \
-BEFORE it is tested, and it must be justified by the mechanism you can actually articulate -- not by \
-how much you would like it to be true. 1.0 is neutral. Use above 1.0 only when there is a specific \
-reason to expect this effect (a plausible causal story linking THIS event type to THIS market state \
-in THIS direction); use below 1.0 for a speculative combination you are proposing mainly to rule it \
-out. This does NOT make a hypothesis easier to accept on its own: the family shares one fixed error \
-budget, so weighting one condition up makes every other condition tested alongside it harder to \
-accept. Marking everything highly plausible therefore achieves exactly nothing. Your weight is \
-recorded now and never revised after the result is seen.
-
-IMPORTANT -- conditions may be SEQUENCED, not just simultaneous. Each clause takes an optional \
-"within_days" (integer, 0-14, default 0). 0 means "true on the day the condition fires"; K means \
-"was true at any point in the last K days". This is what lets you express an ORDERING rather than a \
-coincidence, and the two are genuinely different hypotheses:
-  - crash FIRST, then the news:  close_return_5d <= -0.10 with within_days=3, AND today's condition
-  - news FIRST, then the move:   cpi_surprise >= 1 with within_days=2, AND today's condition
-  - both on the same day:        leave within_days at 0 on both
-You are shown a day-by-day LEAD-UP table (the last several days of key indicators, oldest first) \
-precisely so you can tell these apart. Read it before choosing: if the violent move is two rows \
-above the last one, the honest hypothesis is a sequenced one, not a same-day conjunction.
-
-Prefer a hypothesis where the EVENT (a macro release, a shock) is combined with MARKET STATE \
-(RSI, Bollinger position, volume, funding). A proposal built only from market-state indicators is \
-a chart pattern, not the market-conditions-plus-event question this system exists to answer -- and \
-one built only from an event term is tested against ordinary days rather than against the same \
-market state without the event, which is a much weaker claim.
-
-No prose, no markdown fences, just the JSON object."""
 
 COMPRESSION_SYSTEM_PROMPT = f"""You are a quantitative researcher, not a trader. Your subject is a single question: \
 does a real-world macro or news EVENT produce a measurable, repeatable change in crypto prices \
@@ -227,11 +81,6 @@ strategist and the wrong one for this task. Start from the EVENT -- what was pub
 it moved from what was expected -- and only then ask which market conditions would make its \
 effect visible.
 
-Here the trigger that brought this to you IS a market event -- a coin's \
-short-term realized volatility has just spiked into roughly the top ~2% most extreme episodes for \
-that coin (this project's own Phase 1 methodology excludes exactly this population from the static \
-candidate battery's fitting, because a handful of crashes shouldn't distort barriers meant for \
-ordinary conditions). \
 WHEN YOU ARE ASKED, and why it matters for your answer. You are consulted at exactly one kind of \
 moment: a period of unusually LOW volatility for this coin has just ended, and the exit has held \
 for several days. The market coiled, stayed quiet, and has now begun to move again.
@@ -250,14 +99,13 @@ You will be given the episode in three phases -- PHASE A (when it began and how 
 PHASE MIDDLE (how long it lasted, how price drifted, and every macro release published while it \
 lasted, each as a CHANGE from the prior print and a SURPRISE in standard deviations of that \
 series' usual move), and PHASE B (the day it ended) -- plus this coin's real indicator readings \
-AS OF THE EXIT, recent real news headlines, real technical/portfolio state, and the candidate \
-battery's status.
+AS OF THE EXIT, real technical/portfolio state, and the candidate battery's status.
 
 Conditions may be built ONLY from these whitelisted indicators (nothing else is buildable): \
 {proposable_indicators()}. The list is derived from the code that validates your proposal, so an \
 indicator missing from it will be rejected before it is ever tested. Ground \
-your reasoning ONLY in these real numbers/headlines you were actually given -- never invent an \
-indicator reading, a headline, or a release you weren't shown. Recommend one of:
+your reasoning ONLY in these real numbers you were actually given -- never invent an \
+indicator reading or a release you weren't shown. Recommend one of:
 - "no_action": noise, not worth a human's attention.
 - "propose_novel_test": worth finding out if a SPECIFIC combination of what you were just given, \
   historically, shows a real reversal or continuation pattern -- e.g. you notice the market coiled \
@@ -355,15 +203,15 @@ def format_spec_clauses(spec: dict) -> str:
     )
 
 
-# Minimum cacheable prefix: 1024 tokens for Sonnet, 2048 for Haiku. Measured with
-# the API's own count_tokens rather than guessed:
-#     SONNET_SYSTEM_PROMPT   2408   cached
+# Minimum cacheable prefix: 1024 tokens for Sonnet. Measured with the API's own
+# count_tokens rather than guessed:
 #     REPLAY_SYSTEM_PROMPT   1575   cached
 #     COMPRESSION_SYSTEM_PROMPT  ~1500  cached
 #     MARKET_CHECK_PROMPT     316   too short
-#     HAIKU_SYSTEM_PROMPT     187   too short (and Haiku's floor is 2048)
-# The short ones are deliberately NOT marked: below the floor the breakpoint is
+# The short one is deliberately NOT marked: below the floor the breakpoint is
 # silently ignored, which would leave code that looks cached and isn't.
+# (SONNET_SYSTEM_PROMPT at 2408 and HAIKU_SYSTEM_PROMPT at 187 were both
+# measured here too; both belonged to the removed headline path.)
 CACHE_MIN_TOKENS_SONNET = 1024
 
 
@@ -396,74 +244,19 @@ def extract_text(response) -> str:
     raise ValueError(f"No text block in response.content: {[getattr(b, 'type', type(b)) for b in response.content]}")
 
 
-def haiku_scout(articles: list[dict], client: Anthropic) -> list[dict]:
-    if not articles:
-        return []
-    headlines_block = "\n".join(f"- {a['headline']}" for a in articles)
-    response = client.messages.create(
-        model=HAIKU_MODEL, max_tokens=2048, system=HAIKU_SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": headlines_block}],
-    )
-    _usage.record(response, "prod.haiku_scout", HAIKU_MODEL)
-    return json.loads(_strip_fences(extract_text(response)))
-
-
-def sonnet_strategist(flagged: dict, client: Anthropic) -> dict:
-    """A pattern doesn't require a shock to exist -- Sonnet's discovery
-    role (propose_novel_test) is never limited to shock-triggered
-    events, so a routine headline gets the same real indicator/macro
-    grounding a shock does: this coin's current readings if the headline
-    names one, every tracked coin's if it's broad/unclear ("MARKET"),
-    plus recent real macro releases -- never just the headline text
-    alone."""
-    technical_snapshot = build_technical_snapshot(flagged.get("asset", "MARKET"), FREQTRADE_DB_PATH)
-    context_summary = build_context_summary()
-    coin = _asset_to_coin(flagged.get("asset", ""))
-    if coin is not None:
-        # Snapshot AND the run-up: an ordered hypothesis (crash three days ago,
-        # news today) is unreasonable to ask for from a single instant's numbers.
-        indicator_snapshot = build_indicator_snapshot(coin) + "\n\n" + build_indicator_leadup(coin)
-    else:
-        indicator_snapshot = "\n".join(build_indicator_snapshot(c) for c in SHOCK_SCAN_COINS)
-    macro_summary = recent_releases_summary()
-    user_content = (
-        f"HEADLINE: {flagged['headline']} (asset={flagged['asset']}, "
-        f"sentiment={flagged['sentiment']}, magnitude={flagged['magnitude']}, "
-        f"event_type={flagged['event_type']})\n\n"
-        f"INDICATOR SNAPSHOT:\n{indicator_snapshot}\n\n"
-        f"RECENT MACRO RELEASES (last 10 days):\n{macro_summary}\n\n"
-        f"TECHNICAL SNAPSHOT:\n{technical_snapshot}\n\n"
-        f"CANDIDATE BATTERY CONTEXT:\n{context_summary}"
-    )
-    response = client.messages.create(
-        # 2000, not 700 -- see replay/judgment.py::judge_event's comment: observed
-        # live, the model emits a thinking block even though `thinking` is never
-        # requested, and 700 sometimes left no budget for the actual JSON answer.
-        model=SONNET_MODEL, max_tokens=4000, system=cached_system(SONNET_SYSTEM_PROMPT),
-        messages=[{"role": "user", "content": user_content}],
-    )
-    _usage.record(response, "prod.sonnet_strategist", SONNET_MODEL)
-    return json.loads(_strip_fences(extract_text(response)))
-
-
-def _recent_headlines_summary(limit: int = 5) -> str:
-    """A few of the most recent real news headlines -- best-effort: a
-    fetch failure here must not block the shock judgment itself, since
-    Sonnet can still reason from indicators/macro alone."""
-    try:
-        articles = fetch_cryptocompare_news(limit=limit)
-    except Exception as e:
-        return f"Headlines unavailable ({e})."
-    if not articles:
-        return "No recent headlines available."
-    return "\n".join(f"- {a['headline']} ({a['published_at']})" for a in articles[:limit])
-
-
 def sonnet_compression_response(episode: dict, client: Anthropic) -> dict:
     """The live counterpart of replay/judgment.py::judge_event for a confirmed
     compression exit. Same three-phase framing, same question, so a hypothesis
     discovered live and one discovered in the replay are answers to the same
-    prompt rather than to two that happen to look similar."""
+    prompt rather than to two that happen to look similar.
+
+    The RECENT NEWS HEADLINES block was removed from this context along with
+    the Haiku path, and that closed a live train/serve gap rather than merely
+    tidying up: production showed Sonnet headlines here while the replay's
+    `judge_event` never did, so the two were NOT answering the same prompt on
+    the primary trigger despite the docstring above claiming they were. Since
+    no headline can appear in any proposable clause, the block could only
+    invite reasoning the model was then unable to express."""
     from replay.judgment import format_compression_event
 
     symbol = episode["symbol"]
@@ -478,7 +271,6 @@ def sonnet_compression_response(episode: dict, client: Anthropic) -> dict:
     user_content = (
         f"{format_compression_event(symbol, episode)}\n\n"
         f"INDICATOR SNAPSHOT (as of the exit):\n{indicator_snapshot}\n\n"
-        f"RECENT NEWS HEADLINES:\n{_recent_headlines_summary()}\n\n"
         f"TECHNICAL SNAPSHOT:\n{technical_snapshot}\n\n"
         f"CANDIDATE BATTERY CONTEXT:\n{context_summary}"
     )
@@ -530,6 +322,50 @@ def format_compression_message(episode: dict, assessment: dict) -> str:
     else:
         base += "\n\n<i>No action taken -- nothing here worth testing.</i>"
     return base
+
+
+def send_telegram(message: str, reply_markup: dict | None = None) -> bool:
+    """THE function whose absence broke the compression trigger, which is
+    this project's primary discovery path -- deleted by commit 20b134f
+    (2026-08-31) alongside `format_sonnet_message` and `_asset_to_coin`
+    while that commit rewrote the neighbouring shock->compression code.
+
+    `run_compression_scan()` calls this on its last line, AFTER it has
+    already queued the proposal and called `mark_escalated()`. So the
+    NameError left the worst possible state: the episode permanently
+    ledgered as escalated (never retried), a pending test sitting behind
+    buttons no human ever saw, and the queue entry expiring silently 48h
+    later. Every live compression exit since 2026-08-31 was lost that way.
+    `run_once()`'s headline path was broken by the same deletion, but it
+    keeps no ledger, so it merely lost the message.
+
+    Invisible for three compounding reasons: each call site's own broad
+    `except Exception` printed the NameError instead of raising it; no test
+    invoked either function end-to-end (now closed -- see
+    tests/test_haiku_sonnet_pipeline.py and the end-to-end case in
+    tests/test_compression_detector.py); and the replay, which is what
+    actually gets run and watched, sends via telegram/bot.py::_send and
+    never touches this function at all.
+
+    KNOWN GAP, carried over deliberately from the deleted original rather
+    than fixed here: this does not chunk messages past Telegram's 4,096-char
+    limit the way telegram/bot.py::_send does (which splits at 3,500 after
+    that exact limit silently dropped a 6,880-char /replay_summary -- see
+    docs/case_study/methodology-decisions.md). A proposal message is a few
+    hundred characters, so it is not reachable today; it is the same latent
+    bug in a second sender."""
+    load_dotenv()
+    token = os.environ["TELEGRAM_BOT_TOKEN"]
+    chat_id = os.environ["TELEGRAM_CHAT_ID"]
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    payload = {"chat_id": chat_id, "text": message, "parse_mode": "HTML"}
+    if reply_markup is not None:
+        payload["reply_markup"] = json.dumps(reply_markup)
+    resp = requests.post(url, json=payload, timeout=15)
+    if not resp.ok:
+        print(f"Telegram send FAILED ({resp.status_code}): {resp.text[:300]}")
+        return False
+    return True
 
 
 def run_compression_scan(coins: list[str] | None = None) -> None:
@@ -593,41 +429,6 @@ def run_compression_scan(coins: list[str] | None = None) -> None:
         except Exception as e:
             # One malformed response must not cost the other coins their scan.
             print(f"Failed to process compression exit '{episode.get('symbol', '?')}', skipping: {e}")
-
-
-def run_once() -> None:
-    load_dotenv()
-    client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-
-    articles = fetch_cryptocompare_news(limit=20)
-    scored = haiku_scout(articles, client)
-
-    for item in scored:
-        if item.get("magnitude", 0) < ESCALATION_MAGNITUDE_THRESHOLD:
-            print(f"Not escalated (magnitude {item.get('magnitude')}): {item['headline'][:80]}")
-            continue
-        try:
-            assessment = sonnet_strategist(item, client)
-            reply_markup = None
-            if assessment["recommended_action"] == "propose_novel_test" and assessment.get("novel_condition_spec"):
-                s = assessment["novel_condition_spec"]
-                spec = spec_from_dict(s)
-                pending_id = push_pending_test(spec, SHOCK_SCAN_COINS, live_coin=_asset_to_coin(item.get("asset", "")), signal_class="manual")
-                reply_markup = PROPOSAL_KEYBOARD_TEMPLATE(pending_id)
-            if assessment["recommended_action"] != "propose_novel_test":
-                # Nothing happened -- log it, do not notify. See replay/engine.py
-                # ::_handle_assessment for why silence is the right default here.
-                print(f"no_action: {assessment.get('assessment', '')[:120]}")
-                continue
-            message = format_sonnet_message(item, assessment)
-            sent = send_telegram(message, reply_markup=reply_markup)
-            status = "notified" if sent else "notify FAILED, see error above"
-            print(f"Escalated + {status}: {item['headline'][:80]}")
-        except Exception as e:
-            # One malformed Sonnet response (e.g. invalid JSON) must not
-            # cost every OTHER headline in this batch its own escalation --
-            # without this, a single bad item silently stops the whole run.
-            print(f"Failed to process escalated headline '{item.get('headline', '?')[:80]}', skipping: {e}")
 
 
 if __name__ == "__main__":

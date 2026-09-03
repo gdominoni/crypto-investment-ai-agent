@@ -19,18 +19,29 @@ walks the calendar and fires on a dated fact — a coin's volatility compression
 ended five days ago and has not resumed since. Sonnet is never asked *whether* to look; it is asked what it
 makes of something the code already decided was worth looking at.
 
-**Is Haiku still used?** Not in the replay. `HAIKU_MODEL` appears only in
-`llm_pipeline/haiku_sonnet_pipeline.py::haiku_scout`, whose job is to read live
-news headlines cheaply and forward only the ones worth Sonnet's attention. The
-replay has no headline feed — historical news, dated and attributable to a coin,
-is precisely what this project does not have — so there is nothing for Haiku to
-filter and it is never called. The replay's only model calls are
-`replay/judgment.py:222` (event judgment) and `:379` (ad-hoc market questions).
+**Is Haiku still used?** No — nowhere, as of 2026-09-02. It never was in the
+replay: there is no headline feed here, because historical news dated and
+attributable to a coin is precisely what this project does not have. It ran
+hourly in *production*, screening live headlines for Sonnet, and that path has
+now been removed there too. The reason is the one this document's whole
+structure depends on: a hypothesis is only worth proposing if it can be
+**tested**, and nothing a headline surfaced could enter a testable condition —
+the whitelist has no sentiment term, and there is no archive to backtest one
+against. Backfilling that archive was measured rather than assumed
+(`forecast/sentiment_power.py`) and would not have helped either: at the feed
+quality real news sentiment achieves, accepted conditions are indistinguishable
+from a pure-noise arm. Removing it also aligned production with this document —
+production had been showing Sonnet headlines in the compression prompt that the
+replay never showed. See `docs/case_study/methodology-decisions.md`.
+
+The replay's only model calls are `replay/judgment.py:222` (event judgment) and
+`:379` (ad-hoc market questions).
 
 ## One simulated day, in order
 
-Four things happen per day, in this sequence. The first three cost nothing and
-run unattended; only the last involves a model or a human.
+Five things happen per day, in this sequence. The first four cost nothing and
+run unattended; only the last — or a parked proposal reaching its own gate —
+involves a model or a human.
 
 ### 1. Resolve anything due — no model
 
@@ -50,7 +61,28 @@ today's hourly bars and opens a live test the moment one fires. This is the bulk
 of the system's activity and it is entirely unattended: a pattern that has already
 been accepted does not need re-judging each time it recurs, it needs recording.
 
-### 3. Weekly: re-validate the battery — no model
+### 3. Promote a parked proposal, if one has become testable — no model, checked daily
+
+A proposal that was well-formed and on-thesis but hadn't occurred often enough to
+test (see "If too rare, can it be rescued?" below) is parked rather than
+discarded. `_check_parked_proposals(d)` runs every simulated day now, not at the
+weekly refresh where it originally sat — moved because ~107 parked proposals
+become testable at once when the walk-forward crosses its four-distinct-years
+threshold in 2021, and one promotion per WEEK would take two simulated years to
+drain that backlog, losing exactly the prospective evidence parking exists to
+preserve. Daily draining is 7x faster (months, not years).
+
+Still one promotion per check, oldest first, even at daily cadence: batching
+several into one approval would empty the human gate of meaning, and draining
+more than one within a single simulated day would require re-entering that day —
+the exact mechanism behind a checkpoint-rollback bug this project hit once
+already (see `docs/case_study/methodology-decisions.md`). A promoted proposal
+already carries its assessment from when it was first proposed, so no new model
+call happens here — it goes straight to the same *Test It* / *Don't Test It*
+gate a fresh proposal reaches, and if one is promoted, the replay halts for the
+day exactly as a fresh compression-triggered proposal would.
+
+### 4. Weekly: re-validate the battery — no model
 
 Every 7 simulated days, `run_replay_battery(d)` re-runs the acceptance test on
 as-of data only, then:
@@ -64,12 +96,17 @@ as-of data only, then:
   not: whether there was statistical **power** to detect an effect, separating
   "tested and found nothing" from "never actually asked".
 - `_check_n50_milestones` fires each time a candidate crosses a new multiple of
-  50 resolved live occurrences. This is the only place the word *validated* is
-  used, and it is re-earned at every checkpoint rather than awarded once.
+  `MILESTONE_N` (20) occurrences that **postdate its own hypothesis** —
+  occurrences accumulated while a proposal sat parked count the same way live
+  ones do, via `confirmation_priors.json` (see `_effective_milestone_count`).
+  This is the only place the word *confirmed* is used — never *validated*:
+  twenty occurrences cannot prove an effect at this project's horizons, only
+  show it kept happening, and the checkpoint is re-earned at every threshold
+  rather than awarded once (see `docs/case_study/methodology-decisions.md`).
 
 Neither function calls a model any more.
 
-### 4. The one trigger — a confirmed exit from volatility compression
+### 5. The one trigger — a confirmed exit from volatility compression
 
 `_compression_exit` fires when a coin's `vol_compression_zscore` was at or above
 1.25 (unusually quiet for that coin), then dropped below it, and **did not go
@@ -193,7 +230,10 @@ Worth stating explicitly, because it is most of the system:
 - every mechanical trigger firing on an already-tracked candidate;
 - every live test resolution;
 - the weekly battery re-validation;
-- the annual keep-or-drop digest and the N=50 milestone reports;
+- the annual keep-or-drop digest and the milestone confirmation reports (every
+  20 postdating occurrences);
+- a parked proposal's promotion once its history catches up — already
+  assessed when first proposed, no new model call;
 - any day with no macro release and no shock transition — the large majority.
 
 ## Cost consequence

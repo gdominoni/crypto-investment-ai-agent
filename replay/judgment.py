@@ -1,7 +1,7 @@
 """Sonnet's judgment calls for the historical replay -- structurally the
-same decision this project's live pipeline makes (llm_pipeline/haiku_sonnet_pipeline.py::sonnet_strategist),
-adapted for a REAL, dated, structured event (a macro release, a
-volatility shock) instead of a news headline, since the replay
+same decision this project's live pipeline makes (llm_pipeline/haiku_sonnet_pipeline.py::sonnet_compression_response),
+adapted for a REAL, dated, structured event (a confirmed exit from a
+volatility-compression episode), since the replay
 deliberately avoids needing any invented content: every event fed in
 here is real and dated, and the battery/history context is built from
 the replay's OWN isolated state (replay/state.py), never production's.
@@ -359,7 +359,14 @@ def judge_event(event_description: str, client: Anthropic, as_of: pd.Timestamp |
         model=model, max_tokens=4000, system=cached_system(REPLAY_SYSTEM_PROMPT),
         messages=[{"role": "user", "content": user_content}],
     )
-    _usage.record(response, ("replay.shock" if coin else "replay.macro")
+    # Tagged `replay.compression`, the trigger that actually fires. It read
+    # `replay.shock`/`replay.macro` until 2026-09-02 -- names from the two
+    # triggers removed months earlier, so the historical entries under those
+    # keys in llm_usage.json belong to the OLD architecture and must not be
+    # read as the current design's cost. The `coin` branch is kept because a
+    # coin-less judgment is still expressible, not because macro days trigger
+    # anything any more.
+    _usage.record(response, ("replay.compression" if coin else "replay.judgment")
                             + ("" if model == SONNET_MODEL else f".{model.split('-')[1]}"), model)
     return json.loads(_strip_fences(extract_text(response)))
 
@@ -522,7 +529,7 @@ def answer_market_question(question: str, client: Anthropic) -> str:
 
 def format_telegram_message(as_of, event_description: str, assessment: dict) -> str:
     """Deliberately formatted to look exactly like what the live pipeline
-    itself would send (llm_pipeline/haiku_sonnet_pipeline.py::format_sonnet_message/
+    itself would send (llm_pipeline/haiku_sonnet_pipeline.py::
     format_compression_message) -- no "this is a simulation" framing inside the
     message body. That disclosure belongs in the surrounding write-up
     this replay is presented in, not baked into every individual message
@@ -531,7 +538,7 @@ def format_telegram_message(as_of, event_description: str, assessment: dict) -> 
     here but represent dates spread across a year -- without it the
     sequence wouldn't read as a coherent history at all.
 
-    Same reasoning as format_sonnet_message on the action label: it
+    Same reasoning as format_compression_message on the action label: it
     depends on what's actually happening, not a uniform "Recommended
     action: X" line -- only propose_novel_test is genuinely a decision
     pending on the human."""

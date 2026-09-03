@@ -1,6 +1,14 @@
-# Crypto Pattern-Discovery Agent: Can Market Sentiment and Real-Time Conditions Reveal Statistically Real, Repeatable Patterns in Crypto Prices?
+> **⏳ NOTA TEMPORANEA — 2026-09-03 — da rimuovere.** Il dry run completo (nove anni simulati, **zero chiamate API**) è **terminato senza problemi**: ha raggiunto il presente in 169 chunk, e i tre controlli di invarianza sono tutti PASS — l'orologio del replay non è mai tornato indietro, nessun trade è datato oltre il checkpoint, nessun candidato duplicato (105 registrati, 7.784 live test, 96 ancora parcheggiati). La directory di stato reale `replay/state/` è rimasta vuota: l'isolamento ha tenuto.
+>
+> **Sulla lentezza (~11 ore): NON sono i salvataggi giornalieri del checkpoint.** Quel file è di 57 byte e costa 1-2 ms a scrittura, circa 5 secondi su tutto il run. Misurate invece due cause reali: (1) *dominante* — la scansione meccanica giornaliera valuta il trigger di **ogni** candidato tracciato sulle barre orarie, e il registro cresce fino a 105, quindi il costo per giorno simulato aumenta lungo il run; (2) *minore ma sistemabile* — `append_trade`/`update_trade` rileggono e riscrivono **l'intero** `trade_log.json` a ogni apertura e a ogni risoluzione: a 2,8 MB / 6.500 voci sono 73 ms a ciclo, un costo quadratico che vale 10-16 minuti complessivi.
+>
+> Una terza causa era già stata corretta prima di questo run: il ricontrollo giornaliero delle proposte parcheggiate chiamava `is_testable()` (~146 ms) su tutta la coda ogni giorno — proiettato a ~9 ore. Ora è scaglionato, e il ritmo nei primi anni è passato da 7,7 a 121 giorni simulati al minuto.
+>
+> **Nessuna spesa API in questo run.** I disservizi su status.claude.com non lo riguardano.
 
-![Python](https://img.shields.io/badge/Python-3.11+-blue) ![Claude](https://img.shields.io/badge/Claude-Haiku%20%2B%20Sonnet-6B4FBB) ![Telegram](https://img.shields.io/badge/Telegram-human--in--the--loop-26A5E4) ![Freqtrade](https://img.shields.io/badge/Freqtrade-hyperopt%20cross--check-orange) ![Status](https://img.shields.io/badge/Status-Case%20Study-blue)
+# Crypto Pattern-Discovery Agent: Can Macro Events and Real-Time Market Conditions Reveal Statistically Real, Repeatable Patterns in Crypto Prices?
+
+![Python](https://img.shields.io/badge/Python-3.11+-blue) ![Claude](https://img.shields.io/badge/Claude-Sonnet-6B4FBB) ![Telegram](https://img.shields.io/badge/Telegram-human--in--the--loop-26A5E4) ![Freqtrade](https://img.shields.io/badge/Freqtrade-hyperopt%20cross--check-orange) ![Status](https://img.shields.io/badge/Status-Case%20Study-blue)
 
 <div align="center">
 <table width="82%">
@@ -10,9 +18,10 @@
 <b>TL;DR — Key Engineering Highlights</b>
 <br><br>
 <sub><b>ARCHITECTURE</b><br>
-Autonomous Claude Sonnet agent that proposes and tests market hypotheses<br>
-(Claude Haiku separately pre-screens news headlines before anything reaches it),<br>
-integrated with a Telegram bot interface &amp; human-in-the-loop gating.</sub>
+Autonomous Claude Sonnet agent that proposes and tests market hypotheses,<br>
+integrated with a Telegram bot interface &amp; human-in-the-loop gating.<br>
+<i>A Claude Haiku news-screening layer was built, measured, and then removed —<br>
+see "What this project does not claim" below.</i></sub>
 <br><br>
 <sub><b>STATISTICAL RIGOR</b><br>
 Block-bootstrap significance testing, Benjamini–Hochberg FDR control,<br>
@@ -39,6 +48,23 @@ Whether an LLM-driven architecture — reading real market news and recognizing 
 An earlier, static rule-based research phase tested six categories of deterministic market triggers — scheduled macro releases, futures-market crowding, trend-efficiency continuation — across seven-plus years of crypto data, under full walk-forward validation, and found no fully persistent, unconditional edge. This project's response is the adaptive system described below: a continuously re-validated statistical baseline, a bootstrap significance test that asks whether a pattern is *real* (not merely profitable-looking in one backtest), a Claude Sonnet judgment layer that discovers and proposes genuinely new conditions, and a human supervisor at exactly one decision point — whether a newly-proposed condition is even worth testing. Everything downstream of that one decision is deterministic and code-driven; no further human input is needed.
 
 **How this project checks its own instruments.** A system that reports "no pattern found" has an obvious failure mode: a detector that never fires looks identical to a detector that is broken. Before trusting any null result, this project plants a synthetic signal it already knows the answer to and confirms the pipeline finds it — and confirms a pure-noise arm stays silent. Only once the instrument is shown to work is a real result reported as a fact about the market rather than a bug.
+
+### What this project does not claim — and a component deleted for it
+
+This system tests **market conditions combined with macro events** (CPI, Fed funds, initial jobless claims — real releases, dated by publication and graded as a surprise in standard deviations). It does **not** test news-headline sentiment, and the honest reason is worth more than the feature was.
+
+A Claude Haiku layer screened live news headlines and escalated the significant ones to Sonnet. It ran hourly and it worked — but nothing it surfaced could enter a *testable* hypothesis. Every proposal must carry one of the three macro-surprise terms, and the indicator whitelist contains no headline or sentiment term at all, because acceptance is always decided by a backtest and there is no historical news archive to backtest against (verified: the news API is live-only, 3,527 days missing). Measured consequence: of **771 live tests** opened for Sonnet-discovered candidates, **zero** were news-linked. Haiku decided *which* question got asked and then vanished from both the test and the track record.
+
+The obvious repair is to backfill news history. That was measured rather than assumed. [`forecast/sentiment_power.py`](forecast/sentiment_power.py) models sentiment as a continuous daily score parameterised by `rho`, its correlation with the forward return, and asks the only question that matters: **how good would a feed have to be before this pipeline could detect it?** Accepted conditions, out of 57 at each quality level:
+
+| feed quality (`rho`) | 0.00 (pure noise) | 0.04 (real news sentiment) | 0.08 | 0.15 | 0.30 (oracle) |
+|---|---|---|---|---|---|
+| **accepted** | 2 | **3** | 5 | 20 | 23 |
+| median p | 0.486 | 0.357 | 0.215 | 0.092 | 0.004 |
+
+At the quality a real news feed actually achieves, the result is **indistinguishable from the pure-noise floor** — three conditions against two, out of 57. Detection needs a feed three to four times better than published work reports for news sentiment on next-week returns. So the backfill would not have rescued it either, and the rare-event alternative fails for a different reason: a hack or a lawsuit cannot accumulate 40 independent episodes across seven coins in nine years.
+
+**I modelled the minimum feed quality this pipeline could detect, measured that realistic feeds fall below it, and deleted the component rather than keep it for the badge.** The `Haiku` badge came off this README at the same time. A component whose output cannot reach the evidence is decoration, and this project's whole argument is that decoration is what makes a null result look like a discovery.
 
 <p align="center">
   <img src="docs/case_study/assets/in_short.svg" alt="In short: the five steps the system runs, and the same five steps again as a worked example" width="100%">
@@ -231,7 +257,7 @@ You:     /details weak_claims_then_oversold
 crypto-sentiment-trading-agent/
 ├── candidates/                  # Statistical methodology + battery: methodology.py, definitions.py, run_battery.py
 ├── execution/                   # Live test engine (live_testing.py), local-only hyperopt cross-check (hyperopt_runner.py)
-├── llm_pipeline/                # Haiku Scout, Sonnet Strategist, live context builder, novel-condition tester, compression_detector.py
+├── llm_pipeline/                # Sonnet judgment on compression exits, live context builder, novel-condition tester, compression_detector.py
 ├── telegram/                    # Both interaction modes -- free text and structured commands
 ├── scheduler/                   # live_daemon.py (the one command that runs everything), weekly_revalidation.py
 ├── data_ingestion/               # market_data/binance_fetcher.py (keeps data/ current, from-scratch backfill capable)

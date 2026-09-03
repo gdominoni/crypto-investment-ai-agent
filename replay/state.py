@@ -152,8 +152,10 @@ def load_parked_proposals() -> list[dict]:
     majority of everything it discovered in its first four years, permanently,
     since a rejected proposal was never stored anywhere.
 
-    Parking them costs no API calls: they are re-checked by the weekly battery
-    refresh that already runs.
+    Parking them costs no API calls: they are re-checked daily, at the top of
+    `replay/engine.py::advance()`'s own loop (not the weekly battery refresh,
+    where this originally sat -- see docs/case_study/methodology-decisions.md,
+    "Parked proposals are re-checked daily, not weekly").
 
     The delay also makes the eventual test STRONGER, not weaker. A condition
     formulated in 2019 and tested in 2022 is tested partly on data that did not

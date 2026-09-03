@@ -2167,3 +2167,236 @@ clears in months.
 rarely accumulates enough for ordering to be significant. It stays because the
 alternative — promoting by any measured quality — would be selecting a hypothesis
 on its outcome at proposal time.
+
+---
+
+## The primary trigger stopped notifying anyone, and a broad `except` made it look like nothing was happening
+
+**Found while answering an unrelated question about the README.** The TL;DR
+claims Haiku pre-screens headlines before anything reaches Sonnet. Checking
+whether that was still true surfaced something much worse in the same file.
+
+**Three functions were called but did not exist.** Commit `20b134f`
+(2026-08-31, "Align production onto the compression trigger") deleted
+`send_telegram`, `format_sonnet_message` and `_asset_to_coin` from
+`llm_pipeline/haiku_sonnet_pipeline.py` while rewriting the neighbouring
+shock→compression code. Nothing in that commit message mentions removing them
+and every call site was left in place, so this reads as collateral damage from
+a block deletion rather than an intentional removal.
+
+**The damage is concentrated on the compression trigger, not the headline
+path.** `run_compression_scan()` calls `send_telegram` on its last line —
+*after* it has queued the proposal and called `mark_escalated()`. Reproduced by
+executing the pre-fix code against mocked network boundaries:
+
+    Failed to process compression exit 'BTCUSDT': name 'send_telegram' is not defined
+    pending queue entries:                        1
+    episode marked escalated (never retried):     True
+
+So each live compression exit left the worst available state: the episode
+permanently ledgered as already-escalated, a pending test sitting behind
+buttons no human ever saw, and that queue entry expiring silently 48 hours
+later. Every live compression exit since 2026-08-31 was lost this way. The
+ordering that caused it is itself deliberate and still correct — marking before
+the send is what stops a failed notification re-escalating the same episode
+every hour — it simply assumed the send could fail, not that it could not run.
+
+**The headline path was broken too, and earlier in the call chain.**
+`_asset_to_coin` is called inside `sonnet_strategist` itself, seventeen lines
+before its `client.messages.create`, so every escalated headline died *before*
+Sonnet was ever asked. Haiku ran, screened, and escalated into nothing. A
+fourth latent break sat behind it: `run_once` still tested the singular
+`novel_condition_spec` key and called `spec_from_dict`, a name this module
+never imported, while `SONNET_SYSTEM_PROMPT` had moved to the plural
+`novel_condition_specs` list in `b32683d`.
+
+**Why a year of running never surfaced it — three things compounding.** Each
+call site's own broad `except Exception` printed the NameError rather than
+raising it, so production emitted a log line and no alert. No test invoked
+either function end-to-end; the only references to `run_compression_scan` in
+`tests/` were a `hasattr` and a source-string check, both of which pass against
+completely broken code. And the replay — the thing that actually gets run and
+watched, and this project's own evidence mechanism — sends via
+`telegram/bot.py::_send` and never imports this module's sender at all, so no
+amount of replaying could have exercised it.
+
+This is the same failure shape as the 6,880-character `/replay_summary` that
+silently never arrived: a broad catch turning a hard failure into no output,
+which is indistinguishable from a quiet week. The lesson that entry drew — check
+the return value, do not assume silence means nothing happened — applies to an
+exception handler exactly as much as to a send.
+
+**Fixed, and the fix is verified by the failure it produces.** All three
+functions restored (`send_telegram` byte-identical; the other two
+reimplemented, each saying so in its own docstring), and `run_once` rewritten
+onto the same `proposals_from_assessment` → `spec_from_proposal` →
+`filter_redundant_proposals` → `push_pending_test` pipeline
+`run_compression_scan` already used correctly. The regression tests were
+checked the way this project checks every regression test: by reverting the
+source to the broken original and confirming they fail — 10 of them do,
+including the end-to-end compression case.
+
+**One gap carried over rather than closed.** The restored `send_telegram` does
+not chunk past Telegram's 4,096-character limit the way `_send` does. That is
+faithful to the deleted original and unreachable at a proposal message's few
+hundred characters, but it is the same latent bug in a second sender, and it is
+recorded here rather than left to be rediscovered.
+
+---
+
+## Haiku and the news-headline path were deleted, because a measurement said they could never produce evidence
+
+**The question that started it** was narrow: the README's TL;DR claimed Haiku
+pre-screens headlines before anything reaches Sonnet — was that still true? It
+was. Haiku ran hourly, screened live CryptoCompare headlines, and escalated the
+significant ones. The path worked. It also could not, structurally, contribute
+anything to this project's evidence, and checking why is what produced this
+entry.
+
+### A headline can never appear in a testable condition
+
+`proposable_indicators()` holds 13 indicators and not one is a headline, a
+sentiment score, or anything derived from news text. The three named
+`NEWS_EVENT_INDICATORS` — `cpi_surprise`, `rate_surprise`,
+`jobless_claims_surprise` — are all FRED series, and at least one of them is
+**mandatory** in every proposal, enforced in code.
+
+So Haiku could flag "XRP lawsuit ruling, magnitude 5", Sonnet could read it, and
+the only hypothesis Sonnet was permitted to write back had to be phrased in
+macro surprises and market state — the exact vocabulary the compression trigger
+already supplies. The headline was a prompt to ask a question, never part of the
+answer. This log already recorded the consequence without drawing the
+conclusion: of **771 live tests** opened for Sonnet-discovered candidates,
+**zero** were news-linked, and "Haiku's sentiment decides which condition gets
+proposed and then disappears entirely from both the test and the track record."
+
+### The obvious repair was measured, and it does not work
+
+Backfill news history, add a sentiment indicator, and the clause becomes
+testable. `forecast/sentiment_power.py` was built to price exactly that, before
+committing to it — modelling sentiment as a continuous daily score parameterised
+by `rho`, its correlation with the forward return, so the output is one
+checkable number: **how good would a feed have to be?** Accepted conditions out
+of 57 at each quality:
+
+| feed quality (`rho`) | accepted / 57 | significant | median p | median excess |
+|---|---|---|---|---|
+| 0.00 — pure noise floor | 2 | 2 | 0.486 | −0.04% |
+| **0.04 — real news sentiment** | **3** | 4 | 0.357 | +0.64% |
+| 0.08 — optimistic | 5 | 7 | 0.215 | +1.24% |
+| 0.15 — implausible | 20 | 23 | 0.092 | +3.54% |
+| 0.30 — oracle | 23 | 36 | 0.004 | +7.61% |
+
+At the quality a real feed achieves, three conditions clear against a noise
+floor of two, out of 57. That is not a weak signal; it is no signal. The median
+p-value only crosses 0.10 at `rho = 0.15`, three to four times better than
+published work reports for news sentiment against next-week returns.
+
+**Both available forms are closed, for different reasons.** A *continuous* daily
+sentiment score is the only form that could reach the testability floors — and
+the table above says it is undetectable at achievable quality. A *discrete* news
+event (a hack, a lawsuit, an ETF ruling) is the only kind of headline not already
+redundant with FRED — and it can never accumulate `MIN_HISTORICAL_EPISODES = 40`
+independent episodes across seven coins in nine years. Neither branch survives.
+
+### What was removed, and one gap it closed on the way out
+
+Deleted: `haiku_scout`, `HAIKU_SYSTEM_PROMPT`, `HAIKU_MODEL`,
+`sonnet_strategist`, `SONNET_SYSTEM_PROMPT`, `run_once`,
+`format_sonnet_message`, `_asset_to_coin`, and the headline block in the
+compression prompt; `run_headline_scan` is unwired from `live_daemon`.
+`HAIKU_MODEL` moved to `forecast/model_comparison.py`, its only remaining
+caller, which asks the separate and still-live question of whether Haiku could
+replace Sonnet as the *judge* — that experiment's committed results stay
+reproducible. `cryptocompare_fetcher.py` is kept but is now wired to nothing.
+
+**A real gap closed as a side effect.** `sonnet_compression_response` was
+including `RECENT NEWS HEADLINES` in its prompt while the replay's `judge_event`
+never did — so production and the replay were *not* answering the same prompt on
+the primary trigger, despite the docstring asserting they were. That is the same
+train/serve mismatch commit `20b134f` was written to eliminate when it moved
+production off shocks, surviving in a second place. Sonnet was being shown, in
+production only, something it had no way to encode into a clause.
+
+### Why this is reported as a deletion rather than kept as a feature
+
+The honest scope of this system is **market conditions combined with macro
+events**, and the README's title and TL;DR now say so; the "Sentiment" framing
+and the `Haiku` badge are gone with the code. That costs the project a component
+and a logo, and it is the right trade: **I modelled the minimum feed quality
+this pipeline could detect, measured that realistic feeds fall below it, and
+deleted the component rather than keep it for the badge.**
+
+A component whose output cannot reach the evidence is decoration, and this
+project's entire argument is that decoration is what makes a null result look
+like a discovery. Keeping a Haiku box on the architecture diagram while its
+output appeared in none of the 771 live tests would have been exactly the kind
+of claim this log exists to catch.
+
+**Guarded, not just deleted.** `test_the_haiku_headline_path_is_gone_from_production`
+asserts every removed name stays removed, that the daemon does not schedule the
+scan, that the compression prompt shows no headlines, and — the premise the
+whole decision rests on — that no proposable indicator is news-derived. If that
+last assertion ever fails because a real sentiment backfill landed, the right
+response is to revisit this decision, not the test.
+
+---
+
+## The daily parked re-check cost nine hours of compute, and a free dry run is what caught it
+
+**Found by running the replay with the model calls stubbed out**, before spending
+anything — which is the point of the exercise and the reason it is worth
+repeating before any paid run.
+
+**The regression.** Moving the parked-proposal check from the weekly battery
+refresh into the daily loop (see "Parked proposals are re-checked daily, not
+weekly" above) was correct in intent and careless about cost.
+`_check_parked_proposals` called `is_testable()` on **every** parked proposal,
+and `is_testable` counts occurrences across real history at ~146ms a call. On a
+day when nothing has become testable — overwhelmingly the common case in the
+early years — the whole queue was paid for and nothing was learned.
+
+Measured on the dry run at its 2020 state, with 68 proposals parked:
+
+    68 parked x 0.146s  =  9.9 seconds per simulated day
+    x 3,294 days        =  ~9 HOURS of the run, growing as the queue grows
+
+The run was pacing at 47 simulated days per minute at the start and 7.7 by 2020,
+with an extrapolated 8-10 hours remaining. That cost is local compute, so it
+would have applied identically to the paid run, where it is invisible next to
+217 API calls and would simply have looked like the replay being slow.
+
+**The fix separates two things the daily change had conflated.** The queue is
+still examined every day; each individual proposal is now re-examined at most
+once per `PARKED_RECHECK_DAYS = 7`, staggered by a stable hash of its label so
+roughly a seventh of the queue is checked daily and every proposal is seen
+exactly once per window. Cost fell from 9.9s to 1.4s per simulated day, and the
+restarted run paced at **121 simulated days per minute against 7.7**.
+
+**What this trades, stated plainly.** A proposal can now wait up to six extra
+days before anyone notices it became testable. That is latency, not loss:
+occurrence counts only ever grow, so a deferred check cannot miss anything. And
+it is not what the daily cadence was bought for — that was the DRAIN RATE, one
+promotion per day rather than one per week, so the ~107 proposals that become
+testable together in 2021 clear in months instead of two years. The drain rate
+is unchanged, because a promotion can still happen on any day.
+
+It also weakens "oldest first" to "oldest first among those examined today", and
+the docstring now says so rather than glossing it. The property that actually
+carries the epistemology survives untouched: the ordering is independent of any
+measured outcome, since a hash of a label cannot know how a condition performed.
+
+**A defect in the first version of the fix, caught by an existing test.**
+Staggering the whole function also deferred dropping proposals the grammar can
+no longer express — cheap work (one `spec_from_dict`, no history scan) that has
+no reason to wait, and `test_a_proposal_the_grammar_no_longer_accepts_is_dropped_not_stuck`
+failed on exactly that. The two passes are now separate: cheap cleanup over the
+whole queue every day, expensive testability check only on today's slice. The
+test was tightened to assert the cleanup happens on *every* day of a re-check
+window rather than on one convenient date.
+
+Two further tests were added for the properties the stagger has to preserve:
+that no proposal starves (each seen exactly once per window) and that the
+stagger is stable as the queue changes — hashed on the label rather than list
+position, so promoting or parking one proposal does not reshuffle everyone
+else's slot mid-run.

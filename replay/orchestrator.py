@@ -31,10 +31,15 @@ CHECKIN_QUESTIONS = [
 
 
 def run_to_completion(max_chunks: int = 1500, ask_every: int = 4) -> dict:
-    # Exclusive lock on this replay's own state, for the whole run -- see
-    # state.acquire_replay_lock's docstring for the incident that made this
-    # necessary: two unlocked processes wrote the same checkpoint overnight and
-    # silently overwrote each other's progress, corrupting the run.
+    # Exclusive lock on this replay's own state, for the whole run -- kept as a
+    # precaution, not because it's what fixed a real incident. An overnight run
+    # was once corrupted by a deterministic single-process checkpoint-rollback
+    # loop (a resolved test's pending "as_of" being written back as the clock,
+    # not two processes racing); this lock would not have prevented that. See
+    # state.acquire_replay_lock's docstring and
+    # docs/case_study/methodology-decisions.md ("The replay clock and the
+    # backtest's data cutoff are two different dates") for the actual cause and
+    # fix.
     state.acquire_replay_lock()
     try:
         return _run_to_completion_locked(max_chunks, ask_every)
