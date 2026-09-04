@@ -159,6 +159,153 @@ _MIN_SEND_INTERVAL = 1.05
 _MAX_429_RETRIES = 3
 _last_send_at = 0.0
 
+# A 429 whose `retry_after` exceeds this is NOT waited out inline. Telegram was
+# observed answering a compressed replay with retry_after = 63,364s (17.6 hours).
+# The retry loop below already caps each individual sleep at 300s, so honouring
+# that inline does not block for 17 hours -- it does something subtler and worse:
+# EVERY subsequent message pays 4 attempts x 300s = ~20 minutes and is then lost
+# anyway, so the simulation crawls while producing no record at all. A real run
+# stalled two hours at 2021-09-23 in exactly this way.
+#
+# Past this threshold the message is QUEUED and the caller returns immediately.
+# Queued rather than merely logged, because the Telegram history IS this
+# project's evidence: a message that cannot be delivered now must still be
+# delivered later, not written to a file nobody reads.
+_MAX_INLINE_WAIT = 60.0
+_OUTBOX_PATH = Path(__file__).resolve().parent / "outbox.json"
+_OUTBOX_DRAIN_PER_SEND = 3
+# Set when Telegram states how long the ban lasts. While it holds, sends are
+# queued with NO network call and NO sleep -- the ban is already known, so
+# rediscovering it once per message is pure cost.
+_rate_limited_until = 0.0
+
+
+SHORT_ID_LEN = 4
+
+
+def short_id(candidate: str) -> str:
+    """A 4-character handle for a trigger, for typing on a phone.
+
+    Sonnet names conditions descriptively, which is right for reading and
+    hostile to typing: real ones run 36-45 characters
+    (`jobless_claims_beat_low_efficiency_fade_short`). Every message that shows
+    a trigger shows this alongside, and `/details`/`/replay_details` accept
+    either form.
+
+    DERIVED from the name rather than assigned and stored: no registry
+    migration, no extra state to keep in sync, and an id that is stable across
+    runs and identical in production and the replay. Collisions are possible in
+    principle (4 hex chars = 65,536) and are resolved by `resolve_candidate`
+    reporting the ambiguity rather than silently picking one."""
+    import hashlib
+    return hashlib.sha256(candidate.encode()).hexdigest()[:SHORT_ID_LEN]
+
+
+def resolve_candidate(query: str, known: "list[str] | dict") -> "tuple[str | None, str | None]":
+    """Turn what a human typed into exactly one candidate name.
+
+    Accepts the full name or the short id, case-insensitively. Returns
+    (name, None) on success or (None, message) when the query matches nothing
+    or more than one thing -- never guesses, since answering about the wrong
+    trigger is worse than asking again."""
+    names = list(known)
+    q = query.strip()
+    if q in names:
+        return q, None
+    lowered = {n.lower(): n for n in names}
+    if q.lower() in lowered:
+        return lowered[q.lower()], None
+    hits = [n for n in names if short_id(n) == q.lower()]
+    if len(hits) == 1:
+        return hits[0], None
+    if len(hits) > 1:
+        listed = ", ".join(f"<b>{escape_html(h)}</b>" for h in hits)
+        return None, f"'{escape_html(q)}' matches more than one trigger: {listed}. Use the full name."
+    return None, None
+
+
+RECENT_OCCURRENCES_SHOWN = 8
+
+
+def _recent_occurrences(trade_log: list, candidate: str, limit: int = RECENT_OCCURRENCES_SHOWN) -> list[dict]:
+    """This candidate's most recent live tests, newest first.
+
+    Resolved ones first and open ones last, each by date, so the reader sees
+    outcomes before pending rows rather than a block of "still open" at the top
+    of what is meant to be a record of what happened."""
+    mine = [t for t in trade_log if t.get("candidate") == candidate]
+    closed = sorted((t for t in mine if t.get("status") == "closed"),
+                     key=lambda t: str(t.get("close_date") or ""), reverse=True)
+    still_open = sorted((t for t in mine if t.get("status") != "closed"),
+                         key=lambda t: str(t.get("decision_date") or ""), reverse=True)
+    return (closed + still_open)[:limit]
+
+
+def _outbox_load() -> list[dict]:
+    try:
+        return json.loads(_OUTBOX_PATH.read_text()) if _OUTBOX_PATH.exists() else []
+    except Exception:
+        return []
+
+
+def _outbox_save(queue: list[dict]) -> None:
+    try:
+        if queue:
+            _OUTBOX_PATH.write_text(json.dumps(queue))
+        elif _OUTBOX_PATH.exists():
+            _OUTBOX_PATH.unlink()
+    except Exception as e:
+        print(f"Could not persist Telegram outbox: {e}")
+
+
+def _outbox_queue(payload: dict) -> None:
+    q = _outbox_load()
+    q.append({"payload": payload, "queued_at": time.time()})
+    _outbox_save(q)
+    print(f"Telegram rate-limited -- queued to outbox ({len(q)} waiting).")
+
+
+def outbox_pending() -> int:
+    """How many messages are waiting for the ban to lift -- read by the replay's
+    end-of-run summary, so a run cannot report a complete Telegram record while
+    messages are still undelivered."""
+    return len(_outbox_load())
+
+
+def drain_outbox(limit: int = _OUTBOX_DRAIN_PER_SEND) -> int:
+    """Deliver up to `limit` queued messages, oldest first. Stops at the first
+    failure, so a ban that is still active costs one attempt rather than `limit`."""
+    global _rate_limited_until
+    if time.monotonic() < _rate_limited_until:
+        return 0
+    q = _outbox_load()
+    if not q:
+        return 0
+    load_dotenv()
+    token, chat_id = os.environ["TELEGRAM_BOT_TOKEN"], os.environ["TELEGRAM_CHAT_ID"]
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    sent = 0
+    while q and sent < limit:
+        payload = dict(q[0]["payload"], chat_id=chat_id)
+        _throttle()
+        try:
+            resp = requests.post(url, json=payload, timeout=15)
+        except Exception:
+            break
+        if resp.status_code == 429:
+            try:
+                _rate_limited_until = time.monotonic() + float(resp.json()["parameters"]["retry_after"])
+            except Exception:
+                _rate_limited_until = time.monotonic() + 300.0
+            break
+        q.pop(0)      # delivered, or permanently malformed -- either way stop blocking the queue
+        if resp.ok:
+            sent += 1
+    _outbox_save(q)
+    if sent:
+        print(f"Delivered {sent} queued Telegram message(s); {len(q)} still waiting.")
+    return sent
+
 
 def _redact(text: str, token: str) -> str:
     """Strip the bot token out of anything that gets printed.
@@ -193,15 +340,24 @@ def _send(text: str, reply_markup: dict | None = None, pin: bool = False) -> boo
     only to the LAST chunk, so buttons appear once, where a human would
     expect to act on them, not repeated on every piece. Returns True
     only if every chunk sent successfully."""
+    global _rate_limited_until
     load_dotenv()
     token, chat_id = os.environ["TELEGRAM_BOT_TOKEN"], os.environ["TELEGRAM_CHAT_ID"]
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     chunks = _chunk_message(text)
     all_ok = True
+    # Anything stuck behind a lifted ban goes out before new traffic, so the
+    # history stays in the order events actually happened.
+    drain_outbox()
     for i, chunk in enumerate(chunks):
         payload = {"chat_id": chat_id, "text": chunk, "parse_mode": "HTML"}
         if reply_markup is not None and i == len(chunks) - 1:
             payload["reply_markup"] = reply_markup
+        # A ban we already know about: queue without a network call or a sleep.
+        if time.monotonic() < _rate_limited_until:
+            _outbox_queue({k: v for k, v in payload.items() if k != "chat_id"})
+            all_ok = False
+            continue
         resp = None
         for attempt in range(_MAX_429_RETRIES + 1):
             _throttle()
@@ -234,11 +390,22 @@ def _send(text: str, reply_markup: dict | None = None, pin: bool = False) -> boo
                 wait = float(resp.json()["parameters"]["retry_after"])
             except Exception:
                 wait = 5.0 * (attempt + 1)
+            # A long ban is recorded and the message queued, NOT slept through.
+            # Sleeping here was capped at 300s per attempt, which sounds harmless
+            # and is not: it made every later message cost ~20 minutes and then
+            # be lost anyway. See _MAX_INLINE_WAIT.
+            if wait > _MAX_INLINE_WAIT:
+                _rate_limited_until = time.monotonic() + wait
+                print(f"Telegram rate limit of {wait:.0f}s is too long to wait inline "
+                      f"-- queueing and continuing.")
+                _outbox_queue({k: v for k, v in payload.items() if k != "chat_id"})
+                resp = None
+                break
             if attempt == _MAX_429_RETRIES:
                 break
             print(f"Rate limited by Telegram, waiting {wait:.0f}s before retry "
                   f"{attempt + 1}/{_MAX_429_RETRIES}...")
-            time.sleep(min(wait, 300.0) + 0.5)
+            time.sleep(wait + 0.5)
         if resp is None:
             return False
         if not resp.ok:
@@ -627,27 +794,35 @@ def _dispatch_update(update: dict, client: Anthropic) -> None:
         from replay import status_history as replay_sh
         parts = text.split(maxsplit=1)
         if len(parts) < 2:
-            _send("Usage: /replay_details &lt;trigger_name&gt;  (e.g. /replay_details c2_long -- see /replay_summary for the exact names currently tracked)")
+            _send("Usage: /replay_details &lt;trigger&gt;  -- the full name or its 4-character id "
+                  "(e.g. /replay_details c2_long, or /replay_details a3f9). See /replay_summary for both.")
             return
-        candidate = parts[1].strip()
+        query = parts[1].strip()
         checkpoint = replay_state.load_checkpoint()
         if checkpoint.get("current_date") is None:
             _send("Replay hasn't started yet -- nothing to show details for.")
             return
         as_of = pd.Timestamp(checkpoint["current_date"])
         status_summary = run_replay_battery(as_of)
-        row = status_summary.get(candidate)
+        candidate, ambiguous = resolve_candidate(query, status_summary)
+        if ambiguous:
+            _send(ambiguous)
+            return
+        row = status_summary.get(candidate) if candidate else None
         if row is None:
             from candidates.status_history import all_latest_statuses as production_statuses
             hint = (" This name IS tracked in production, though -- try /details instead."
-                    if candidate in production_statuses() else "")
-            _send(f"No candidate named '<b>{escape_html(candidate)}</b>' found in the replay's current battery. Check /replay_summary for exact names.{hint}")
+                    if query in production_statuses() else "")
+            _send(f"No candidate named '<b>{escape_html(query)}</b>' found in the replay's current battery. "
+                  f"Check /replay_summary for exact names and ids.{hint}")
             return
         horizon = replay_state.load_horizons().get(candidate)
         milestone = replay_sh.all_latest_statuses().get(candidate, {})
         live_entry = replay_state.load_battery_status().get("candidates", {}).get(candidate, {})
+        recent = _recent_occurrences(replay_state.load_trade_log(), candidate)
         _send(format_candidate_details(candidate, row, definition=_replay_trigger_numeric_description(candidate), horizon=horizon,
-                                        milestone=milestone, tp_mult=live_entry.get("tp_mult"), sl_mult=live_entry.get("sl_mult")))
+                                        milestone=milestone, tp_mult=live_entry.get("tp_mult"), sl_mult=live_entry.get("sl_mult"),
+                                        recent_occurrences=recent, short_id=short_id(candidate)))
         return
 
     if text.lower() == "/replay_status":

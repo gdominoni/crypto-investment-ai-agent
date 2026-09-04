@@ -378,10 +378,21 @@ simulated state (a specific past date, walked forward day by day -- not live). G
 portfolio state as of that simulated date and the live candidate battery context, answer the user's \
 question in 2-4 sentences. Cite only the numbers given to you in the state below -- never invent a \
 price, a percentage, or a live-test detail. The reader may not know this project's internal vocabulary \
-(status codes like "insufficient_data", "watch"; terms like "validated" vs. "accepted") -- briefly \
-explain any such term you use in plain language rather than stating it bare, the way you'd explain a \
-piece of jargon to someone unfamiliar with the system. If nothing in the given state answers the \
-question, say so plainly rather than guessing."""
+(status codes like "insufficient_data", "watch") -- briefly explain any such term you use in plain \
+language rather than stating it bare, the way you'd explain a piece of jargon to someone unfamiliar \
+with the system.
+
+ACCEPTED AND CONFIRMED ARE DIFFERENT CLAIMS AND MUST NEVER BE TREATED AS SYNONYMS. "accepted" means \
+the HISTORICAL backtest cleared every gate (significance, direction, concentration, risk path) -- it \
+says nothing about what happened afterwards. "confirmed" means the condition kept occurring AFTER the \
+hypothesis was written down and still held 'accepted' when it reached a checkpoint of 20 such \
+occurrences -- it is persistence, re-earned at each checkpoint, never a permanent badge and never a \
+proof. A candidate can be accepted and never confirmed, or reach a checkpoint while in 'watch' and so \
+not earn the word. Writing "confirmed (that is, accepted)" or otherwise equating them is wrong. \
+Neither word means an effect has been demonstrated: at these horizons a demonstration needs occurrences \
+in the hundreds, so when you cite a count, cite what would be required alongside it.
+
+If nothing in the given state answers the question, say so plainly rather than guessing."""
 
 
 def _open_positions_summary() -> str:

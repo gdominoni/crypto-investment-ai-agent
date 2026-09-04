@@ -1347,7 +1347,8 @@ def explain_non_acceptance(row: dict, min_report_events: int = 50) -> str:
 
 def format_candidate_details(candidate: str, row: dict, definition: str | None = None, horizon: int | None = None,
                               milestone: dict | None = None, tp_mult: float | None = None, sl_mult: float | None = None,
-                              min_report_events: int = 20) -> str:
+                              min_report_events: int = 20, recent_occurrences: "list[dict] | None" = None,
+                              short_id: str | None = None) -> str:
     """Full numeric breakdown for one candidate, in bullet points --
     powers Telegram's `/details <name>`/`/replay_details <name>`.
     Deliberately the detail `_trigger_summary_line()`/`format_trigger_summary()`
@@ -1381,7 +1382,13 @@ def format_candidate_details(candidate: str, row: dict, definition: str | None =
     would break the production/replay symmetry this module is shared
     by, and isn't the place to add one just for this."""
     status = row.get("status", "unknown")
-    lines = [f"<b>{_escape_html(candidate)}</b>"]
+    # The short id goes in the header rather than a footer: it is what a reader
+    # needs to type to come back here, and the name it abbreviates runs 36-45
+    # characters for a Sonnet-authored condition.
+    header = f"<b>{_escape_html(candidate)}</b>"
+    if short_id:
+        header += f"  <code>{_escape_html(short_id)}</code>"
+    lines = [header]
     if definition:
         lines.append(f"What triggers it: {_escape_html(definition)}")
     direction = row.get("direction")
@@ -1468,6 +1475,35 @@ def format_candidate_details(candidate: str, row: dict, definition: str | None =
     if status in ("watch", "rejected"):
         lines.append("")
         lines.append(f"Why not accepted: {_escape_html(explain_non_acceptance(row, min_report_events))}")
+
+    # The DATED occurrences behind every aggregate above. Everything else here
+    # is a summary statistic, and a summary is the one thing a reader cannot
+    # check: "51% positive over 340 tests" is unfalsifiable against anyone's own
+    # memory of the market, while "2023-05-04, BTCUSDT, +3.10%" is a claim about
+    # a specific day that can be looked up. This became necessary rather than
+    # merely nice when the replay stopped sending one message per resolved live
+    # test -- that stream WAS the dated record, and dropping it would otherwise
+    # have left nothing but aggregates.
+    if recent_occurrences:
+        lines.append("")
+        lines.append(f"<b>Last {len(recent_occurrences)} occurrences</b> (most recent first)")
+        for occ in recent_occurrences:
+            when = occ.get("close_date") or occ.get("decision_date") or "?"
+            coin_name = occ.get("coin", "?")
+            ret = occ.get("forward_return")
+            if ret is None:
+                lines.append(f"  {when}  {_escape_html(coin_name)}  <i>still open</i>")
+                continue
+            mfe_v, mae_v = occ.get("mfe"), occ.get("mae")
+            # MAE is stored as an absolute magnitude (`path_outcome` returns
+            # abs(mae)), so printing it with a leading "+" reads as a gain when
+            # it is the adverse excursion. Negated here so "worst -14.7%" says
+            # what actually happened. MFE keeps its sign: a NEGATIVE best point
+            # is real and worth seeing -- it means the trade never once traded
+            # in its own favour.
+            path = (f"  (best {mfe_v:+.1%}, worst {-abs(mae_v):+.1%})"
+                    if isinstance(mfe_v, (int, float)) and isinstance(mae_v, (int, float)) else "")
+            lines.append(f"  {when}  {_escape_html(coin_name)}  <b>{ret:+.2%}</b>{path}")
     return "\n".join(lines)
 
 

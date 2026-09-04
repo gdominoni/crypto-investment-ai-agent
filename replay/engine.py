@@ -52,9 +52,28 @@ from llm_pipeline.novel_condition_tester import (
 from replay import judgment, state
 from replay import status_history as sh
 from replay.battery import run_replay_battery
-from telegram.bot import _send
+from telegram.bot import _send, short_id as _short_id
 
 CHUNK_DAYS = 30
+# Rows the monthly digest prints before collapsing the rest into a count. The
+# message must stay bounded: its predecessor listed EVERY tracked candidate and
+# would have exceeded Telegram's 4,096-character limit at the ~105 a full run
+# reaches -- the same failure that once made a /replay_summary section vanish
+# with no error at all.
+MAX_DIGEST_ROWS = 8
+
+
+def _required_n_for(candidate: str) -> float:
+    """How many occurrences this candidate needs before a null from it would
+    mean anything, derived from its own realised volatility. NaN when that is
+    not computable yet, in which case the digest prints the achieved count
+    alone rather than inventing a denominator."""
+    try:
+        sd = ((state.load_battery_status().get("summary") or {})
+              .get(candidate, {}).get("pattern_oos_sd"))
+        return required_n_for_power(sd) if isinstance(sd, (int, float)) else float("nan")
+    except Exception:
+        return float("nan")
 # The shock threshold used to live here, for the trigger. The trigger is gone
 # (see _compression_exit); `shock_zscore` survives only as a snapshot reading and
 # in the C1/C2/C6 static battery, both of which carry their own constant.
@@ -230,7 +249,9 @@ def _confirmation_block(candidate: str) -> str:
             mfe = float(np.mean([t["mfe"] for t in closed]))
             mae = float(np.mean([t["mae"] for t in closed]))
             ratio = mfe / abs(mae) if mae else float("nan")
-            lines.append(f"Mean best point {mfe:+.2%}, mean worst {mae:+.2%}"
+            # MAE is stored as an absolute magnitude, so a bare "+" would make
+            # the adverse excursion read as a gain. Negated to say what happened.
+            lines.append(f"Mean best point {mfe:+.2%}, mean worst {-abs(mae):+.2%}"
                          + (f" -- MFE/MAE {ratio:.2f}" if ratio == ratio else ""))
         else:
             lines.append("Trend materialised: no occurrence has resolved yet")
@@ -275,14 +296,16 @@ def _check_live_tests(d: pd.Timestamp) -> None:
             # return on its own says very little.
             "baseline_return": _market_return_over(trade["entry_loc"], trade["horizon"], trade["direction"]),
         })
-        _send(f"<b>{d.date()}</b>\n\n"
-              f"<b>Live test resolved -- {trade['direction'].upper()} {trade['coin']}</b>\n\n"
-              f"(candidate <b>{escape_html(trade['candidate'])}</b>: {escape_html(_trigger_description(trade['candidate']))}, "
-              f"held {trade['horizon']}d, opened {trade['entry_date']})\n\n"
-              f"Forward return: <b>{outcome['forward_return']:+.2%}</b>\n"
-              f"Best point reached: {outcome['mfe']:+.2%}\n"
-              f"Worst point reached: {outcome['mae']:+.2%}\n\n"
-              + _confirmation_block(trade["candidate"]))
+        # NOT notified individually. This used to send one message per resolved
+        # live test, and its twin in _scan_mechanical_triggers one per opened
+        # test: measured over a full replay, 15,500 of 16,363 messages -- 95%.
+        # Telegram answered that volume with retry_after = 63,364s and a real
+        # run stalled at 2021-09-23, but the rate limit is only the mechanical
+        # objection. The substantive one is that 7,800 notifications are not a
+        # history anybody reads. The dated record survives in full in
+        # trade_log.json and is reachable through /replay_details <trigger>,
+        # which now prints the last occurrences with their outcomes; the
+        # aggregate goes out once a simulated month in _send_monthly_digest.
         _check_consecutive_failures(trade["candidate"], d)
 
 
@@ -870,9 +893,9 @@ def _scan_mechanical_triggers(d: pd.Timestamp, hourly_full: dict, ohlc_full: dic
                     continue
                 if not today_static[variant].any():
                     continue
-                execution = _open_live_test(variant, coin, direction, d)
-                if execution.get("opened"):
-                    _send(_format_live_test_opened(d.date(), direction, coin, variant, execution["horizon"]))
+                # Opened silently -- see _check_live_tests for why the per-test
+                # stream was removed. The trade log records it either way.
+                _open_live_test(variant, coin, direction, d)
 
         if not dynamic_registry:
             continue
@@ -895,9 +918,7 @@ def _scan_mechanical_triggers(d: pd.Timestamp, hourly_full: dict, ohlc_full: dic
             trig = _dynamic_trigger_hourly(spec, hourly_to_date, ohlc_full[coin], funding, symbol=coin).loc[day_start:day_end]
             if not trig.any():
                 continue
-            execution = _open_live_test(label, coin, spec.direction, d)
-            if execution.get("opened"):
-                _send(_format_live_test_opened(d.date(), spec.direction, coin, label, execution["horizon"]))
+            _open_live_test(label, coin, spec.direction, d)
 
 
 def advance(chunk_days: int = CHUNK_DAYS) -> dict:
@@ -1046,48 +1067,101 @@ def advance(chunk_days: int = CHUNK_DAYS) -> dict:
 
     state.save_checkpoint(str(chunk_end.date()), status="running")
     reached_end = chunk_end >= today_real
-    _send_checkpoint_digest(current, chunk_end, events_this_chunk, reached_end)
+    _send_monthly_digest(current, chunk_end, events_this_chunk, reached_end)
     return {"stopped": None, "current_date": str(chunk_end.date()), "events": events_this_chunk, "reached_end": reached_end}
 
 
-def _send_checkpoint_digest(start: pd.Timestamp, end: pd.Timestamp, n_events: int, reached_end: bool) -> None:
+def _send_monthly_digest(start: pd.Timestamp, end: pd.Timestamp, n_events: int, reached_end: bool) -> None:
+    """The replay's ONE periodic message, replacing a per-live-test stream that
+    was 95% of all traffic (15,500 of 16,363 messages over a full run).
+
+    Bounded by construction: a fixed header plus at most MAX_DIGEST_ROWS trigger
+    rows and a count for the rest. The version this replaces listed EVERY
+    tracked candidate with its description, which at the 105 a real run reaches
+    would have blown through Telegram's 4,096-character limit -- the same
+    failure that once made an entire /replay_summary section vanish silently."""
     log = state.load_trade_log()
-    opened_this_period = [t for t in log if start.date() <= pd.Timestamp(t["decision_date"]).date() <= end.date()]
-    closed_this_period = [t for t in log if t["status"] == "closed"
-                           and start.date() <= pd.Timestamp(t["close_date"]).date() <= end.date()]
-    positive = sum(1 for t in closed_this_period if t["forward_return"] > 0)
-    mean_return = (sum(t["forward_return"] for t in closed_this_period) / len(closed_this_period)) if closed_this_period else 0.0
+    opened = [t for t in log if start.date() <= pd.Timestamp(t["decision_date"]).date() <= end.date()]
+    closed = [t for t in log if t["status"] == "closed"
+              and start.date() <= pd.Timestamp(t["close_date"]).date() <= end.date()]
     still_open = len(state.load_open_trades())
-
     all_closed = [t for t in log if t["status"] == "closed"]
-    all_positive = sum(1 for t in all_closed if t["forward_return"] > 0)
-    all_mean_return = (sum(t["forward_return"] for t in all_closed) / len(all_closed)) if all_closed else 0.0
 
+    def _mean(xs):
+        return (sum(xs) / len(xs)) if xs else float("nan")
+
+    pos = sum(1 for t in closed if t["forward_return"] > 0)
+    all_pos = sum(1 for t in all_closed if t["forward_return"] > 0)
+
+    lines = [f"<b>{'━' * 3} MONTHLY DIGEST -- {start.strftime('%B %Y')} {'━' * 3}</b>", ""]
+    lines.append(f"<b>Live tests</b>  {len(opened)} opened - {len(closed)} resolved - {still_open} still open")
+    if closed:
+        mfe, mae = _mean([t["mfe"] for t in closed]), _mean([abs(t["mae"]) for t in closed])
+        ratio = f"{mfe / mae:.2f}" if mae else "n/a"
+        lines.append(f"<b>This month</b>  {pos}/{len(closed)} positive ({pos / len(closed):.0%}) - "
+                      f"mean {_mean([t['forward_return'] for t in closed]):+.2%} - MFE/MAE {ratio}")
+    if all_closed:
+        lines.append(f"<b>All time</b>  {len(all_closed)} resolved - {all_pos / len(all_closed):.0%} positive - "
+                      f"mean {_mean([t['forward_return'] for t in all_closed]):+.2%}")
+    lines.append(f"Events assessed this month: {n_events}")
+
+    # Ranked by how far along the confirmation count each trigger is, NEVER by
+    # how well it has done. Ordering by success rate puts the luckiest small
+    # sample on top -- measured on a real run, the top rows were candidates at
+    # n=6 with a 100% hit rate whose own backtest status was `rejected`. The
+    # required-N denominator does the rest of the work: "8 of 307" cannot be
+    # misread the way a bare "8" can.
+    by_candidate = {}
+    for t in all_closed:
+        by_candidate.setdefault(t["candidate"], []).append(t["forward_return"])
+    priors = state.load_confirmation_priors()
     statuses = sh.all_latest_statuses()
-    active = {name: info for name, info in statuses.items() if not info["dropped"]}
-    lines = [
-        f"<b>Checkpoint</b> {start.date()} -> {end.date()}",
-        "",
-        f"Events assessed this period: {n_events}",
-        f"Live tests opened this period: {len(opened_this_period)}",
-        f"Live tests resolved this period: {len(closed_this_period)} ({positive} positive forward return), mean return: {mean_return:+.2%}",
-        f"All-time: {len(all_closed)} resolved ({all_positive} positive), mean return: {all_mean_return:+.2%}",
-        f"Still open (awaiting resolution): {still_open}",
-        f"Total live tests ever opened: {len(log)}",
-        "",
-        f"Triggers tracked: {len(statuses)} total, {len(active)} still active.",
-    ]
-    for name, info in sorted(statuses.items()):
-        if info["dropped"]:
-            tag = "dropped"
-        elif info.get("milestone_reported"):
-            n_reached = info.get("last_checkpoint_n", sh.MILESTONE_N)
-            tag = "confirmed" if info.get("milestone_cleared") else f"not confirmed at its {n_reached}-occurrence checkpoint"
-        elif info["status"] == "accepted":
-            tag = f"accepted, no confirmation checkpoint yet (first at {sh.MILESTONE_N} post-hypothesis occurrences)"
-        else:
-            tag = "in progress"
-        lines.append(f"  - <b>{escape_html(name)}</b> ({tag}): {escape_html(_trigger_description(name))}")
+    rows = []
+    for name, rets in by_candidate.items():
+        if statuses.get(name, {}).get("dropped"):
+            continue
+        rows.append((_effective_milestone_count(name, priors.get(name), len(rets)), name, rets))
+    rows.sort(reverse=True)
+    if rows:
+        lines.append("")
+        lines.append("<b>Confirmation progress</b> (none of these is a result -- the denominator is the point)")
+        powered = 0
+        for n, name, rets in rows[:MAX_DIGEST_ROWS]:
+            need = _required_n_for(name)
+            if need == need and n >= need:
+                # PAST the power threshold, and that changes what its null means.
+                # Below it, "no effect found" is "we could not tell"; above it,
+                # the sample was large enough to detect a MIN_INTERESTING_EFFECT
+                # and did not -- which is a finding, not a gap. Marked here
+                # because the digest is where a reader forms their impression,
+                # and burying it would understate what the run established.
+                need_txt = f" -- <b>powered</b> (needed {need:.0f})"
+                powered += 1
+            elif need == need:
+                need_txt = f" of {need:.0f} needed for power"
+            else:
+                need_txt = ""
+            wins = sum(1 for r in rets if r > 0)
+            status = statuses.get(name, {}).get("status", "?")
+            lines.append(f"  <b>{escape_html(name[:34])}</b> <code>{_short_id(name)}</code>  "
+                          f"confirmed {n}{need_txt}  -  trend {wins / len(rets):.0%}  -  {status}")
+        if len(rows) > MAX_DIGEST_ROWS:
+            lines.append(f"  <i>... and {len(rows) - MAX_DIGEST_ROWS} more -- /replay_summary for all of them</i>")
+        if powered:
+            lines.append(f"  <i>{powered} of the rows above are past their power threshold: for those, "
+                          f"'no effect found' is a measurement, not a missing answer.</i>")
+
+    active = [k for k, v in statuses.items() if not v["dropped"]]
+    confirmed = [k for k, v in statuses.items() if v.get("milestone_cleared")]
+    reached = [k for k, v in statuses.items() if v.get("milestone_reported")]
+    lines.append("")
+    lines.append(f"<b>Battery</b>  {len(statuses)} tracked - {len(active)} active - "
+                  f"{len(reached)} reached a checkpoint - {len(confirmed)} currently CONFIRMED - "
+                  f"{len(state.load_parked_proposals())} parked")
+    lines.append("")
+    lines.append("<i>Individual live tests are no longer sent one by one. Every figure above comes from the "
+                  "full trade log -- /replay_summary for the table, /replay_details &lt;name or id&gt; for one "
+                  "trigger with its last dated occurrences.</i>")
     if reached_end:
         lines.append("\n<b>Replay has reached the present -- fully caught up.</b>")
     _send("\n".join(lines))

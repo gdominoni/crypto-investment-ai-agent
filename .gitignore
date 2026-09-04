@@ -33,3 +33,5 @@ llm_usage.json
 
 # in-progress sweep state only; completed result sets are committed as evidence
 forecast/sentiment_power.json
+replay_run_*.log
+telegram/outbox.json
