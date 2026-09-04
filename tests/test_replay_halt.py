@@ -68,9 +68,16 @@ class TestHaltCheckpoint:
 
 class TestOrchestratorSurvivesTheEndOfTheBudget:
     """The unattended driver must end a run out of credit with a resume point,
-    not a traceback."""
+    not a traceback.
 
-    def test_it_stops_on_api_failure_instead_of_burning_the_remaining_chunks(self, monkeypatch):
+    Every test here takes `isolated_replay_state`: `run_to_completion` acquires
+    the real replay lock, so without isolation these fail with
+    ReplayAlreadyRunning whenever an actual run is in progress -- a test
+    contending with a live nine-hour run for its own state file, which is the
+    same defect already recorded in methodology-decisions.md under "Tests could
+    write to the live replay's own state"."""
+
+    def test_it_stops_on_api_failure_instead_of_burning_the_remaining_chunks(self, monkeypatch, isolated_replay_state):
         import replay.orchestrator as O
         calls = {"advance": 0}
 
@@ -86,7 +93,7 @@ class TestOrchestratorSurvivesTheEndOfTheBudget:
         assert out["resume_from"] == "2023-04-11"
         assert out["reached_end"] is False
 
-    def test_a_failing_checkin_question_does_not_end_a_working_run(self, monkeypatch):
+    def test_a_failing_checkin_question_does_not_end_a_working_run(self, monkeypatch, isolated_replay_state):
         """The check-in is cosmetic. Its failure used to be uncaught and would
         have ended a run whose real work was succeeding."""
         import replay.orchestrator as O

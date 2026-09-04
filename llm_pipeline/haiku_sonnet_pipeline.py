@@ -326,9 +326,16 @@ def format_compression_message(episode: dict, assessment: dict) -> str:
             head = f"<b>{i}. \"{escape_html(spec['label'])}\"</b>" if plural else \
                    f"<b>Proposed test: \"{escape_html(spec['label'])}\"</b>"
             base += f"{head}\n\n({format_spec_clauses(spec)} → {escape_html(spec['direction'])})\n\n"
+        # Bound outside the f-string rather than inlined. "it's" carries an
+        # apostrophe, so inlining it needs a double quote nested inside a
+        # double-quoted f-string -- legal only from Python 3.12 (PEP 701) and a
+        # SyntaxError on 3.11, which is what CI runs and what the README
+        # promises. It is a syntax error at IMPORT, so it took down the whole
+        # test collection, not one test. See tests/test_python_compatibility.py.
+        they_are = "they are" if plural else "it's"
         base += (f"Test It runs a real walk-forward backtest of "
                  f"{'each condition' if plural else 'this condition'} before "
-                 f"{'they are' if plural else "it's"} tracked as "
+                 f"{they_are} tracked as "
                  f"{'live tests' if plural else 'a live test'} (no real money is ever placed). "
                  f"Don't Test It dismisses {'them' if plural else 'this proposal'}.")
     else:
