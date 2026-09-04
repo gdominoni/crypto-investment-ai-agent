@@ -203,15 +203,27 @@ def format_spec_clauses(spec: dict) -> str:
     )
 
 
-# Minimum cacheable prefix: 1024 tokens for Sonnet. Measured with the API's own
-# count_tokens rather than guessed:
-#     REPLAY_SYSTEM_PROMPT   1575   cached
-#     COMPRESSION_SYSTEM_PROMPT  ~1500  cached
-#     MARKET_CHECK_PROMPT     316   too short
-# The short one is deliberately NOT marked: below the floor the breakpoint is
+# Minimum cacheable prefix: 1024 tokens for Sonnet. Re-measured 2026-09-04 with
+# the API's own count_tokens -- the previous figures here were stale by a wide
+# margin (REPLAY was recorded as 1575 and is 3481), and since this table is what
+# the cache/no-cache decision is read off, a stale number here is how a prompt
+# ends up marked and silently uncached:
+#     REPLAY_SYSTEM_PROMPT        3481   cached
+#     COMPRESSION_SYSTEM_PROMPT   2588   cached
+#     MARKET_CHECK_PROMPT          630   too short -- NOT marked
+# The short one is deliberately left unmarked: below the floor the breakpoint is
 # silently ignored, which would leave code that looks cached and isn't.
-# (SONNET_SYSTEM_PROMPT at 2408 and HAIKU_SYSTEM_PROMPT at 187 were both
-# measured here too; both belonged to the removed headline path.)
+# (SONNET_SYSTEM_PROMPT and HAIKU_SYSTEM_PROMPT were measured here too; both
+# belonged to the removed headline path.)
+#
+# MEASURED BEHAVIOUR, worth knowing before tuning this. Over 73 real calls the
+# cache halved input cost ($0.68 -> $0.34), but it was REWRITTEN ~20 times
+# rather than once: `ephemeral` is the 5-minute tier, and compression exits are
+# rare enough that minutes of local compute pass between calls, expiring it. The
+# 1-hour tier would cover those gaps but writes at 2.0x instead of 1.25x; net,
+# it saves roughly $0.30 over a full run -- real, and small enough that it is
+# recorded here rather than acted on. Switching tiers also means updating the
+# multipliers in llm_pipeline/usage.py, which that module's own comment flags.
 CACHE_MIN_TOKENS_SONNET = 1024
 
 
