@@ -176,15 +176,25 @@ class TestConfirmationNotValidation:
         assert "{n} of {need:.0f}" in src
         assert "hyperopt_runner.format_result" in src
 
-    def test_the_market_adjusted_rate_lives_on_the_checkpoint(self):
+    def test_the_market_adjusted_figure_lives_on_the_checkpoint(self):
         """Kept out of the per-occurrence message, which stays short, but not
         dropped: a long-only rule is right most of the time in a rising market
-        for reasons unrelated to any macro release."""
+        for reasons unrelated to any macro release, so "the trend happened" and
+        "the trend happened BECAUSE of this condition" must not be reported as
+        one number.
+
+        Asserts the SUBSTANCE, not a phrase: this checked for the exact wording
+        "holding the whole coin universe" and broke on a rewrite that kept the
+        figure and reworded the label, which is a test failing for the one
+        reason it should not."""
         import inspect
 
         from replay.engine import _check_n50_milestones
         src = inspect.getsource(_check_n50_milestones)
-        assert "baseline_return" in src and "holding the whole coin universe" in src
+        assert "baseline_return" in src, "the market baseline is no longer subtracted"
+        assert "_adj" in src, "the adjusted series is no longer computed"
+        assert "baseline" in src.lower().split("--- performance")[-1] or "Market-Adjusted" in src, \
+            "the adjusted figure is computed but no longer shown to a human"
 
     def test_the_confirmation_block_never_raises(self):
         """It runs inside the notification loop: a missing statistic must degrade

@@ -34,7 +34,7 @@ from dotenv import load_dotenv
 
 from candidates.data_loading import load_daily, load_funding, load_hourly
 from candidates.definitions import CANDIDATE_DIRECTIONS, TRIGGER_DESCRIPTIONS, compute_triggers
-from candidates.methodology import (COMPRESSION_CONFIRM_DAYS, COMPRESSION_ZSCORE_THRESHOLD,
+from candidates.methodology import (COMPRESSION_CONFIRM_DAYS, COMPRESSION_ZSCORE_THRESHOLD, SIGNIFICANCE_ALPHA,
                                      compression_exit, format_prune_digest, path_outcome,
                                      MIN_INTERESTING_EFFECT, prospective_split,
                                      prune_recommendation, required_n_for_power,
@@ -797,33 +797,77 @@ def _check_n50_milestones(as_of: pd.Timestamp, status_summary: dict) -> None:
         _adj = [t["forward_return"] - t["baseline_return"] for t in _closed
                 if isinstance(t.get("baseline_return"), (int, float))
                 and t["baseline_return"] == t["baseline_return"]]
-        market_line = ""
-        if _adj:
-            raw_w = sum(1 for t in _closed if t["forward_return"] > 0) / len(_closed)
-            adj_w = sum(1 for r in _adj if r > 0) / len(_adj)
-            market_line = (f"Trend materialised {raw_w:.0%} of the time; {adj_w:.0%} after subtracting "
-                           f"what holding the whole coin universe did over the same windows.\n")
+        # Bound unconditionally. `raw_w` depends only on _closed while `adj_w`
+        # needs _adj, and computing both inside `if _adj:` left `raw_w` undefined
+        # whenever a candidate had resolved occurrences but no stored baseline --
+        # a NameError inside the notification loop, which is the one place this
+        # project has repeatedly paid for.
+        raw_w = (sum(1 for t in _closed if t["forward_return"] > 0) / len(_closed)) if _closed else float("nan")
+        adj_w = (sum(1 for r in _adj if r > 0) / len(_adj)) if _adj else float("nan")
         count_basis = (f"{live_n} live occurrence(s) so far" if is_static else
                        f"{n_reached} recent occurrence(s) so far ({live_n} live, the rest backtest -- static "
                        f"candidates count live occurrences only; this one is Sonnet-proposed, so backtest tops "
                        f"up the count only until it has 50 live occurrences of its own)")
+        # Scannable sections rather than prose. The previous version was five
+        # dense paragraphs and buried the two numbers that decide everything --
+        # the p-value against its own threshold, and the count against the count
+        # that would make a null informative. Every figure below is computed; a
+        # missing one is printed as unavailable rather than omitted, so a gap
+        # cannot be mistaken for a zero.
+        need = _required_n_for(candidate)
+        p_val = info.get("pattern_p_value")
+        sig = info.get("pattern_significant")
+        if p_val is None:
+            sig_line = "Pattern Significance: NOT TESTED (no result on this sample yet)"
+        else:
+            verdict_word = "SIGNIFICANT" if sig else "NOT SIGNIFICANT"
+            sig_line = (f"Pattern Significance: <b>{verdict_word}</b> "
+                        f"(p = {p_val:.3f} | Target: p &lt; {SIGNIFICANCE_ALPHA:.3f})")
+        if need == need:
+            powered = n_reached >= need
+            power_line = (f"Power Progress: {n_reached:,} / {need:,.0f} occurrences "
+                          f"({'SAMPLE SUFFICIENT -- a null here is a measurement' if powered
+                             else 'Incomplete Sample for 80% Power'})")
+        else:
+            power_line = f"Power Progress: {n_reached:,} occurrences (required sample not yet computable)"
+
+        mfe_mae_line = "MFE / MAE: not enough resolved occurrences yet"
+        trend_line = f"Trend Realized: {raw_w:.1%}" if _closed else "Trend Realized: no resolved occurrences yet"
+        lift_line = ""
+        if _closed:
+            _mfe = sum(t["mfe"] for t in _closed) / len(_closed)
+            _mae = abs(sum(abs(t["mae"]) for t in _closed) / len(_closed))
+            ratio = f" (Ratio: {_mfe / _mae:.2f})" if _mae else ""
+            mfe_mae_line = f"MFE / MAE: {_mfe:+.2%} / {-_mae:+.2%}{ratio}"
+        if _adj:
+            # The mean EXCESS over what holding the whole universe did across the
+            # same windows -- "the trend happened" and "the trend happened BECAUSE
+            # of this condition" are different claims, and over 2017-2026 a
+            # long-only rule is right most of the time for reasons unrelated to any
+            # macro release. Reported as excess return, not as a win rate: a rate
+            # printed with a leading "+" would read as a lift it is not.
+            lift_line = (f"\n• Market-Adjusted Excess: {sum(_adj) / len(_adj):+.2%} per occurrence "
+                         f"vs universe baseline ({adj_w:.0%} positive after adjustment)")
+
         message = (
             f"<b>{as_of_str}</b>\n\n"
-            f"<b>Confirmation checkpoint at {n_reached} occurrences -- {escape_html(candidate)}</b>\n\n"
-            f"({escape_html(trigger_desc)})\n\n"
-            f"<b>{'CONFIRMED' if cleared else 'NOT confirmed'}</b> at this checkpoint -- "
-            f"{'still clears' if cleared else 'no longer clears'} the acceptance bar ({count_basis}).\n"
-            f"<i>Confirmed, not validated: at this project's horizons a conclusive test would need "
-            f"occurrences in the hundreds (see each live-test message for the number). This says the "
-            f"condition has kept occurring and still passes on the enlarged sample -- persistence, "
-            f"not proof.</i>\n"
-            f"{escape_html(criteria_str)}. (No single coin or period may carry more than 60% of the positive "
-            f"return either, for either check to pass.)\n\n"
-            f"{market_line}"
-            f"Current status: <b>{escape_html(status)}</b>\n"
-            f"Re-evaluated fresh at every {sh.MILESTONE_N}-occurrence checkpoint, not a permanent verdict -- re-checked "
-            f"again at {n_reached + sh.MILESTONE_N} either way, unless dropped below.\n\n"
-            f"{escape_html(hyperopt_runner.format_result(candidate))}\n\n"
+            f"<b>STATUS UPDATE: {escape_html(status.upper())}</b>\n"
+            f"Candidate: <b>{escape_html(candidate)}</b> <code>{_short_id(candidate)}</code>\n"
+            f"<i>({escape_html(trigger_desc)})</i>\n\n"
+            f"<b>--- VERDICT &amp; POWER ---</b>\n"
+            f"• {sig_line}\n"
+            f"• {power_line}\n\n"
+            f"<b>--- PERFORMANCE &amp; EXCURSION ---</b>\n"
+            f"• {trend_line}{lift_line}\n"
+            f"• {mfe_mae_line}\n\n"
+            f"<b>--- EXECUTION (HYPEROPT) ---</b>\n"
+            f"• {escape_html(hyperopt_runner.format_result(candidate, short=True))}\n\n"
+            f"<b>---</b>\n"
+            f"Next Checkpoint: {n_reached + sh.MILESTONE_N:,} occurrences "
+            f"(re-evaluated fresh each time, never a permanent verdict)\n"
+            f"<b>{'CONFIRMED' if cleared else 'NOT confirmed'}</b> at this checkpoint. "
+            f"<i>Confirmed, not validated: persistence on an enlarged sample, not proof -- "
+            f"a conclusive test needs the occurrence count shown above.</i>\n"
             f"Assessment: {escape_html(advice)}"
         )
         _send(message, reply_markup=PRUNE_KEYBOARD_TEMPLATE(candidate))
