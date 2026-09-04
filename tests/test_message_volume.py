@@ -164,3 +164,46 @@ class TestOutboxIsDrainedNotJustFilled:
         src = inspect.getsource(B._send)
         assert "_MAX_INLINE_WAIT" in src
         assert B._MAX_INLINE_WAIT <= 120
+
+
+class TestCompressionReportShowsWhatWasProposed:
+    """The Post-Squeeze State line reports the indicators SONNET reasoned from,
+    not a fixed pair. A hardcoded RSI/Bollinger line would print two numbers
+    unrelated to the hypothesis printed underneath it whenever Sonnet reached
+    for funding, volume or efficiency instead -- which is most of the time."""
+
+    def _episode(self):
+        import pandas as pd
+        from candidates.data_loading import load_daily
+        from replay.engine import _compression_exit
+        ep = _compression_exit(load_daily("DOGEUSDT"), pd.Timestamp("2019-11-26"))
+        assert ep is not None, "the fixture episode no longer exists in the data"
+        return ep
+
+    def _spec(self, *indicators):
+        return {"label": "x", "direction": "long",
+                "clauses": [{"indicator": i, "op": "<=", "threshold": 1.0} for i in indicators]}
+
+    def _line(self, specs):
+        from replay.judgment import format_compression_report
+        out = format_compression_report("DOGEUSDT", self._episode(), specs)
+        return next((l for l in out.splitlines() if "Post-Squeeze" in l), "")
+
+    def test_it_reports_the_indicator_the_proposal_uses(self):
+        assert "RSI" in self._line([self._spec("rsi_14d")])
+        assert "volume" in self._line([self._spec("volume_zscore_30d")]).lower()
+
+    def test_it_does_not_report_an_indicator_nobody_proposed(self):
+        line = self._line([self._spec("volume_zscore_30d")])
+        assert "RSI" not in line and "Bollinger" not in line
+
+    def test_a_macro_only_proposal_gets_no_state_line(self):
+        """Event indicators are already the MACRO section; repeating them here
+        would state the same number twice as though it were two facts."""
+        assert self._line([self._spec("jobless_claims_surprise")]) == ""
+
+    def test_oversold_is_claimed_only_from_an_rsi_reading(self):
+        """A label is a claim. "Oversold" asserted from a volume z-score would be
+        one this project has not earned."""
+        assert "Oversold" in self._line([self._spec("rsi_14d")])
+        assert "Oversold" not in self._line([self._spec("volume_zscore_30d")])

@@ -496,7 +496,7 @@ def _check_parked_proposals(as_of: pd.Timestamp, live_coin: str | None = None) -
 
 
 def _handle_assessment(as_of: pd.Timestamp, event_desc: str, assessment: dict, live_coin: str | None = None,
-                        resume_from: pd.Timestamp | None = None) -> str | None:
+                        resume_from: pd.Timestamp | None = None, episode: dict | None = None) -> str | None:
     """Returns "STOP" if the replay must halt for a human decision, else
     None. Sonnet never opens a trade here -- that's the mechanical scan's
     job (see _scan_mechanical_triggers); this only ever proposes a novel
@@ -549,7 +549,10 @@ def _handle_assessment(as_of: pd.Timestamp, event_desc: str, assessment: dict, l
             "resume_from": str(resume_from.date()),
         })
         assessment["novel_condition_specs"] = [p["dict"] for p in prepared]
-        _send(judgment.format_telegram_message(as_of, event_desc, assessment),
+        # `episode` renders the sectioned EVENT ALERT header; a promoted parked
+        # proposal has no episode of its own and falls back to its description.
+        _send(judgment.format_telegram_message(as_of, event_desc, assessment,
+                                                episode=episode, symbol=live_coin),
               reply_markup=REPLAY_PROPOSAL_KEYBOARD)
         return "STOP"
     # NO MESSAGE on no_action. A "nothing to see here" notification for every
@@ -1127,7 +1130,7 @@ def advance(chunk_days: int = CHUNK_DAYS) -> dict:
             consecutive_failures = 0
             events_this_chunk += 1
             if _handle_assessment(as_of_b, event_desc, assessment, live_coin=coin,
-                                   resume_from=d) == "STOP":
+                                   resume_from=d, episode=episode) == "STOP":
                 state.save_checkpoint(str(d.date()), status="waiting_for_human")
                 return {"stopped": "waiting_for_human", "current_date": str(d.date()), "events": events_this_chunk}
 

@@ -17,7 +17,8 @@ from candidates.macro_vintage import recent_releases_summary
 from candidates.methodology import STATUS_PLAIN
 from candidates.run_battery import COINS
 from llm_pipeline.haiku_sonnet_pipeline import SONNET_MODEL, _strip_fences, cached_system, escape_html, extract_text, format_spec_clauses
-from llm_pipeline.novel_condition_tester import (MIN_HISTORICAL_OCCURRENCES, build_indicator_leadup,
+from llm_pipeline.novel_condition_tester import (EVENT_INDICATORS, INDICATOR_PLAIN_NAMES,
+                                                  MIN_HISTORICAL_OCCURRENCES, build_indicator_leadup,
                                                   build_indicator_snapshot, proposable_indicators)
 from replay import state
 from replay import status_history as sh
@@ -234,6 +235,22 @@ def format_macro_event(name: str, release: dict) -> str:
             f"for period {release['period'].date()}: value={release['value']}{change_str}")
 
 
+def _macro_number(value: float, signed: bool = False) -> str:
+    """Format a macro figure at a scale a reader can take in.
+
+    These series do not share units: initial jobless claims are counts in the
+    hundreds of thousands, CPI is an index, the Fed funds rate is a percentage.
+    One format cannot serve all three -- "+14000.000" was being printed for a
+    claims delta, three decimals of false precision on a number that is only
+    ever reported in thousands."""
+    sign = "+" if signed and value >= 0 else ""
+    if abs(value) >= 10_000:
+        return f"{sign}{value / 1000:,.0f}k"
+    if abs(value) >= 100:
+        return f"{sign}{value:,.0f}"
+    return f"{sign}{value:.2f}".rstrip("0").rstrip(".") if value % 1 else f"{sign}{value:,.0f}"
+
+
 def _macro_during(start: pd.Timestamp, end: pd.Timestamp) -> str:
     """Every macro release published between two dates, as DELTA and SURPRISE
     rather than as a level.
@@ -264,9 +281,9 @@ def _macro_during(start: pd.Timestamp, end: pd.Timestamp) -> str:
                 continue
             delta = (rel["value"] - rel["prior_value"]) if rel.get("prior_value") is not None else None
             z = surprises.get(d)
-            parts = [f"  {d.date()} {label}: {rel['value']:g}"]
+            parts = [f"  {d.date()} {label}: {_macro_number(rel['value'])}"]
             if delta is not None:
-                parts.append(f"change vs prior {delta:+.3f}")
+                parts.append(f"change vs prior {_macro_number(delta, signed=True)}")
             if z is not None and z == z:
                 parts.append(f"surprise {z:+.1f} sd vs this series' usual move")
             lines.append(", ".join(parts))
@@ -302,6 +319,105 @@ def format_compression_event(symbol: str, episode: dict) -> str:
         f"and in which direction, is what the evidence has to explain -- the exit "
         f"bar's own direction carries no information about it."
     )
+
+
+def indicator_values(coin: str, as_of, names: "tuple[str, ...]") -> dict:
+    """Named indicator readings as FLOATS, dated to `as_of`.
+
+    `build_indicator_snapshot` renders every whitelisted indicator as prose for a
+    model prompt; this returns the handful a human report actually formats, so
+    the report is not parsing a string meant for something else. Never raises: a
+    missing or NaN reading comes back absent, and the caller omits that line
+    rather than printing a number it does not have."""
+    from candidates.data_loading import load_daily, load_funding
+    from llm_pipeline.novel_condition_tester import SUPPORTED_INDICATORS
+
+    out: dict = {}
+    try:
+        daily = load_daily(coin)
+        if as_of is not None:
+            daily = daily.loc[:as_of]
+        if len(daily) == 0:
+            return out
+        funding = load_funding(coin)
+        if funding is not None and as_of is not None:
+            funding = funding.loc[:as_of]
+        for name in names:
+            fn = SUPPORTED_INDICATORS.get(name)
+            if fn is None:
+                continue
+            try:
+                # TWO positional args only, exactly as build_indicator_snapshot
+                # calls them. The functions in SUPPORTED_INDICATORS do NOT share
+                # a signature past that point -- `_rsi` takes (df, funding,
+                # scale, window, symbol) while the surprise series take
+                # (df, funding, scale, symbol) -- so passing the coin as the
+                # fourth positional set window="DOGEUSDT" and every reading came
+                # back empty. Silently: the except below swallowed it.
+                series = fn(daily, funding).dropna()
+            except Exception:
+                continue
+            if len(series):
+                value = float(series.iloc[-1])
+                if value == value:
+                    out[name] = value
+    except Exception:
+        return out
+    return out
+
+
+def format_compression_report(symbol: str, episode: dict, specs: "list[dict] | None" = None) -> str:
+    """The HUMAN-facing rendering of a compression exit.
+
+    Deliberately separate from `format_compression_event`, which builds the same
+    episode as a PROMPT for Sonnet. The two have different jobs -- one has to be
+    reasoned from, the other scanned -- and merging them would mean every change
+    to how a human reads this silently rewrites what the model is asked."""
+    a, b = episode["a_date"], episode["b_date"]
+    lines = [f"<b>EVENT ALERT: VOLATILITY COMPRESSION RESOLVED</b>",
+             f"Asset: <b>{escape_html(symbol)}</b>",
+             f"Period: {a.date()} to {b.date()} ({episode['duration']} Days Coiling)",
+             "", "<b>--- SQUEEZE METRICS ---</b>",
+             f"• Start Volatility: {episode['z_at_a']:.2f} SD below normal",
+             f"• Mid-Squeeze Drift: {episode['squeeze_return']:+.2%}",
+             f"• Exit Bar Move ({b.date()}): {episode['b_return']:+.2%}"]
+    # The readings shown are the ones SONNET actually reasoned from -- the
+    # market-state indicators appearing in the conditions it proposed -- not a
+    # fixed pair chosen here. A hardcoded RSI/Bollinger line would print two
+    # numbers unrelated to the hypothesis underneath it whenever Sonnet reached
+    # for funding, volume or efficiency instead, which is most of the time.
+    # Event indicators are excluded: their values are already the MACRO section.
+    wanted: list[str] = []
+    for spec in (specs or []):
+        for clause in spec.get("clauses", []):
+            name = clause.get("indicator")
+            if name and name not in wanted and name not in EVENT_INDICATORS:
+                wanted.append(name)
+    readings = indicator_values(symbol, b, tuple(wanted)) if wanted else {}
+    if readings:
+        # Short label here, full plain-English name on the Logic line below. The
+        # names in INDICATOR_PLAIN_NAMES carry a parenthetical gloss ("14-day RSI
+        # (momentum, 0-100 scale)") which earns its length where the condition is
+        # spelled out and swamps a metrics line where four of them sit side by side.
+        bits = [f"{INDICATOR_PLAIN_NAMES.get(n, n).split(' (')[0]}: {readings[n]:.2f}"
+                for n in wanted if n in readings]
+        # Only named when RSI is among what was proposed, and only at the
+        # textbook thresholds: a label is a claim, and "oversold" asserted from
+        # a reading of 49 -- or from an indicator that says nothing about being
+        # oversold at all -- would be one this project has not earned.
+        rsi = readings.get("rsi_14d")
+        state_word = ""
+        if rsi is not None:
+            state_word = ("Oversold " if rsi <= 35 else "Overbought " if rsi >= 65 else "Neutral ")
+        lines.append(f"• Post-Squeeze State: {state_word}({' | '.join(bits)})".replace(": (", ": ("))
+        if not state_word:
+            lines[-1] = f"• Post-Squeeze State: {' | '.join(bits)}"
+    lines += ["", "<b>--- MACRO CONTEXT DURING SQUEEZE ---</b>", _macro_during(a, b).rstrip()]
+    # The exit bar's own direction is reported and NOT characterised: measured on
+    # 214 episodes its direction has no relationship to where price is 14 days
+    # later (rho = -0.051, p = 0.46), so calling it bullish or bearish here would
+    # invite exactly the extrapolation the trigger design rules out.
+    return "\n".join(lines)
 
 
 def format_shock_event(symbol: str, shock_z: float, direction: str) -> str:
@@ -538,57 +654,72 @@ def answer_market_question(question: str, client: Anthropic) -> str:
     return escape_html(extract_text(response))
 
 
-def format_telegram_message(as_of, event_description: str, assessment: dict) -> str:
-    """Deliberately formatted to look exactly like what the live pipeline
-    itself would send (llm_pipeline/haiku_sonnet_pipeline.py::
-    format_compression_message) -- no "this is a simulation" framing inside the
-    message body. That disclosure belongs in the surrounding write-up
-    this replay is presented in, not baked into every individual message
-    the way a UI mockup doesn't stamp "MOCKUP" on every button. The date
-    is still shown, plainly, since messages fire in rapid real succession
-    here but represent dates spread across a year -- without it the
-    sequence wouldn't read as a coherent history at all.
+def format_telegram_message(as_of, event_description: str, assessment: dict,
+                             episode: dict | None = None, symbol: str | None = None) -> str:
+    """The human-facing proposal message, in scannable sections.
 
-    Same reasoning as format_compression_message on the action label: it
-    depends on what's actually happening, not a uniform "Recommended
-    action: X" line -- only propose_novel_test is genuinely a decision
-    pending on the human."""
-    base = (
-        f"<b>{as_of.date()}</b>\n\n"
-        f"<b>Event:</b> {escape_html(event_description)}\n\n"
-        f"<b>Assessment:</b> {escape_html(assessment['assessment'])}"
-    )
+    Deliberately formatted to look exactly like what the live pipeline itself
+    would send (llm_pipeline/haiku_sonnet_pipeline.py::format_compression_message)
+    -- no "this is a simulation" framing inside the message body. That disclosure
+    belongs in the surrounding write-up this replay is presented in, not baked
+    into every message, the way a UI mockup doesn't stamp "MOCKUP" on every
+    button. The date is still shown, since messages fire in rapid succession here
+    but represent dates spread across years.
+
+    `episode`/`symbol` are optional: with them the event renders as the sectioned
+    EVENT ALERT report, without them (a promoted parked proposal, which has no
+    episode of its own) it falls back to the plain description it was handed."""
     action = assessment["recommended_action"]
     specs = assessment.get("novel_condition_specs")
     if specs is None and assessment.get("novel_condition_spec"):
         specs = [assessment["novel_condition_spec"]]
+
+    # Resolved BEFORE the header: the report's indicator readings are the ones
+    # the proposals actually reference, so it cannot be built until they are known.
+    if episode is not None and symbol is not None:
+        header = format_compression_report(symbol, episode, specs)
+    else:
+        header = f"<b>Event:</b> {escape_html(event_description)}"
+    base = f"<b>{as_of.date()}</b>\n\n{header}\n\n"
+
+    assessment_text = escape_html(assessment["assessment"])
     if action == "propose_novel_test" and specs:
-        # One approval covers the SET. Splitting one idea into two measurable
-        # halves only helps if both halves are actually tested, so the buttons
-        # accept or dismiss them together rather than asking twice.
-        plural = len(specs) > 1
-        base += (f"\n\n<b>{'These need' if plural else 'This needs'} your input.</b>\n\n"
-                 + (f"<b>{len(specs)} hypotheses proposed</b> — two measurable conditions rather "
-                    f"than one deeper combination that could not be measured.\n\n" if plural else ""))
+        n = len(specs)
+        base += (f"<b>--- ASSESSMENT ---</b>\n{assessment_text}\n"
+                 f"Sonnet generated <b>{n} testable hypothes{'es' if n > 1 else 'is'}</b>.\n")
+        if n > 1:
+            # Two measurable halves rather than one deeper conjunction that could
+            # not be measured at all -- and one approval covers the SET, since
+            # splitting an idea only helps if both halves are actually tested.
+            base += ("<i>Two conditions rather than one deeper combination: each extra clause "
+                     "divides historical occurrences by roughly eight. One button approves both.</i>\n")
         for i, spec in enumerate(specs, 1):
-            prefix = f"<b>{i}. " if plural else "<b>Proposed test: "
-            base += (f"{prefix}\"{escape_html(spec['label'])}\"</b>\n\n"
-                     f"<i>Exactly what would be tested:</i> {format_spec_clauses(spec)} → "
-                     f"{escape_html(spec['direction'])}\n\n")
+            base += (f"\n\n<b>PROPOSAL {i}: {escape_html(spec['label'])}</b>\n"
+                     f"Status: <b>PROPOSED</b> (Awaiting Human Gating)\n\n"
+                     f"<b>--- CONDITION &amp; PARAMETERS ---</b>\n"
+                     f"• Logic: {format_spec_clauses(spec)} → {escape_html(spec['direction'].upper())}\n")
             # The tested condition is not always the proposed one. When thresholds
             # were loosened to reach a measurable sample, the human approving has
             # to see that BEFORE pressing the button -- the clause line above
             # shows the new numbers but not that they changed, and a silent
             # substitution would make the approval meaningless.
             if spec.get("relaxed_from"):
-                base += (f"<i>Note: the thresholds originally proposed occurred too rarely to "
-                         f"measure. They were {escape_html(spec['relaxed_from'])} — so this is the "
-                         f"nearest testable version of the idea, not the original one.</i>\n\n")
-        base += (f"Test It runs a real walk-forward backtest of "
-                 f"{'each condition' if plural else 'this condition'} before "
-                 f"{'they are' if plural else 'it is'} tracked as "
-                 f"{'live tests' if plural else 'a live test'} (no real money is ever placed). "
-                 f"Don't Test It dismisses {'them' if plural else 'this proposal'}.")
+                base += (f"• Thresholds: {escape_html(spec['relaxed_from'])}\n"
+                         f"  <i>*Note: nearest testable version of the proposed hypothesis, "
+                         f"not the original one.</i>\n")
+        base += (f"\n\n<b>--- ACTION REQUIRED (HUMAN-IN-THE-LOOP) ---</b>\n"
+                 # Worded from what the code actually does. NOT "parks for live
+                 # tracking": in this codebase PARKED means a proposal that never
+                 # reached a human for want of occurrences, which is the opposite
+                 # of what pressing this does. And NOT "purges from the pipeline":
+                 # discard_pending_test clears the pending slot and records
+                 # nothing, so nothing is purged -- there is no registry entry to
+                 # remove, and the condition remains re-proposable later.
+                 f"[ <b>Test It</b> ] → Runs the full walk-forward backtest on history up to this "
+                 f"date, registers {'both conditions' if n > 1 else 'the condition'}, and tracks "
+                 f"{'them' if n > 1 else 'it'} forward as observational live tests. No capital, ever.\n"
+                 f"[ <b>Don't Test It</b> ] → Dismisses {'them' if n > 1 else 'it'} untested and "
+                 f"resumes the replay. Nothing is recorded, so the same idea can surface again later.")
     else:
-        base += "\n\n<i>No action taken -- logged, nothing further needed.</i>"
+        base += f"<b>--- ASSESSMENT ---</b>\n{assessment_text}\n\n<i>No action taken -- logged, nothing further needed.</i>"
     return base
