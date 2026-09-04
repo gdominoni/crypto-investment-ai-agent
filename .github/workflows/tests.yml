@@ -8,10 +8,18 @@ jobs:
   pytest:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # v7 for both: v4/v5 target Node 20, which GitHub deprecated and now
+      # force-runs on Node 24 anyway, with a warning on every run. Pinned to a
+      # major so patch fixes arrive without a version bump here. Both were
+      # checked to declare `using: node24` rather than assumed from the tag.
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
+          # The oldest Python this project claims to support, and the whole
+          # point of running CI on it: a developer on a newer interpreter
+          # cannot see a 3.11 syntax error locally. See
+          # tests/test_python_compatibility.py.
           python-version: "3.11"
 
       # The test suite only exercises candidates/ and llm_pipeline/novel_condition_tester.py,
