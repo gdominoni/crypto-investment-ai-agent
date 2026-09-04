@@ -172,6 +172,14 @@ _last_send_at = 0.0
 # project's evidence: a message that cannot be delivered now must still be
 # delivered later, not written to a file nobody reads.
 _MAX_INLINE_WAIT = 60.0
+# How long a stated `retry_after` is trusted before probing again. Telegram's
+# number is an upper bound, not a contract: a real ban quoted 63,364s (17.6h)
+# and the channel was reachable again well inside that. Treating it as gospel
+# left a running replay queueing every message for seventeen hours against a
+# limit that had already lifted -- 710 undelivered while a test send went
+# through fine. Past this, one message is attempted; if the ban really is still
+# on, that costs a single 429 and the clock is reset.
+_BAN_REPROBE_AFTER = 900.0
 _OUTBOX_PATH = Path(__file__).resolve().parent / "outbox.json"
 _OUTBOX_DRAIN_PER_SEND = 3
 # Set when Telegram states how long the ban lasts. While it holds, sends are
@@ -304,7 +312,7 @@ def drain_outbox(limit: int = _OUTBOX_DRAIN_PER_SEND) -> int:
     """Deliver up to `limit` queued messages, oldest first. Stops at the first
     failure, so a ban that is still active costs one attempt rather than `limit`."""
     global _rate_limited_until
-    if time.monotonic() < _rate_limited_until:
+    if time.monotonic() < _rate_limited_until - _BAN_REPROBE_AFTER:
         return 0
     q = _outbox_load()
     if not q:
@@ -382,7 +390,7 @@ def _send(text: str, reply_markup: dict | None = None, pin: bool = False) -> boo
         if reply_markup is not None and i == len(chunks) - 1:
             payload["reply_markup"] = reply_markup
         # A ban we already know about: queue without a network call or a sleep.
-        if time.monotonic() < _rate_limited_until:
+        if time.monotonic() < _rate_limited_until - _BAN_REPROBE_AFTER:
             _outbox_queue({k: v for k, v in payload.items() if k != "chat_id"})
             all_ok = False
             continue
