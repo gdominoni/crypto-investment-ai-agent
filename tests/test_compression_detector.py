@@ -135,6 +135,17 @@ def test_run_compression_scan_reaches_telegram_end_to_end(monkeypatch, tmp_path)
     import llm_pipeline.pending_tests as pending_tests
     import data_ingestion.market_data.binance_fetcher as fetcher
 
+    # `run_compression_scan` builds an Anthropic client before it reaches the
+    # stubbed judgment call, so the key must exist as a VALUE even though no
+    # request is ever made. Set here rather than relied upon from a local .env:
+    # CI has no .env, and a test that passes only on the author's machine is the
+    # same blind spot as the 3.11 syntax and the ccxt import before it.
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key-never-used")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "test-token")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "test-chat")
+    monkeypatch.setattr(H, "load_dotenv", lambda *a, **k: None)
+    monkeypatch.setattr(H, "Anthropic", lambda **kw: object())
+
     monkeypatch.setattr(pending_tests, "PENDING_TESTS_PATH", tmp_path / "pending_test.json")
     monkeypatch.setattr(fetcher, "update_all", lambda coins: None)
 
