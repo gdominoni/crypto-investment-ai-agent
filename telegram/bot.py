@@ -265,6 +265,34 @@ def _outbox_queue(payload: dict) -> None:
     print(f"Telegram rate-limited -- queued to outbox ({len(q)} waiting).")
 
 
+def flush_outbox(max_wait_s: float = 0.0, poll_s: float = 300.0) -> int:
+    """Deliver everything queued, optionally waiting out an active ban.
+
+    `drain_outbox` only ever runs from inside `_send`, which is fine while a run
+    is producing messages and useless at the end of one: a replay that finishes
+    with a full queue has no further sends left to trigger a drain, so the
+    evidence would sit in the file forever. This is the end-of-run flush, and
+    with `max_wait_s` it can outlast a ban -- Telegram has answered a compressed
+    replay with a 17-hour `retry_after`, which is longer than the run itself.
+
+    Returns how many are still queued, so a caller can report an incomplete
+    record rather than implying a complete one."""
+    import time as _time
+
+    deadline = _time.monotonic() + max_wait_s
+    while True:
+        while drain_outbox(limit=50):
+            pass
+        left = outbox_pending()
+        if left == 0 or _time.monotonic() >= deadline:
+            return left
+        wait = min(poll_s, max(0.0, deadline - _time.monotonic()))
+        remaining = max(0.0, _rate_limited_until - _time.monotonic())
+        print(f"Outbox: {left} message(s) still queued, Telegram unavailable for "
+              f"another {remaining / 3600:.1f}h -- retrying in {wait / 60:.0f} min.")
+        _time.sleep(wait)
+
+
 def outbox_pending() -> int:
     """How many messages are waiting for the ban to lift -- read by the replay's
     end-of-run summary, so a run cannot report a complete Telegram record while

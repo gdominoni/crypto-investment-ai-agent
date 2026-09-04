@@ -127,3 +127,40 @@ class TestAdverseExcursionSign:
                                   "forward_return": -0.1394, "mfe": -0.097, "mae": 0.147}])
         assert "worst -14.7%" in out, out
         assert "worst +14.7%" not in out
+
+
+class TestOutboxIsDrainedNotJustFilled:
+    """The outbox exists so a Telegram ban cannot stall the replay. It is only
+    a safety net if something empties it: `drain_outbox` runs from inside
+    `_send`, so a run that ENDS with messages queued has no send left to push
+    them out, and the queue becomes a silent hole in the evidence rather than a
+    delay. Found by checking a real 12.5-hour ban before restarting a run."""
+
+    def test_the_orchestrator_flushes_on_every_exit_path(self):
+        import inspect
+
+        import replay.orchestrator as O
+        src = inspect.getsource(O._run_to_completion_locked)
+        reached_end = src[src.index('result.get("reached_end")'):]
+        assert "_finish(" in reached_end, "a completed run leaves the outbox unflushed"
+        assert "_finish(" in src[src.index("safety cap"):], "the cap path leaves it unflushed"
+        assert "drain_outbox()" in src, "nothing drains opportunistically during the run"
+
+    def test_flush_reports_what_it_could_not_deliver(self, monkeypatch, tmp_path):
+        """An undelivered message must be stated, not swallowed -- otherwise an
+        incomplete record is indistinguishable from a complete one."""
+        import telegram.bot as B
+        monkeypatch.setattr(B, "_OUTBOX_PATH", tmp_path / "outbox.json")
+        B._outbox_save([{"payload": {"text": "x"}, "queued_at": 0}])
+        monkeypatch.setattr(B, "drain_outbox", lambda limit=3: 0)
+        assert B.flush_outbox(max_wait_s=0.0) == 1
+
+    def test_a_long_ban_queues_instead_of_sleeping(self):
+        """A retry_after over the threshold must not be waited out inline: that
+        made every later message cost ~20 minutes and be lost anyway."""
+        import inspect
+
+        import telegram.bot as B
+        src = inspect.getsource(B._send)
+        assert "_MAX_INLINE_WAIT" in src
+        assert B._MAX_INLINE_WAIT <= 120

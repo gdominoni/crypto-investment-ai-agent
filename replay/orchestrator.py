@@ -20,7 +20,7 @@ from llm_pipeline.haiku_sonnet_pipeline import escape_html
 from replay import state
 from replay.engine import advance, resolve_pending_test
 from replay.judgment import answer_market_question
-from telegram.bot import _send
+from telegram.bot import _send, drain_outbox, flush_outbox, outbox_pending
 
 CHECKIN_QUESTIONS = [
     "What's the crypto market situation right now?",
@@ -51,6 +51,32 @@ FINAL_QUESTIONS = [
 # poorly worded, without spending much: these are Q&A-path calls.
 FINAL_QUESTION_WINDOW_DAYS = 210
 FINAL_QUESTION_ROUNDS = 2
+
+
+# How long the end-of-run flush will sit waiting for a Telegram ban to lift.
+# Set above the longest `retry_after` this project has actually been given
+# (63,364s / 17.6h): the run's own compute is ~10 hours, so a ban that starts
+# early can easily outlast it, and a queue nobody drains is the evidence lost.
+WAIT_OUT_BAN_S = 20 * 3600
+
+
+def _finish(max_wait_s: float) -> None:
+    """Deliver whatever is still queued before the process exits.
+
+    Without this the outbox is a leak dressed as a safety net: `drain_outbox`
+    only runs from inside `_send`, so a run that ends with messages queued has
+    nothing left to push them out. Says plainly what could not be delivered
+    rather than letting a silent gap look like a complete record."""
+    pending = outbox_pending()
+    if not pending:
+        return
+    print(f"Flushing {pending} queued Telegram message(s) -- waiting out a rate limit if needed...")
+    left = flush_outbox(max_wait_s=max_wait_s)
+    if left:
+        print(f"WARNING: {left} message(s) still undelivered. The replay's record is INCOMPLETE. "
+              f"Run `python3 -m telegram.flush` once Telegram is reachable to finish sending them.")
+    else:
+        print("Outbox empty -- the Telegram record is complete.")
 
 
 def _final_questions_due(current_date: str | None, already_asked: list[str]) -> str | None:
@@ -109,6 +135,10 @@ def _run_to_completion_locked(max_chunks: int, ask_every: int) -> dict:
     while chunk_count < max_chunks:
         result = advance()
         chunk_count += 1
+        # Opportunistic, and a no-op while a ban is known to be active: costs
+        # nothing per chunk and means a lifted ban starts clearing the backlog
+        # immediately rather than at the next message the replay happens to send.
+        drain_outbox()
         print(f"[{chunk_count}] {result}")
 
         # A systemic API failure (out of credit, rejected key, unreachable API)
@@ -145,6 +175,7 @@ def _run_to_completion_locked(max_chunks: int, ask_every: int) -> dict:
             print("\nNext, if you want the independent Freqtrade cross-check on what survived:")
             print("    python3 -m replay.post_replay_hyperopt --dry-run   # see what it would run")
             print("    python3 -m replay.post_replay_hyperopt             # run it (local, hours)")
+            _finish(max_wait_s=WAIT_OUT_BAN_S)
             return {"chunks": chunk_count, "reached_end": True}
 
         # The two case-study questions, once the run is inside its final
@@ -176,6 +207,7 @@ def _run_to_completion_locked(max_chunks: int, ask_every: int) -> dict:
                 print(f"    check-in question failed, continuing anyway: {e}")
 
     print(f"Stopped after reaching the {max_chunks}-chunk safety cap.")
+    _finish(max_wait_s=WAIT_OUT_BAN_S)
     return {"chunks": chunk_count, "reached_end": False}
 
 
