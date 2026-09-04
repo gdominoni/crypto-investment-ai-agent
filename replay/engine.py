@@ -62,6 +62,35 @@ CHUNK_DAYS = 30
 # with no error at all.
 MAX_DIGEST_ROWS = 8
 
+# What each status means, for a reader who does not carry this project's
+# vocabulary in their head. Deliberately NOT worded as "parked": in this
+# codebase a PARKED proposal is one that never reached a human because it had
+# too few occurrences to test (see park_proposal), which is a different thing
+# from a tested candidate sitting at `watch`. Reusing the word for both would
+# collapse a distinction the whole discovery path rests on.
+STATUS_ONE_LINER = {
+    "accepted": "clears every gate on the historical sample",
+    "watch": "real signal, fails a robustness check",
+    "rejected": "tested; no effect, or the effect runs the wrong way",
+    "insufficient_data": "too few occurrences to judge either way",
+}
+STATUS_DEFINITION = {
+    "accepted": ("The historical statistics pass in full: significant in the traded direction, "
+                 "favourable risk path, and not carried by a single coin or year. A backtest "
+                 "verdict, NOT a live track record -- occurrences from here on count separately "
+                 "toward a confirmation checkpoint."),
+    "watch": ("A real pattern signal that fails a robustness check -- typically concentration "
+              "(over 60% of the positive return from one coin or one year), or an unfavourable "
+              "risk path. It trades zero real capital while accumulating new occurrences toward "
+              "the sample a null result would need to be informative."),
+    "rejected": ("Tested with adequate data and no effect found, or an effect running opposite to "
+                 "the direction traded. Kept tracked rather than deleted, so it is never silently "
+                 "re-proposed as though new."),
+    "insufficient_data": ("Not enough occurrences for the test to run at all. This is 'we could not "
+                          "tell', a different claim from 'we tested it and there was nothing' -- the "
+                          "two never share a label here."),
+}
+
 
 def _required_n_for(candidate: str) -> float:
     """How many occurrences this candidate needs before a null from it would
@@ -1351,34 +1380,71 @@ def _resolve_one_proposal(spec: "ConditionSpec", pending: dict, as_of: pd.Timest
     sh.record_status(spec.label, status, pending["as_of"])
 
     condition_str = f"{condition_desc(spec)} → {spec.direction}"
-    lines = [f"<b>{reveal_date.date()}</b>", "",
-             f"<b>Historical backtest -- {escape_html(spec.label)}</b>", "",
-             f"({escape_html(condition_str)})"]
-    if pending.get("relaxed_from") or any(d.get("relaxed_from") for d in (pending.get("specs") or [])
-                                           if d.get("label") == spec.label):
-        note = next((d.get("relaxed_from") for d in (pending.get("specs") or [])
-                     if d.get("label") == spec.label and d.get("relaxed_from")),
-                    pending.get("relaxed_from"))
-        if note:
-            lines += ["", f"<i>Thresholds were {escape_html(note)}.</i>"]
     pattern = result.get("pattern_significance") or {}
+    lines = [f"<b>{reveal_date.date()}</b>", "",
+             f"<b>HISTORICAL BACKTEST REPORT</b>",
+             f"Candidate: <b>{escape_html(spec.label)}</b> <code>{_short_id(spec.label)}</code>",
+             f"Status: <b>{escape_html(status.upper())}</b> -- {escape_html(STATUS_ONE_LINER.get(status, ''))}",
+             "", "<b>--- CONDITION &amp; PARAMETERS ---</b>",
+             f"• Logic: {escape_html(condition_str)}"]
+    note = next((d.get("relaxed_from") for d in (pending.get("specs") or [])
+                 if d.get("label") == spec.label and d.get("relaxed_from")),
+                pending.get("relaxed_from"))
+    if note:
+        lines.append(f"• Thresholds: {escape_html(note)}")
+
     if status == "insufficient_data":
         n_raw = result.get("n_raw_triggers", 0)
-        lines += ["", f"<b>Verdict:</b> not enough history to judge -- "
-                      f"{n_raw} occurrence(s) found, too few for a walk-forward test.",
-                  "", "Re-checked automatically every 7 days; this can change as "
-                      "more occurrences accumulate."]
+        lines += ["", "<b>--- STATISTICAL VERDICT ---</b>",
+                  f"• Pattern Significance: <b>NOT TESTED</b> -- {n_raw} occurrence(s) found, "
+                  f"too few for a walk-forward test to run",
+                  "• Sample Size: below the floor; no result either way"]
     else:
-        lines.append("")
-        lines.append(format_pattern_significance(pattern))
-        lines.append("")
-        lines.append(f"<b>Verdict:</b> {escape_html(status.upper())}")
-        lines.append("")
-        lines.append(f"For reference, trading this with a TP/SL structure over the same history: "
-                     f"N={result['n']}, win_rate={result['win_rate']:.1%}, sortino={result['sortino']:.2f} "
-                     f"(informational only, doesn't affect the verdict above).")
-        lines.append("Testing continues going forward regardless of this verdict -- re-checked automatically "
-                      "every 7 days alongside every other tracked trigger.")
+        p_val, sig = pattern.get("p_value"), pattern.get("significant")
+        excess = pattern.get("excess_return")
+        lines += ["", "<b>--- STATISTICAL VERDICT ---</b>"]
+        if p_val is None:
+            lines.append("• Pattern Significance: <b>NOT TESTED</b> (no usable result on this sample)")
+        else:
+            lines.append(f"• Pattern Significance: <b>{'SIGNIFICANT' if sig else 'NOT SIGNIFICANT'}</b> "
+                          f"(p = {p_val:.3f} | Target: p &lt; {SIGNIFICANCE_ALPHA:.3f})")
+        base_n = pattern.get("baseline_n")
+        base_bit = f" (Control Sample: N = {base_n:,})" if isinstance(base_n, int) else ""
+        lines.append(f"• Sample Size: N = {pattern.get('n', result.get('n', 0)):,}{base_bit}")
+        if isinstance(excess, float) and excess == excess:
+            # `baseline_kind` decides WHICH question this excess answers --
+            # "does anything happen after this at all" vs "does the event ADD
+            # anything given the market state". +1.09% and -0.23% were the two
+            # answers for one real condition, so the label is not decoration.
+            kind = pattern.get("baseline_kind") or "control"
+            lines.append(f"• Excess Return vs {escape_html(str(kind))}: {excess:+.2%}")
+            if excess <= 0:
+                # The test is one-sided in the traded direction, so a negative
+                # excess is not a near-miss on significance -- it is the effect
+                # running the wrong way, and four of six static candidates were
+                # once called "significant" while doing exactly this.
+                lines.append("  ⚠️ <b>WARNING: Effect runs OPPOSITE to trade direction.</b>")
+
+        ratio, raw_sortino = pattern.get("mfe_mae_ratio"), pattern.get("sortino")
+        lines += ["", "<b>--- RISK PROFILE (RAW PATH) ---</b>"]
+        if isinstance(ratio, float) and ratio == ratio:
+            lines.append(f"• MFE / MAE Ratio: {ratio:.2f} "
+                          f"({'reward exceeds the path risk' if ratio > 1 else 'adverse excursion dominates'})")
+        else:
+            lines.append("• MFE / MAE Ratio: not computable on this sample")
+        if isinstance(raw_sortino, float) and raw_sortino == raw_sortino:
+            lines.append(f"• Raw Sortino Ratio: {raw_sortino:.2f} (No fees / No TP/SL)")
+
+        lines += ["", "<b>--- HISTORICAL TP/SL REFERENCE (INFORMATIONAL) ---</b>",
+                  f"• Trades: N = {result['n']:,} | Win Rate: {result['win_rate']:.1%} | "
+                  f"Sortino: {result['sortino']:.2f}",
+                  "<i>Does not affect the verdict above -- this project accepts on pattern "
+                  "significance, not on a barrier structure's P&amp;L.</i>"]
+
+    lines += ["", "<b>---</b>",
+              f"<b>STATUS DEFINITION [{escape_html(status.upper())}]</b>",
+              escape_html(STATUS_DEFINITION.get(status, "")),
+              "Re-evaluated automatically every 7 simulated days, alongside every other tracked trigger."]
 
     # The genuinely prospective half, when the hypothesis predates part of its own
     # evidence. A parked proposal has this by construction; a freshly-proposed one
