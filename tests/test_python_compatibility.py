@@ -102,3 +102,61 @@ def test_every_source_file_actually_parses():
         except SyntaxError as e:
             broken.append(f"{path.relative_to(PROJECT_ROOT)}:{e.lineno}: {e.msg}")
     assert not broken, "files do not parse:\n  " + "\n  ".join(broken)
+
+
+# The heavy dependencies CI deliberately does NOT install. `.github/workflows/
+# tests.yml` installs a deliberate subset and says why: rather than install an
+# exchange client so a string-chunking test can import telegram/bot.py, the one
+# call site that needs it imports it lazily. Its own note ends "If a future test
+# needs a heavy dependency, prefer making that import lazy over adding it here."
+UNINSTALLED_ON_CI = ["ccxt", "freqtrade"]
+
+# Modules a test may import. Each must be importable WITHOUT the packages above:
+# an eager import anywhere in their chain makes an exchange client a hard
+# requirement of running the tests at all.
+MUST_IMPORT_WITHOUT_HEAVY_DEPS = [
+    "replay.engine", "replay.orchestrator", "replay.judgment",
+    "scheduler.live_daemon", "scheduler.weekly_revalidation",
+    "telegram.bot", "llm_pipeline.haiku_sonnet_pipeline",
+    "data_ingestion.market_data.binance_fetcher",
+]
+
+
+@pytest.mark.parametrize("module", MUST_IMPORT_WITHOUT_HEAVY_DEPS)
+def test_it_imports_without_the_packages_ci_omits(module):
+    """Run in a subprocess with those packages blocked at the import hook.
+
+    This failed for real: binance_fetcher imported ccxt at module level,
+    weekly_revalidation imports binance_fetcher, live_daemon imports that -- so
+    three tests that only wanted to read live_daemon's SOURCE could not run on
+    CI. A developer with the full requirements installed cannot reproduce it,
+    which is the same blind spot as the 3.11/3.12 syntax difference above."""
+    import subprocess
+    import sys
+    import textwrap
+
+    blocker = textwrap.dedent(f"""
+        import sys
+        from importlib.abc import MetaPathFinder
+        BLOCKED = {UNINSTALLED_ON_CI!r}
+        class _Blocker(MetaPathFinder):
+            def find_spec(self, fullname, path=None, target=None):
+                root = fullname.split(".")[0]
+                if root in BLOCKED:
+                    raise ImportError(f"No module named {{fullname!r}}")
+                return None
+        sys.meta_path.insert(0, _Blocker())
+        try:
+            import {UNINSTALLED_ON_CI[0]}
+        except ImportError:
+            pass
+        else:
+            raise SystemExit("blocker inactive -- this test would prove nothing")
+        import {module}
+    """)
+    proc = subprocess.run([sys.executable, "-c", blocker], capture_output=True,
+                          text=True, cwd=str(PROJECT_ROOT))
+    assert proc.returncode == 0, (
+        f"{module} cannot be imported without {UNINSTALLED_ON_CI}, so it cannot be "
+        f"imported on CI. Make the heavy import lazy (inside the function that uses "
+        f"it) rather than adding the package to the workflow.\n{proc.stderr.strip()}")

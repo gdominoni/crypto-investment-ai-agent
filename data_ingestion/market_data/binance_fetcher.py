@@ -18,7 +18,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import ccxt
 import pandas as pd
 
 DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
@@ -75,6 +74,16 @@ def update_ohlcv(symbol: str, timeframe: str = "1d") -> int:
     else:
         since = int(pd.Timestamp(BACKFILL_SINCE, tz="utc").timestamp() * 1000)
 
+    # Imported HERE, not at module level. `ccxt` is an exchange client with a
+    # large dependency tree, and importing it eagerly made it a hard requirement
+    # of everything downstream: scheduler/weekly_revalidation.py imports this
+    # module, scheduler/live_daemon.py imports that, so a test that merely
+    # checks live_daemon's SOURCE for a scheduled job name could not run without
+    # an exchange client installed. CI deliberately omits ccxt and three tests
+    # failed on it -- the same failure this project already hit once and fixed
+    # the same way (see .github/workflows/tests.yml's own note).
+    import ccxt
+
     exchange = ccxt.binance({"enableRateLimit": True})
     candles: list = []
     for _ in range(MAX_FETCH_PAGES):
@@ -122,6 +131,8 @@ def update_funding(symbol: str) -> int:
         since = int(existing["timestamp"].max()) + 1
     else:
         since = int(pd.Timestamp(BACKFILL_SINCE, tz="utc").timestamp() * 1000)
+
+    import ccxt  # lazy -- see update_ohlcv
 
     exchange = ccxt.binance({"enableRateLimit": True, "options": {"defaultType": "future"}})
     history: list = []
