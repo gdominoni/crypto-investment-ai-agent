@@ -1,8 +1,35 @@
+> # ⚠️ ARCHIVED BRANCH — NOT THE ACTIVE PROJECT
+>
+> **This branch is no longer developed.** It was the repository's `main` until
+> 2026-09-05 and is preserved, unchanged, as a record of the multi-module
+> architecture described below (Phases 0 → 9: cash & carry, trend-following,
+> volatility ML, safety kernel, capital allocator, Telegram orchestrator).
+>
+> ### → The active work is on [`main`](../../tree/main)
+>
+> That branch holds a different system, and the reason for the split is the
+> finding this one produced: tested under full walk-forward validation across
+> seven-plus years, the deterministic rule-based triggers here showed **no
+> persistent, unconditional edge**. Rather than keep tuning them, the project was
+> rebuilt around a different question — whether an LLM can *propose* market
+> hypotheses that survive rigorous statistical testing, with every candidate
+> checked against bootstrap significance, FDR control and prospective tracking.
+>
+> That rebuild is complete: a nine-year day-by-day replay, 159 hypotheses
+> tracked, 23,495 observational tests, and one candidate that cleared every gate.
+>
+> **Nothing here is deleted or superseded as a matter of record** — the code, the
+> phase-by-phase build log and the results below are all real and stand as
+> written. This notice exists only so a reader does not mistake an archived line
+> of development for the current one.
+
+---
+
 # Crypto Investment AI Agent
 
 A 24/7 autonomous, cost-optimized AI agent system for crypto trading, controlled via Telegram, built as a public **"Vibe Coding" case study**: every phase of this repo was designed and implemented through a conversation with an AI coding assistant (Claude), with a human directing priorities and handling anything requiring real-world action (accounts, keys, servers). This README is written for **non-technical readers** — if you've never coded before, you should be able to follow along and understand *why* every decision was made.
 
-Status: 🚧 early build — Phase 9 complete (model training deep-dive: Module C rebuilt on a rigorous bespoke ML pipeline, Module B hyperopt run with a project-consistent objective). Full roadmap below.
+Status: 📦 **archived at Phase 9** (model training deep-dive: Module C rebuilt on a rigorous bespoke ML pipeline, Module B hyperopt run with a project-consistent objective). The roadmap below was never completed past this point — see the notice at the top of this file. Everything described up to Phase 9 was built and run.
 
 ---
 
