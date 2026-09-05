@@ -88,6 +88,22 @@ def _fstrings_needing_312(source: str) -> list[tuple[int, str]]:
     return out
 
 
+def _rejected_on_311(source: str) -> bool:
+    """Whether this source would be refused by Python 3.11, however that shows up.
+
+    Two mechanisms, and which one fires depends on the interpreter running the
+    tests. On 3.11 the parser itself rejects it. On 3.12+ it parses cleanly and
+    only `_fstrings_needing_312` can tell. Callers want the question answered,
+    not the mechanism."""
+    import ast
+
+    try:
+        ast.parse(source)
+    except SyntaxError:
+        return True
+    return bool(_fstrings_needing_312(source))
+
+
 def _project_python_files() -> list[pathlib.Path]:
     return [p for p in sorted(PROJECT_ROOT.rglob("*.py"))
             if not SKIP_PARTS & set(p.parts)]
@@ -104,8 +120,15 @@ def test_the_detector_catches_a_known_violation():
     # runtime so this file does not trip its own scan of the project.
     nested = f"x = f{q}{{'a' if p else {q}b{q}}}{q}"
     multiline = "x = (f\"a {b if c\n     else d}\")"
-    assert _fstrings_needing_312(nested), "no longer catches a nested delimiter"
-    assert _fstrings_needing_312(multiline), "no longer catches a multi-line expression"
+    # Asserted as "this interpreter would not let it through", not as "the
+    # detector flagged it". On 3.11 these do not parse at all, so the detector
+    # correctly returns nothing and the real compiler has already done the job;
+    # on 3.12+ they parse fine and only the detector stands between them and CI.
+    # Asserting the detector directly made this test itself environment-
+    # dependent -- it passed locally on 3.13 and failed on CI, which is the
+    # exact class of bug this whole file exists to eliminate.
+    for src, what in ((nested, "a nested delimiter"), (multiline, "a multi-line expression")):
+        assert _rejected_on_311(src), f"{what} would reach CI unnoticed"
 
     # Valid code must stay silent, including the two shapes most likely to be
     # mistaken for violations: implicit concatenation across lines, and format
@@ -113,7 +136,7 @@ def test_the_detector_catches_a_known_violation():
     for ok in (f"x = f{q}{{'a' if p else 'b'}}{q}",
                'x = (f"line one {a} "\n     f"line two {b}")',
                'x = f"{a:.2f} {b!r}"'):
-        assert not _fstrings_needing_312(ok), f"flags valid code: {ok!r}"
+        assert not _rejected_on_311(ok), f"flags valid code: {ok!r}"
 
 
 def test_no_source_file_needs_a_python_newer_than_ci_runs():
