@@ -46,9 +46,14 @@ def _fstrings_needing_312(source: str) -> list[tuple[int, str]]:
     a backslash, or the quote character the f-string itself was opened with.
 
     Note `ast.parse` alone is no help: it accepts all of this on a 3.12+
-    interpreter, which is exactly the blind spot being closed. That is also why
-    this cannot be replaced by "just compile it" locally -- there is no 3.11
-    interpreter on this machine, and CI is the only place the real compiler runs."""
+    interpreter, which is exactly the blind spot being closed.
+
+    This is a fast PRE-FILTER, not the authority. `scripts/check_py311.sh`
+    compiles the whole tree with the real Python 3.11 in Docker, pinned to the
+    same image CI uses, and that is what settles it when the two disagree -- a
+    hand-written check knows the violations someone thought of, the compiler
+    knows all of them. This one earns its place by needing no Docker and running
+    in the ordinary suite."""
     import ast
 
     try:
