@@ -24,8 +24,12 @@ You do **not** need a server, a cloud account, or a credit card beyond the Anthr
 ```bash
 git clone https://github.com/gdominoni/crypto-investment-ai-agent.git
 cd crypto-investment-ai-agent
-git checkout sentiment-agent-rebuild
 ```
+
+The clone lands on `main`, which is this project. (An earlier version of these
+instructions asked you to `git checkout sentiment-agent-rebuild`; that branch was
+renamed to `main` on 2026-09-05 and the checkout now fails. The multi-module
+system that used to occupy `main` is preserved on `multi-module-agent`.)
 
 **Check it worked:** running `ls` should show, among others, `README.md`, `candidates/`, `telegram/`, `scheduler/`.
 
@@ -79,8 +83,9 @@ This tells the bot which conversation to send messages to (yours).
 
 If the page is empty (`{"ok":true,"result":[]}`), you sent the message to the wrong bot or too long ago — send it another message and reload the URL.
 
-### 4d. (Optional) CryptoCompare API key
-Not required — the news feed works on CryptoCompare's free tier without a key. Only add one (from [cryptocompare.com](https://www.cryptocompare.com/cryptopian/api-keys)) if you hit rate-limit errors later.
+*(There used to be a fourth item here, a CryptoCompare key for the news feed.
+The headline-screening layer it fed was removed — see "Scope, and one component
+removed for it" in the README — so there is nothing left to configure.)*
 
 ---
 
@@ -96,11 +101,10 @@ Open the new `.env` file in any text editor and fill in the values you collected
 ANTHROPIC_API_KEY=sk-ant-...
 TELEGRAM_BOT_TOKEN=123456789:AAE...
 TELEGRAM_CHAT_ID=-123456789
-CRYPTOCOMPARE_API_KEY=
 FREQTRADE_DB_PATH=execution/tradesv3.sqlite
 ```
 
-Leave `CRYPTOCOMPARE_API_KEY` and `FREQTRADE_DB_PATH` exactly as shown unless Step 4d told you otherwise. **Never share this file or commit it to git** — it's already listed in `.gitignore` so a normal `git add`/`git commit` won't pick it up.
+Leave `FREQTRADE_DB_PATH` exactly as shown. **Never share this file or commit it to git** — it's already listed in `.gitignore` so a normal `git add`/`git commit` won't pick it up.
 
 ---
 
@@ -110,7 +114,7 @@ Leave `CRYPTOCOMPARE_API_KEY` and `FREQTRADE_DB_PATH` exactly as shown unless St
 python3 -m pytest tests/ -q
 ```
 
-**Check it worked:** you should see a line like `112 passed in 22s` with no `FAILED` or `ERROR` lines. This runs entirely offline — it does not call Anthropic or Telegram, so it can't cost anything or send you a message. If anything fails here, stop and re-check Steps 2–3 before continuing (a failure this early is almost always a missing dependency, not a real code bug).
+**Check it worked:** you should see a line like `253 passed in 40s` with no `FAILED` or `ERROR` lines. This runs entirely offline — it does not call Anthropic or Telegram, so it can't cost anything or send you a message. If anything fails here, stop and re-check Steps 2–3 before continuing (a failure this early is almost always a missing dependency, not a real code bug).
 
 ---
 
@@ -138,7 +142,7 @@ This replays years of real historical data (from 2017 onward) day by day, as if 
 python3 -m replay.orchestrator
 ```
 
-**Check it worked:** the terminal prints one line per simulated step, and your Telegram bot starts receiving messages (proposed conditions, resolved live tests, periodic check-ins). This does call the real Anthropic API repeatedly, so it does cost real (small) amounts of credit — see [`PROJECT_MAP.md`](PROJECT_MAP.md)'s "Cost Optimization" section for real measured per-call costs. Stop it any time with `Ctrl+C`; it checkpoints its progress and resumes from where it stopped the next time you run it. This never touches live state — it's entirely isolated (`/replay_summary` vs. `/summary` on Telegram), so running it has no effect on Part 2 below, whether you run it before, after, or never.
+**Check it worked:** the terminal prints one line per simulated step, and your Telegram bot starts receiving messages (proposed conditions awaiting your Test It / Don't Test It, a monthly digest of what the live tests did, confirmation checkpoints, and periodic check-ins). Individual live tests are deliberately NOT sent one by one — a full replay opens over 20,000 of them. This does call the real Anthropic API repeatedly, so it does cost real (small) amounts of credit — see [`PROJECT_MAP.md`](PROJECT_MAP.md)'s "Cost Optimization" section for real measured per-call costs. Stop it any time with `Ctrl+C`; it checkpoints its progress and resumes from where it stopped the next time you run it. This never touches live state — it's entirely isolated (`/replay_summary` vs. `/summary` on Telegram), so running it has no effect on Part 2 below, whether you run it before, after, or never.
 
 ### Part 2 — Go live (the real thing)
 
@@ -156,7 +160,7 @@ python3 -m scheduler.live_daemon
 
 | Symptom | Likely cause / fix |
 |---|---|
-| `TypeError: Messages.create() got an unexpected keyword argument 'temperature'` (or the test `test_messages_create_accepts_every_kwarg_the_project_passes` fails) | You have version 1.x of the `anthropic` library, which removed that setting. This project pins `temperature=0` so that repeated runs give the same answer, so `requirements.txt` asks for `anthropic<1.0`. Fix it with `pip install -r requirements.txt --upgrade`. If you are not inside the virtual environment from Step 2, you may be picking up a different, newer copy of the library — activate it and try again. |
+| The test `test_messages_create_accepts_every_kwarg_the_project_passes` fails | Your installed `anthropic` SDK does not accept an argument this project passes. The project deliberately passes nothing version-specific — `temperature` was removed after the API began rejecting it, and the code is verified against both 0.x and 1.x — so this most likely means the virtual environment from Step 2 is not active and a different copy of the library is being picked up. Activate it and re-run Step 3. |
 | `ModuleNotFoundError: No module named 'anthropic'` (or similar) | Your virtual environment isn't active. Run `source .venv/bin/activate` again (Step 2), or re-run Step 3. |
 | `KeyError: 'ANTHROPIC_API_KEY'` or similar at startup | `.env` is missing, misnamed, or in the wrong folder. It must be named exactly `.env` and sit in the project's root folder (Step 5). |
 | No message ever arrives on Telegram | Double-check `TELEGRAM_CHAT_ID` (Step 4c) — a wrong ID fails silently from Telegram's side. Also confirm you sent your bot at least one message before running `getUpdates`. |
