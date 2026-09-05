@@ -1,11 +1,3 @@
-> **⏳ NOTA TEMPORANEA — 2026-09-03 — da rimuovere.** Il dry run completo (nove anni simulati, **zero chiamate API**) è **terminato senza problemi**: ha raggiunto il presente in 169 chunk, e i tre controlli di invarianza sono tutti PASS — l'orologio del replay non è mai tornato indietro, nessun trade è datato oltre il checkpoint, nessun candidato duplicato (105 registrati, 7.784 live test, 96 ancora parcheggiati). La directory di stato reale `replay/state/` è rimasta vuota: l'isolamento ha tenuto.
->
-> **Sulla lentezza (~11 ore): NON sono i salvataggi giornalieri del checkpoint.** Quel file è di 57 byte e costa 1-2 ms a scrittura, circa 5 secondi su tutto il run. Misurate invece due cause reali: (1) *dominante* — la scansione meccanica giornaliera valuta il trigger di **ogni** candidato tracciato sulle barre orarie, e il registro cresce fino a 105, quindi il costo per giorno simulato aumenta lungo il run; (2) *minore ma sistemabile* — `append_trade`/`update_trade` rileggono e riscrivono **l'intero** `trade_log.json` a ogni apertura e a ogni risoluzione: a 2,8 MB / 6.500 voci sono 73 ms a ciclo, un costo quadratico che vale 10-16 minuti complessivi.
->
-> Una terza causa era già stata corretta prima di questo run: il ricontrollo giornaliero delle proposte parcheggiate chiamava `is_testable()` (~146 ms) su tutta la coda ogni giorno — proiettato a ~9 ore. Ora è scaglionato, e il ritmo nei primi anni è passato da 7,7 a 121 giorni simulati al minuto.
->
-> **Nessuna spesa API in questo run.** I disservizi su status.claude.com non lo riguardano.
-
 # Crypto Pattern-Discovery Agent: Can Macro Events and Real-Time Market Conditions Reveal Statistically Real, Repeatable Patterns in Crypto Prices?
 
 ![Python](https://img.shields.io/badge/Python-3.11+-blue) ![Claude](https://img.shields.io/badge/Claude-Sonnet-6B4FBB) ![Telegram](https://img.shields.io/badge/Telegram-human--in--the--loop-26A5E4) ![Freqtrade](https://img.shields.io/badge/Freqtrade-hyperopt%20cross--check-orange) ![Status](https://img.shields.io/badge/Status-Case%20Study-blue)
@@ -21,7 +13,7 @@
 Autonomous Claude Sonnet agent that proposes and tests market hypotheses,<br>
 integrated with a Telegram bot interface &amp; human-in-the-loop gating.<br>
 <i>A Claude Haiku news-screening layer was built, measured, and then removed —<br>
-see "What this project does not claim" below.</i></sub>
+see "Scope, and one component removed for it" below.</i></sub>
 <br><br>
 <sub><b>STATISTICAL RIGOR</b><br>
 Block-bootstrap significance testing, Benjamini–Hochberg FDR control,<br>
@@ -49,71 +41,48 @@ claim as a demonstrated edge. Full numbers and caveats below.</i></sub>
 
 ## What This Project Tests
 
-Whether an LLM-driven architecture — reading real market news and recognizing specific, recurring market conditions as they happen — can identify genuine, statistically real patterns in crypto prices. Not a paper-trading guess: every candidate pattern is tested directly against that coin's own historical baseline with a real significance test, and once identified, tracked through real, dated occurrences going forward. In plain terms: after a specific kind of announcement (say, a Federal Reserve rate decision), under a specific kind of market condition (say, Bitcoin's price swinging unusually wide that day and closing lower) — is there a clear, repeatable, *statistically significant* reaction in that coin's price over the following days, one an AI system could actually recognize and track as it happens?
+Whether an LLM-driven agent — analyzing real-time macro releases and market dynamics — can formulate and statistically validate genuine, repeatable patterns in crypto prices.
 
-**This project never opens a funded position.** It is a knowledge-discovery investigation of patterns, not an investment strategy — every "trade" described below is an observational live test: a real, dated occurrence of a tracked condition, held for a fixed horizon, resolved by measuring what actually happened next. No capital is ever at risk, at any point, in any phase. Everything below (the historical methodology, the statistical significance test, the Sonnet judgment layer, the human gate on testing genuinely new patterns) exists to answer the question above honestly and live, rather than assume the answer from a backtest.
+Rather than relying on unvalidated LLM assertions or curve-fitted backtests, this system acts as an **autonomous quantitative researcher**: every hypothesis proposed by Claude Sonnet is rigorously evaluated against historical baselines using non-parametric bootstrap testing, multiplicity control (FDR), and prospective live tracking.
+
+**This project never opens a funded position.** It is an AI-driven quantitative data analytics engine. Every "trade" is an observational test designed to measure price behavior, forward returns, and adverse excursions (MFE/MAE) without risking financial capital.
 
 ## Executive Summary
 
-An earlier, static rule-based research phase tested six categories of deterministic market triggers — scheduled macro releases, futures-market crowding, trend-efficiency continuation — across seven-plus years of crypto data, under full walk-forward validation, and found no fully persistent, unconditional edge. This project's response is the adaptive system described below: a continuously re-validated statistical baseline, a bootstrap significance test that asks whether a pattern is *real* (not merely profitable-looking in one backtest), a Claude Sonnet judgment layer that discovers and proposes genuinely new conditions, and a human supervisor at exactly one decision point — whether a newly-proposed condition is even worth testing. Everything downstream of that one decision is deterministic and code-driven; no further human input is needed.
+Static, rule-based indicators often fail to maintain an edge across changing market regimes. This project implements an adaptive pipeline: a statistical engine that continuously evaluates baseline distributions, a Claude Sonnet strategist that proposes structured market hypotheses, and a human supervisor overseeing hypothesis gating via Telegram.
 
-**How this project checks its own instruments.** A system that reports "no pattern found" has an obvious failure mode: a detector that never fires looks identical to a detector that is broken. Before trusting any null result, this project plants a synthetic signal it already knows the answer to and confirms the pipeline finds it — and confirms a pure-noise arm stays silent. Only once the instrument is shown to work is a real result reported as a fact about the market rather than a bug.
+**How this project checks its own instruments.** A system that reports "no pattern found" has an obvious failure mode: a detector that never fires looks identical to a detector that is broken. Before trusting any null result, this project plants a synthetic signal it already knows the answer to and confirms the pipeline finds it — and confirms a pure-noise arm stays silent.
 
-### The result: one full replay, 2017-08-26 → 2026-09-05
+### Key Results (2017–2026 Full Market Replay)
 
-The historical replay walked nine years of real market data one simulated day at a time, deciding only on what was knowable on each date. It is the project's own primary evidence, and this is what it produced.
+The historical replay evaluated 9 years of market data day-by-day, enforcing strict point-in-time data isolation:
 
-| | |
+| Metric | Result |
 |---|---|
-| Simulated span | **2017-08-26 → 2026-09-05** (9 years, day by day) |
-| Conditions proposed, tested and tracked | **159** |
-| Observational live tests opened | **23,495** |
-| Funded positions | **0**, at any point |
-| Still `accepted` at the end | **2** |
-| Ever `CONFIRMED` at a checkpoint | **2** — one of which is still `accepted` today |
+| Simulated Span | **2017-08-26 → 2026-09-05** (9 years) |
+| Hypotheses Proposed & Tracked | **159** |
+| Observational Tests Evaluated | **23,495** |
+| Final Accepted Candidates | **2** |
+| Statistically Confirmed Candidates | **1** still accepted (2 ever reached a checkpoint) |
 
-**The one candidate that cleared everything** is `hawkish_claims_surprise_then_volume_spike_capitulation` (`44fb`): a jobless-claims print coming in more than 0.3 sd *below* recent ones — a strong labour reading — followed within 7 days by a 30-day volume z-score above 1.0, held long for 3 days.
+### Prime Candidate Case Study: `44fb`
 
-| | | |
-|---|---|---|
-| Statistical significance | p = 0.001 | vs a 0.100 threshold |
-| Historical occurrences | N = 896 | |
-| Risk path (MFE/MAE) | 1.31 | favourable above 1.0 |
-| Coin concentration | 26% (BNB) | inside the 60% limit |
-| Year concentration | 44% (2025) | inside the 60% limit |
-| Confirmations postdating the hypothesis | 183 raw, **106 independent episodes** | past the **96** required for power |
-| Multiplicity | survives Benjamini–Hochberg | on a family of 101 |
+The top-performing hypothesis combines labor market surprises with volume expansion:
 
-**Two things that must be said next to those numbers, because they change what they mean.**
+* **Logic:** Jobless claims print >0.3 SD below its own recent prints (a strong economic reading) followed within 7 days by a 30-day Volume Z-Score > 1.0 → Long (3-day hold).
+* **Statistical Power:** p = 0.001 (vs. alpha = 0.100 threshold). N = 896 historical occurrences; **183 confirmations postdating the hypothesis, comprising 106 independent episodes** — exceeding the 96 required for 80% statistical power.
+* **Risk Profile:** Favorable MFE/MAE ratio of **1.31** (favorable price excursion dominates drawdown).
+* **Robustness:** Survives Benjamini–Hochberg False Discovery Rate (FDR) control across a 101-hypothesis family, with zero single-coin (26% ≤ 60%) or single-year (44% ≤ 60%) over-concentration.
 
-**Chance alone predicts about ten.** Of the 101 conditions with a p-value, **19** sit under the raw 0.10 threshold — where a family of pure nulls would produce roughly 10. That gap is why this project runs Benjamini–Hochberg as a family-level pass rather than reading each p-value on its own. After it, 8 survive; of those 8, only 2 also clear direction, concentration and risk path.
+**One condition cleared every gate this system has, which is not the same claim as a demonstrated edge.** Of the 101 hypotheses with a p-value, 19 sit under the raw threshold where chance alone predicts ~10 — which is why the FDR pass is not optional. And `CONFIRMED` means persistence re-earned at each checkpoint, not proof: the other candidate that once earned it is `rejected` today. Full reasoning, including how redundancy is measured differently across time and across coins, is in [`methodology-decisions.md`](docs/case_study/methodology-decisions.md).
 
-**`CONFIRMED` is not `validated`, and the word is chosen.** It means the condition kept occurring after it was written down and still passed on the enlarged sample — persistence, re-earned at each checkpoint and losable. The second candidate ever confirmed, `claims_surprise_then_funding_stretched_reversion`, is `rejected` today: a live demonstration that the label is not a badge.
+### Scope, and one component removed for it
 
-**On what counts as one occurrence**, since the 183/106 split invites the question: the same condition firing on seven coins the same day is seven observations, not one. Redundancy is checked twice, by two different tools, because there are two different ways evidence can be double-counted — repetition in *time*, and dependence across *coins*. [`methodology-decisions.md`](docs/case_study/methodology-decisions.md) sets out both.
+This system tests **market conditions combined with macro events** — CPI, Fed funds and jobless-claims releases, dated by real publication time and graded as a surprise against that series' own recent behaviour. It does **not** test news-headline sentiment, and the reason is a measurement rather than a preference.
 
-So the honest summary is that **one condition cleared every gate this system has, and that is not the same as a demonstrated edge.** The earlier static-battery phase found no persistent unconditional edge; this replay found one candidate that survives every check it can currently be put to. Reporting it that way, rather than as a discovery, is the whole point of the machinery around it.
+An early Claude Haiku layer screened live news headlines. Before keeping it, the question was made concrete: *how good would a news feed have to be before this pipeline could detect anything in it?* Modelled across a range of feed qualities, the answer was that a feed of realistic quality produces results **indistinguishable from pure noise** — 3 accepted conditions out of 57, against 2 out of 57 for a feed containing no information at all. Detection only appears at a signal strength several times better than published work reports for news sentiment.
 
-### What this project does not claim — and a component deleted for it
-
-This system tests **market conditions combined with macro events** (CPI, Fed funds, initial jobless claims — real releases, dated by publication and graded as a surprise in standard deviations). It does **not** test news-headline sentiment, and the honest reason is worth more than the feature was.
-
-A Claude Haiku layer screened live news headlines and escalated the significant ones to Sonnet. It ran hourly and it worked — but nothing it surfaced could enter a *testable* hypothesis. Every proposal must carry one of the three macro-surprise terms, and the indicator whitelist contains no headline or sentiment term at all, because acceptance is always decided by a backtest and there is no historical news archive to backtest against (verified: the news API is live-only, 3,527 days missing). Measured consequence: of **771 live tests** opened for Sonnet-discovered candidates, **zero** were news-linked. Haiku decided *which* question got asked and then vanished from both the test and the track record.
-
-The obvious repair is to backfill news history. That was measured rather than assumed. [`forecast/sentiment_power.py`](forecast/sentiment_power.py) models sentiment as a continuous daily score parameterised by `rho`, its correlation with the forward return, and asks the only question that matters: **how good would a feed have to be before this pipeline could detect it?** Accepted conditions, out of 57 at each quality level:
-
-| feed quality (`rho`) | 0.00 (pure noise) | 0.04 (real news sentiment) | 0.08 | 0.15 | 0.30 (oracle) |
-|---|---|---|---|---|---|
-| **accepted** | 2 | **3** | 5 | 20 | 23 |
-| median p | 0.486 | 0.357 | 0.215 | 0.092 | 0.004 |
-
-At the quality a real news feed actually achieves, the result is **indistinguishable from the pure-noise floor** — three conditions against two, out of 57. Detection needs a feed three to four times better than published work reports for news sentiment on next-week returns. So the backfill would not have rescued it either, and the rare-event alternative fails for a different reason: a hack or a lawsuit cannot accumulate 40 independent episodes across seven coins in nine years.
-
-**I modelled the minimum feed quality this pipeline could detect, measured that realistic feeds fall below it, and deleted the component rather than keep it for the badge.** The `Haiku` badge came off this README at the same time. A component whose output cannot reach the evidence is decoration, and this project's whole argument is that decoration is what makes a null result look like a discovery.
-
-<p align="center">
-  <img src="docs/case_study/assets/in_short.svg" alt="In short: the five steps the system runs, and the same five steps again as a worked example" width="100%">
-</p>
+So the layer was removed rather than kept for the badge. The honest scope is macro events plus market state, which is what the results above actually rest on. Full numbers: [`methodology-decisions.md`](docs/case_study/methodology-decisions.md).
 
 ### Screenshots
 
