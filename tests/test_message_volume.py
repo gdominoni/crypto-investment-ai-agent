@@ -207,3 +207,49 @@ class TestCompressionReportShowsWhatWasProposed:
         one this project has not earned."""
         assert "Oversold" in self._line([self._spec("rsi_14d")])
         assert "Oversold" not in self._line([self._spec("volume_zscore_30d")])
+
+
+class TestTheRetiredWordStaysRetired:
+    """"Validated" was retired for a documented reason: `required_n_for_power`
+    puts a conclusive test in the hundreds of occurrences, so no reachable count
+    demonstrates an effect and a checkpoint can only assert persistence.
+
+    It came back twice in one session, in two different places, and both times
+    in a message headed for the README. Once in the state summary handed to
+    Sonnet -- which then repeated the vocabulary it was given -- and once in
+    `/replay_details`, the single most detail-oriented command in the project.
+    Neither was caught by the prompt-level ban, because neither went through the
+    prompt."""
+
+    def test_the_details_view_says_confirmed(self):
+        from candidates.methodology import format_candidate_details
+        out = format_candidate_details(
+            "x", {"status": "accepted", "n": 900},
+            milestone={"milestone_reported": True, "milestone_cleared": True, "last_checkpoint_n": 180},
+            milestone_step=20)
+        assert "CONFIRMED" in out
+        assert "validated" not in out.lower(), out
+
+    def test_the_next_checkpoint_follows_milestone_n_not_a_hardcoded_50(self):
+        """It read `n_reached + 50` while MILESTONE_N was 20, announcing the next
+        checkpoint 30 occurrences late. The same stale constant this project was
+        already bitten by once, in the same place."""
+        from candidates.methodology import format_candidate_details
+        out = format_candidate_details(
+            "x", {"status": "accepted", "n": 900},
+            milestone={"milestone_reported": True, "milestone_cleared": True, "last_checkpoint_n": 180},
+            milestone_step=20)
+        assert "200" in out, out
+        assert "230" not in out
+
+    def test_sonnets_state_summary_never_hands_it_the_word(self):
+        """The prompt forbids the word, but a model repeats the vocabulary in its
+        context -- forbidding it in one place and supplying it in the other just
+        puts the two in contradiction."""
+        from replay import judgment
+
+        # Checked on the OUTPUT, not the source. An earlier version of this
+        # assertion scanned the function text and matched the comment explaining
+        # why the word is banned -- a test failing on its own documentation.
+        summary = judgment._all_candidates_status_summary()
+        assert "validated" not in summary.lower(), summary[:400]

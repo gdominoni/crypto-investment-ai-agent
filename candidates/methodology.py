@@ -1348,7 +1348,7 @@ def explain_non_acceptance(row: dict, min_report_events: int = 50) -> str:
 def format_candidate_details(candidate: str, row: dict, definition: str | None = None, horizon: int | None = None,
                               milestone: dict | None = None, tp_mult: float | None = None, sl_mult: float | None = None,
                               min_report_events: int = 20, recent_occurrences: "list[dict] | None" = None,
-                              short_id: str | None = None) -> str:
+                              short_id: str | None = None, milestone_step: int = 20) -> str:
     """Full numeric breakdown for one candidate, in bullet points --
     powers Telegram's `/details <name>`/`/replay_details <name>`.
     Deliberately the detail `_trigger_summary_line()`/`format_trigger_summary()`
@@ -1405,11 +1405,18 @@ def format_candidate_details(candidate: str, row: dict, definition: str | None =
     # gives the real, current reason.
     if status == "accepted" and milestone and milestone.get("milestone_reported"):
         n_reached, cleared = milestone.get("last_checkpoint_n"), milestone.get("milestone_cleared")
-        verb = "VALIDATED" if cleared else "NOT validated"
-        lines.append(f"{verb} -- {'cleared' if cleared else 'did not clear'} the acceptance bar at its {n_reached}-occurrence checkpoint "
-                     f"(re-checked fresh again at {n_reached + 50}, not a permanent badge)")
+        # CONFIRMED, never "validated" -- the distinction is this project's own
+        # and is the reason the word was retired: no reachable occurrence count
+        # demonstrates an effect of interesting size, so a checkpoint asserts
+        # persistence and nothing stronger. This line said VALIDATED right up
+        # until it appeared in the one message intended for the README.
+        verb = "CONFIRMED" if cleared else "NOT confirmed"
+        lines.append(f"{verb} -- {'cleared' if cleared else 'did not clear'} the acceptance bar at its "
+                     f"{n_reached}-occurrence checkpoint (re-checked fresh again at "
+                     f"{n_reached + milestone_step}, not a permanent badge)")
     elif status == "accepted" and milestone is not None:
-        lines.append("Not yet validated -- hasn't reached its first 50-occurrence checkpoint yet")
+        lines.append(f"No confirmation checkpoint yet -- the first comes at {milestone_step} "
+                     f"occurrences that postdate the hypothesis")
     lines.append("")
 
     n = row.get("n")

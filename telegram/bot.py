@@ -858,7 +858,12 @@ def _dispatch_update(update: dict, client: Anthropic) -> None:
         recent = _recent_occurrences(replay_state.load_trade_log(), candidate)
         _send(format_candidate_details(candidate, row, definition=_replay_trigger_numeric_description(candidate), horizon=horizon,
                                         milestone=milestone, tp_mult=live_entry.get("tp_mult"), sl_mult=live_entry.get("sl_mult"),
-                                        recent_occurrences=recent, short_id=short_id(candidate)))
+                                        recent_occurrences=recent, short_id=short_id(candidate),
+                                        # Passed in, not hardcoded: this line said 50 while MILESTONE_N
+                                        # was 20, so it announced the next checkpoint 30 occurrences
+                                        # too late. Same stale constant this project has been bitten
+                                        # by before, in the same place.
+                                        milestone_step=replay_sh.MILESTONE_N))
         return
 
     if text.lower() == "/replay_status":
@@ -896,11 +901,13 @@ def _dispatch_update(update: dict, client: Anthropic) -> None:
                     if candidate in replay_sh.all_latest_statuses() else "")
             _send(f"No candidate named '<b>{escape_html(candidate)}</b>' found in the current battery. Check /summary for exact names.{hint}")
             return
+        from candidates import status_history as production_sh
         horizon = load_horizons().get(candidate)
         milestone = all_latest_statuses().get(candidate, {})
         live_entry = live_state.get("candidates", {}).get(candidate, {})
         _send(format_candidate_details(candidate, row, definition=_trigger_numeric_description(candidate), horizon=horizon,
-                                        milestone=milestone, tp_mult=live_entry.get("tp_mult"), sl_mult=live_entry.get("sl_mult")))
+                                        milestone=milestone, tp_mult=live_entry.get("tp_mult"), sl_mult=live_entry.get("sl_mult"),
+                                        milestone_step=production_sh.MILESTONE_N))
         return
 
     if text.lower() == "/summary":
