@@ -177,6 +177,12 @@ def _battery_context() -> str:
             f"{', '.join(candidates.keys())}.")
 
 
+def _short_id(candidate: str) -> str:
+    """Lazy import so this module keeps no import-time dependency on the bot."""
+    from telegram.bot import short_id
+    return short_id(candidate)
+
+
 def _all_candidates_status_summary() -> str:
     """Every candidate ever tracked (all 6 static C1/C2/C6 variants, plus
     any dynamic ones discovered via "test it") and its latest status --
@@ -185,9 +191,11 @@ def _all_candidates_status_summary() -> str:
     question like "what's been tested, anything accepted or dropped?"
     actually needs to answer completely. `status` is the raw, ongoing
     technical classification (accepted/watch/rejected); a separate
-    "validated" tag is added only for candidates that have actually
-    crossed their 50-live-test milestone while accepted -- see
-    replay/status_history.py::mark_milestone_reported.
+    "CONFIRMED at its checkpoint" tag is added only for candidates that
+    were still accepted when they crossed a milestone -- see
+    replay/status_history.py::mark_milestone_reported. Each line is
+    prefixed with the candidate's 4-character id, the handle a reader
+    types into /replay_details.
 
     'insufficient_data' candidates -- almost always the large majority
     once the dynamic registry grows (67 of 96 tracked, as of one real
@@ -212,11 +220,26 @@ def _all_candidates_status_summary() -> str:
             tags.append("dropped")
         if info.get("milestone_reported"):
             n_reached = info.get("last_checkpoint_n", sh.MILESTONE_N)
-            tags.append("validated" if info.get("milestone_cleared") else f"did not validate at its {n_reached}-live-test checkpoint")
+            # CONFIRMED, never "validated". The distinction is the project's own
+            # and is documented at length: no reachable occurrence count
+            # demonstrates an effect of interesting size, so the checkpoint
+            # asserts persistence. Sonnet repeats the vocabulary it is given, and
+            # given "validated" it wrote "validated" -- in a message that would
+            # have gone in the README beside the claim that the word is never
+            # used here.
+            tags.append("CONFIRMED at its checkpoint"
+                        if info.get("milestone_cleared")
+                        else f"not confirmed at its {n_reached}-occurrence checkpoint")
         tag = f" ({', '.join(tags)})" if tags else ""
-        lines.append(f"{name}: {STATUS_PLAIN.get(info['status'], info['status'])}{tag}")
+        # The 4-char id goes in every line: it is what a reader types to ask for
+        # detail, and a Sonnet answer that names a 50-character condition without
+        # it leaves them nothing to act on.
+        lines.append(f"[{_short_id(name)}] {name}: "
+                      f"{STATUS_PLAIN.get(info['status'], info['status'])}{tag}")
     if insufficient:
-        lines.append(f"Insufficient data, not enough historical occurrences yet to test ({len(insufficient)}): " + ", ".join(insufficient))
+        listed = ", ".join(f"[{_short_id(n)}] {n}" for n in insufficient)
+        lines.append(f"Insufficient data, not enough historical occurrences yet to test "
+                      f"({len(insufficient)}): {listed}")
     return "\n".join(lines)
 
 
@@ -507,6 +530,16 @@ proof. A candidate can be accepted and never confirmed, or reach a checkpoint wh
 not earn the word. Writing "confirmed (that is, accepted)" or otherwise equating them is wrong. \
 Neither word means an effect has been demonstrated: at these horizons a demonstration needs occurrences \
 in the hundreds, so when you cite a count, cite what would be required alongside it.
+
+WHEN YOU NAME A CANDIDATE, GIVE ITS 4-CHARACTER ID TOO. Every candidate in the state below is \
+listed as "[id] name". These conditions have long descriptive names and the id is what a reader \
+types to ask for detail, so naming one without it leaves them nothing to act on. Write it as \
+`name` (id), e.g. `hawkish_claims_then_volume_spike` (44fb).
+
+NEVER WRITE "VALIDATED". The word this project uses is CONFIRMED, and the difference is the point: \
+at these horizons a conclusive test needs occurrences in the hundreds, so a checkpoint asserts that \
+a condition kept occurring and still passes on the enlarged sample -- persistence, not proof. \
+"Validated" claims something no reachable count here demonstrates.
 
 If nothing in the given state answers the question, say so plainly rather than guessing."""
 
