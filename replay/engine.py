@@ -857,9 +857,12 @@ def _check_n50_milestones(as_of: pd.Timestamp, status_summary: dict) -> None:
                         f"(p = {p_val:.3f} | Target: p &lt; {SIGNIFICANCE_ALPHA:.3f})")
         if need == need:
             powered = n_reached >= need
+            # Bound outside the f-string: an expression spanning two lines inside
+            # one is PEP 701, legal from 3.12 and a SyntaxError on 3.11.
+            verdict = ("SAMPLE SUFFICIENT -- a null here is a measurement" if powered
+                        else "Incomplete Sample for 80% Power")
             power_line = (f"Power Progress: {n_reached:,} / {need:,.0f} occurrences "
-                          f"({'SAMPLE SUFFICIENT -- a null here is a measurement' if powered
-                             else 'Incomplete Sample for 80% Power'})")
+                          f"({verdict})")
         else:
             power_line = f"Power Progress: {n_reached:,} occurrences (required sample not yet computable)"
 

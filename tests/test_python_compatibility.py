@@ -30,36 +30,62 @@ SKIP_PARTS = {".git", ".venv", "venv", "site-packages", "freqtrade_userdir",
               "__pycache__", "node_modules"}
 
 
-def _nested_same_quote_fstrings(source: str) -> list[tuple[int, str]]:
-    """Lines with an f-string that nests its OWN quote character inside {...}.
+def _fstrings_needing_312(source: str) -> list[tuple[int, str]]:
+    """Every f-string replacement field that requires Python 3.12 or newer.
 
-    Scans textually and not with `ast`: `ast.parse(..., feature_version=(3, 11))`
-    does NOT reject this, because PEP 701 changed the tokenizer rather than the
-    grammar. Verified against a known-bad snippet in the test below, so this
-    helper cannot silently degrade into one that finds nothing."""
-    hits: list[tuple[int, str]] = []
-    for lineno, line in enumerate(source.splitlines(), 1):
-        for match in re.finditer(r"""(\bf|\brf|\bfr)(["'])""", line):
-            quote = match.group(2)
-            i, depth = match.end(), 0
-            while i < len(line):
-                ch = line[i]
-                if ch == "\\":
-                    i += 2
-                    continue
-                if ch == "{":
-                    if i + 1 < len(line) and line[i + 1] == "{":
-                        i += 2
-                        continue
-                    depth += 1
-                elif ch == "}":
-                    depth = max(0, depth - 1)
-                elif ch == quote:
-                    if depth > 0:
-                        hits.append((lineno, line.strip()))
-                    break
-                i += 1
-    return hits
+    Reads the AST rather than pattern-matching the text, and that difference is
+    the whole point of this rewrite. The first version of this guard scanned for
+    ONE symptom -- an f-string reusing its own quote character on a single line
+    -- and a second violation of the same PEP walked straight past it: an
+    expression split across two lines inside an f-string, which is equally legal
+    on 3.12 and equally a SyntaxError on 3.11. Enumerating symptoms is a losing
+    game; PEP 701 relaxed a category, so the check has to cover the category.
+
+    What it inspects is the EXPRESSION inside each pair of braces, via
+    `ast.get_source_segment`, for the three things 3.11 forbids there: a newline,
+    a backslash, or the quote character the f-string itself was opened with.
+
+    Note `ast.parse` alone is no help: it accepts all of this on a 3.12+
+    interpreter, which is exactly the blind spot being closed. That is also why
+    this cannot be replaced by "just compile it" locally -- there is no 3.11
+    interpreter on this machine, and CI is the only place the real compiler runs."""
+    import ast
+
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return []  # test_every_source_file_actually_parses reports this instead
+    lines = source.splitlines()
+    out: list[tuple[int, str]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.JoinedStr):
+            continue
+        # The delimiter is read off THIS f-string's own source, not guessed from
+        # the line it sits on: a single line can hold both f" and f' (there is a
+        # real one in forecast/), and guessing flagged every valid inner quote as
+        # a violation. A false positive here is worse than a miss -- it is how a
+        # guard ends up disabled.
+        whole = ast.get_source_segment(source, node) or ""
+        m = re.match(r'[rRfFbB]*("""|\'\'\'|"|\')', whole)
+        delimiter = m.group(1) if m else ""
+        for part in node.values:
+            if not isinstance(part, ast.FormattedValue):
+                continue
+            seg = ast.get_source_segment(source, part.value)
+            if seg is None:
+                continue
+            if "\n" in seg and len(delimiter) == 1:
+                # Only for a single-quoted f-string. A triple-quoted one may
+                # legitimately carry newlines, and flagging those would be the
+                # kind of false positive that gets a guard switched off.
+                out.append((part.lineno, f"expression spans multiple lines: {seg.splitlines()[0]!r}"))
+                continue
+            if "\\" in seg:
+                out.append((part.lineno, f"backslash inside the expression: {seg!r}"))
+                continue
+            if delimiter and len(delimiter) == 1 and delimiter in seg:
+                out.append((part.lineno, f"reuses its own {delimiter} delimiter: {seg!r}"))
+    return out
 
 
 def _project_python_files() -> list[pathlib.Path]:
@@ -74,16 +100,26 @@ def test_the_detector_catches_a_known_violation():
     # picked up by this module's own scan of the project, which includes the
     # test suite, and the guard would fail on its own fixture.
     q = chr(34)
-    bad = f"x = f{q}{{'a' if p else {q}b{q}}}{q}"
-    assert _nested_same_quote_fstrings(bad), "the detector no longer detects anything"
-    good = f"x = f{q}{{'a' if p else 'b'}}{q}"
-    assert not _nested_same_quote_fstrings(good), "the detector flags valid code"
+    # Both real violations this project has actually shipped, assembled at
+    # runtime so this file does not trip its own scan of the project.
+    nested = f"x = f{q}{{'a' if p else {q}b{q}}}{q}"
+    multiline = "x = (f\"a {b if c\n     else d}\")"
+    assert _fstrings_needing_312(nested), "no longer catches a nested delimiter"
+    assert _fstrings_needing_312(multiline), "no longer catches a multi-line expression"
+
+    # Valid code must stay silent, including the two shapes most likely to be
+    # mistaken for violations: implicit concatenation across lines, and format
+    # specs or conversions inside the braces.
+    for ok in (f"x = f{q}{{'a' if p else 'b'}}{q}",
+               'x = (f"line one {a} "\n     f"line two {b}")',
+               'x = f"{a:.2f} {b!r}"'):
+        assert not _fstrings_needing_312(ok), f"flags valid code: {ok!r}"
 
 
 def test_no_source_file_needs_a_python_newer_than_ci_runs():
     offenders = []
     for path in _project_python_files():
-        for lineno, text in _nested_same_quote_fstrings(path.read_text(errors="ignore")):
+        for lineno, text in _fstrings_needing_312(path.read_text(errors="ignore")):
             offenders.append(f"{path.relative_to(PROJECT_ROOT)}:{lineno}: {text[:100]}")
     assert not offenders, (
         "f-string nests its own quote character -- valid on 3.12+, a SyntaxError on "
