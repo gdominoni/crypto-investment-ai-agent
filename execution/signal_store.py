@@ -39,7 +39,8 @@ def push_manual_signal(coin: str, direction: str, tp_mult: float, sl_mult: float
 
     `signal_class` distinguishes a routine Sonnet-approved trade
     ('manual', the default) from one triggered by the real-time shock
-    detector ('shock_reactive', see `llm_pipeline/shock_detector.py`) --
+    detector ('shock_reactive' -- that detector was removed with the shock
+    trigger; the tag survives in historical records) --
     carried through into the strategy's `enter_tag` so KPI reporting can
     measure critical-phase performance separately from routine trades."""
     pending = load_manual_signals()
@@ -53,18 +54,6 @@ def push_manual_signal(coin: str, direction: str, tp_mult: float, sl_mult: float
     MANUAL_SIGNALS_PATH.write_text(json.dumps({"pending": pending}, indent=2))
 
 
-def peek_pending_manual_signal(coin: str, direction: str) -> dict | None:
-    """Read-only lookup used by `populate_entry_trend` to decide whether
-    to set enter_long/enter_short for this pair, and to read the
-    signal's `signal_class` into the entry tag -- does NOT consume the
-    signal (only `confirm_trade_entry`, called once per actual entry,
-    does that via `consume_manual_signal`), so it's safe to call on
-    every indicator refresh."""
-    now = datetime.now(timezone.utc)
-    for p in load_manual_signals():
-        if p["coin"] == coin and p["direction"] == direction and datetime.fromisoformat(p["expires_at"]) > now:
-            return p
-    return None
 
 
 def consume_manual_signal(coin: str, direction: str) -> dict | None:

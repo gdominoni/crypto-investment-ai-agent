@@ -251,11 +251,6 @@ def _history_summary() -> str:
     return f"{len(log)} live test(s) opened so far this replay, {positive} resolved with a positive forward return."
 
 
-def format_macro_event(name: str, release: dict) -> str:
-    change = release["value"] - release["prior_value"] if release.get("prior_value") is not None else None
-    change_str = f", change from prior release: {change:+.3f}" if change is not None else " (first known release)"
-    return (f"MACRO RELEASE: {name}, published {release['realtime_start'].date()}, "
-            f"for period {release['period'].date()}: value={release['value']}{change_str}")
 
 
 def _macro_number(value: float, signed: bool = False) -> str:
@@ -443,8 +438,6 @@ def format_compression_report(symbol: str, episode: dict, specs: "list[dict] | N
     return "\n".join(lines)
 
 
-def format_shock_event(symbol: str, shock_z: float, direction: str) -> str:
-    return f"VOLATILITY SHOCK: {symbol}, direction={direction}, shock_z={shock_z:.2f} (roughly the top ~2% most extreme volatility episodes for this coin, as of this date)"
 
 
 def judge_event(event_description: str, client: Anthropic, as_of: pd.Timestamp | None = None,

@@ -235,8 +235,8 @@ def shock_zscore_series(ohlc: pd.DataFrame, short_window: int = 5, baseline_wind
     backward-looking by construction), so classifying a bar as a shock
     never uses information from after that bar.
 
-    NOTE on the z>=2.0 threshold used downstream (`classify_regime`,
-    `shock_detector.py`): this is NOT a "2-sigma event" in the textbook
+    NOTE on the z>=2.0 threshold used downstream (`classify_regime`):
+    this is NOT a "2-sigma event" in the textbook
     normal-distribution sense -- measured on real data across this
     project's coin universe, z>=2.0 occurs ~4.4% of the time (z>=3.0
     occurs ~1.9%), because this series is strongly right-skewed
@@ -292,9 +292,11 @@ def build_events(ohlc: pd.DataFrame, trigger: pd.Series, direction: str, horizon
     historical shocks are deliberately excluded from what a fixed rule
     set is fit and graded against, so a handful of crash days can't
     distort the barriers applied to ordinary conditions. Shock-regime
-    events are not discarded; they're routed to the live shock-detection
-    pathway (`llm_pipeline/shock_detector.py`) instead of the weekly-
-    refreshed static battery."""
+    events are not discarded by this classification; they are simply
+    labelled, and the label is what keeps them out of the weekly-refreshed
+    static battery's fitting. The live shock-escalation pathway this note
+    used to point at was removed with the shock trigger itself (see
+    llm_pipeline/compression_detector.py)."""
     assert direction in ("long", "short")
     idx = ohlc.index
     trigger_locs = np.flatnonzero(trigger.reindex(idx, fill_value=False).to_numpy())

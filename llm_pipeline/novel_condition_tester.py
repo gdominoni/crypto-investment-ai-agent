@@ -29,7 +29,7 @@ from candidates.methodology import (
     shock_zscore_series, walk_forward,
 )
 
-SHOCK_ZSCORE_THRESHOLD = 2.0  # matches run_battery.py / shock_detector.py -- one consistent definition of "shock" everywhere
+SHOCK_ZSCORE_THRESHOLD = 2.0  # matches run_battery.py -- one consistent definition of "shock" everywhere
 
 
 def _rsi(df: pd.DataFrame, funding: pd.Series | None, scale: int = 1, window: int = 14, symbol: str | None = None) -> pd.Series:
@@ -83,7 +83,7 @@ def _bollinger_pctb(df: pd.DataFrame, funding: pd.Series | None, scale: int = 1,
 # the backtest, which always calls with scale=1); see
 # docs/case_study/methodology-decisions.md. `shock_zscore` is the one
 # deliberate exception -- a shock stays a daily-window concept regardless
-# of `scale`, matching classify_regime/shock_detector.py everywhere else.
+# of `scale`, matching classify_regime everywhere else.
 SUPPORTED_INDICATORS: dict[str, Callable[..., pd.Series]] = {
     "close_return_1d": lambda df, funding, scale=1, symbol=None: df["close"].pct_change(1 * scale),
     "close_return_5d": lambda df, funding, scale=1, symbol=None: df["close"].pct_change(5 * scale),
@@ -1239,8 +1239,8 @@ def test_novel_condition(spec: ConditionSpec, coins: list[str], as_of: pd.Timest
     """Runs the same walk-forward, concentration-checked pipeline
     `run_battery.py` uses for the static candidates -- including the same
     shock-regime exclusion, with one deliberate exception: when the spec
-    being tested IS the `shock_zscore` indicator itself (Mode B, see
-    `shock_detector.py`), the trigger condition already selects extreme-
+    being tested IS the `shock_zscore` indicator itself (Mode B), the
+    trigger condition already selects extreme-
     volatility bars by construction, so excluding "shock"-regime events
     here would exclude the very population this test exists to evaluate.
 
