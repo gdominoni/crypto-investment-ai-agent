@@ -32,6 +32,17 @@ Python 3.11+, crash-safe atomic JSON state (fsync + atomic replace),<br>
 a synchronous single-process Telegram daemon, and a zero-funded-position<br>
 observational engine running via a single daemon scheduler.</sub>
 <br><br>
+<sub><b>RESULT — one full replay, 2017-08-26 → 2026-09-05</b><br>
+Nine years of real market data walked day by day, causality-safe:<br>
+<b>159</b> conditions tracked, <b>23,495</b> observational live tests, <b>0</b> funded positions.<br>
+<b>2</b> conditions ended <code>accepted</code>; <b>1</b> was also <code>CONFIRMED</code> at a checkpoint.<br>
+It survives Benjamini–Hochberg on a family of 101 — but 19 of those 101 sit<br>
+under the raw threshold where chance alone predicts ~10, which is why the<br>
+multiplicity control is not optional. And its 183 confirmations fall on 59<br>
+distinct dates, so on the independent-episode count this project uses<br>
+everywhere else it is <b>below</b> the 96 its own power calculation asks for.<br>
+<i>A candidate that cleared every gate, not a demonstrated edge. Details below.</i></sub>
+<br><br>
 </td>
 </tr>
 </table>
@@ -48,6 +59,41 @@ Whether an LLM-driven architecture — reading real market news and recognizing 
 An earlier, static rule-based research phase tested six categories of deterministic market triggers — scheduled macro releases, futures-market crowding, trend-efficiency continuation — across seven-plus years of crypto data, under full walk-forward validation, and found no fully persistent, unconditional edge. This project's response is the adaptive system described below: a continuously re-validated statistical baseline, a bootstrap significance test that asks whether a pattern is *real* (not merely profitable-looking in one backtest), a Claude Sonnet judgment layer that discovers and proposes genuinely new conditions, and a human supervisor at exactly one decision point — whether a newly-proposed condition is even worth testing. Everything downstream of that one decision is deterministic and code-driven; no further human input is needed.
 
 **How this project checks its own instruments.** A system that reports "no pattern found" has an obvious failure mode: a detector that never fires looks identical to a detector that is broken. Before trusting any null result, this project plants a synthetic signal it already knows the answer to and confirms the pipeline finds it — and confirms a pure-noise arm stays silent. Only once the instrument is shown to work is a real result reported as a fact about the market rather than a bug.
+
+### The result: one full replay, 2017-08-26 → 2026-09-05
+
+The historical replay walked nine years of real market data one simulated day at a time, deciding only on what was knowable on each date. It is the project's own primary evidence, and this is what it produced.
+
+| | |
+|---|---|
+| Simulated span | **2017-08-26 → 2026-09-05** (9 years, day by day) |
+| Conditions proposed, tested and tracked | **159** |
+| Observational live tests opened | **23,495** |
+| Funded positions | **0**, at any point |
+| Still `accepted` at the end | **2** |
+| Ever `CONFIRMED` at a checkpoint | **2** — one of which is still `accepted` today |
+
+**The one candidate that cleared everything** is `hawkish_claims_surprise_then_volume_spike_capitulation` (`44fb`): a jobless-claims print coming in more than 0.3 sd *below* recent ones — a strong labour reading — followed within 7 days by a 30-day volume z-score above 1.0, held long for 3 days.
+
+| | | |
+|---|---|---|
+| Statistical significance | p = 0.001 | vs a 0.100 threshold |
+| Historical occurrences | N = 896 | |
+| Risk path (MFE/MAE) | 1.31 | favourable above 1.0 |
+| Coin concentration | 26% (BNB) | inside the 60% limit |
+| Year concentration | 44% (2025) | inside the 60% limit |
+| Confirmations postdating the hypothesis | 183 | |
+| Multiplicity | survives Benjamini–Hochberg | on a family of 101 |
+
+**Three things that must be said next to those numbers, because they change what they mean.**
+
+**Chance alone predicts about ten.** Of the 101 conditions with a p-value, **19** sit under the raw 0.10 threshold — where a family of pure nulls would produce roughly 10. That gap is why this project runs Benjamini–Hochberg as a family-level pass rather than reading each p-value on its own. After it, 8 survive; of those 8, only 2 also clear direction, concentration and risk path.
+
+**The confirmation count overstates its own independence.** Those 183 confirmations fall on **59 distinct dates** — one macro surprise fires the condition across several coins the same day, and those are one event, not several. This project already enforces that distinction at the testability gate (`MIN_HISTORICAL_EPISODES`), and applied here it puts the independent count *below* the **96** occurrences `required_n_for_power` asks for to detect a 5% effect at 80% power. On raw occurrences it is past that line; on episodes it is not.
+
+**`CONFIRMED` is not `validated`, and the word is chosen.** It means the condition kept occurring after it was written down and still passed on the enlarged sample — persistence, re-earned at each checkpoint and losable. The second candidate ever confirmed, `claims_surprise_then_funding_stretched_reversion`, is `rejected` today: a live demonstration that the label is not a badge.
+
+So the honest summary is that **one condition cleared every gate this system has, and that is not the same as a demonstrated edge.** The earlier static-battery phase found no persistent unconditional edge; this replay found one candidate that survives every check it can currently be put to, with the independence caveat above still open. Reporting it that way, rather than as a discovery, is the whole point of the machinery around it.
 
 ### What this project does not claim — and a component deleted for it
 

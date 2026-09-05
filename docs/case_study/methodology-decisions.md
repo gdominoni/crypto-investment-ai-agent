@@ -287,6 +287,8 @@ Each entry is dated and never silently rewritten — if a decision is later reve
 
 This is the largest correction in this log. A deep audit of `candidates/methodology.py` found four defects that compounded, and together they were the reason this project appeared to be finding patterns. **After the fix, no candidate in either the production battery or the historical replay is `accepted`, and none is `validated`.** The previously-reported "1 validated out of 98" is withdrawn.
 
+> **Superseded in part, 2026-09-05.** The `0 accepted` figures below were correct for the registry that existed when this audit ran. A later full replay -- under the corrected grammar, with threshold relaxation and the two-proposal split -- produced two accepted candidates and one CONFIRMED. The four defects and their fixes stand unchanged; only the count does not. See "The full replay finished" at the end of this file.
+
 ### Defect 1 (critical) -- the test ignored the direction the candidate trades
 
 Two halves of the same root cause:
@@ -2400,3 +2402,75 @@ that no proposal starves (each seen exactly once per window) and that the
 stagger is stable as the queue changes — hashed on the label rather than list
 position, so promoting or parking one proposal does not reshuffle everyone
 else's slot mid-run.
+
+---
+
+## 2026-09-05 -- The full replay finished: one candidate cleared every gate. This supersedes the "0 accepted" line in the 2026-08-29 audit.
+
+**What the audit entry above says, and why it needed updating.** That entry
+closes with `replay accepted (98 candidates): 0`, and it was correct when
+written. It measured a registry built under the pre-correction grammar, before
+`relax_to_testable` searched for the nearest measurable version of a proposal
+and before the two-clause / two-proposal split. This run is not that run.
+
+**The replay: 2017-08-26 to 2026-09-05, nine years, day by day.** 159 conditions
+proposed, tested and tracked. 23,495 observational live tests opened. Zero
+funded positions, at any point.
+
+    still `accepted` at the end          2
+    ever CONFIRMED at a checkpoint       2  (one of them still accepted today)
+    parked, never testable in time      75
+
+**The one that cleared everything**, `hawkish_claims_surprise_then_volume_spike_capitulation`:
+a jobless-claims print more than 0.3 sd BELOW recent ones -- a strong labour
+reading -- followed within 7 days by a 30-day volume z-score above 1.0, held
+long for 3 days.
+
+    p-value                    0.001    against a 0.100 threshold
+    historical occurrences     N = 896
+    MFE / MAE                  1.31     favourable above 1.0
+    coin concentration         26%      BNB, inside the 60% limit
+    year concentration         44%      2025, inside the 60% limit
+    confirmations postdating the hypothesis   183
+    Benjamini-Hochberg         survives, on a family of 101
+
+**The grammar sweep predicted this could not happen, and the prediction was
+wrong for a stateable reason.** `forecast/grammar_sweep.py` returned 0 accepted
+of 672 and was described here as a strict upper bound on what the replay could
+find. It is not one. It enumerates a 672-point grid -- one threshold per event
+term, a handful per market-state term, `within_days` in {0, 3, 7}, `outcome`
+always `raw` -- while `relax_to_testable` produces intermediate thresholds the
+grid never contains, and 168 of those 672 use indicators now barred from
+proposals. The two spaces overlap; neither contains the other. The sweep's own
+docstring said "this measures the space, not the searcher" and that caveat was
+read as smaller than it is.
+
+### Three qualifications that belong beside the result, not below it
+
+**Chance alone predicts about ten.** Of 101 conditions with a p-value, 19 sit
+under the raw 0.10 threshold where a family of pure nulls yields roughly 10.
+That is the entire case for running Benjamini-Hochberg as a family pass rather
+than reading each p-value alone. After it, 8 survive; of those, 2 also clear
+direction, concentration and risk path.
+
+**The confirmation count overstates its own independence, and this is the
+sharpest caveat.** The 183 confirmations fall on **59 distinct dates**: one macro
+surprise fires the condition across several coins the same day, and those are
+one event counted seven times. This project already enforces exactly that
+distinction at the testability gate (`MIN_HISTORICAL_EPISODES`, and the measured
+3.1x raw-to-episode inflation for this very condition). Applied to the
+confirmation count it puts the independent figure BELOW the 96 occurrences
+`required_n_for_power` asks for. On raw occurrences the candidate is past its
+power threshold; on episodes it is not, and the checkpoint machinery counts raw.
+That is a real inconsistency in this project's own discipline, recorded here
+rather than resolved, because changing what a checkpoint counts mid-analysis
+would be choosing the denominator after seeing the result.
+
+**CONFIRMED is not validated, and the second confirmed candidate proves it.**
+`claims_surprise_then_funding_stretched_reversion` reached a checkpoint while
+accepted and is `rejected` today. The label is persistence, re-earned each time
+and losable -- not a badge.
+
+**Type.** Result, reported with its qualifications. One condition cleared every
+gate this system has, which is not the same claim as a demonstrated edge, and
+the difference is the reason for all the machinery around it.
