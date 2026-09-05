@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+# Catch 3.11 syntax errors before CI does, and NEVER block a push for any other
+# reason.
+#
+# Install:  ./scripts/install-hooks.sh
+# Skip once: git push --no-verify
+#
+# The rule this hook follows, and the reason it is written the way it is: a real
+# syntax error blocks the push, and a missing tool does not. A hook that fails
+# closed on absent infrastructure gets bypassed with --no-verify the first time
+# it is inconvenient, and from then on it protects nothing. So the only exit
+# code 1 here comes from a compiler that actually ran and actually objected.
+#
+# Three checkers, best first. The first one available decides:
+#   1. Docker + python:3.11-slim -- the exact version CI pins. Authoritative.
+#   2. A local Python 3.10, if one exists. Catches everything 3.11 rejects,
+#      because 3.10 is stricter; the one caveat is `except*`, valid from 3.11
+#      and rejected here. This project does not use it, and the message below
+#      says so should that change.
+#   3. tests/test_python_compatibility.py -- the AST pre-filter, no extra deps.
+set -uo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+
+CHECK_SRC='
+import pathlib, sys
+SKIP = {".git", ".venv", "venv", "__pycache__", "freqtrade_userdir", "node_modules"}
+errors, checked = [], 0
+for path in sorted(pathlib.Path(".").rglob("*.py")):
+    if SKIP & set(path.parts):
+        continue
+    checked += 1
+    try:
+        compile(path.read_text(errors="ignore"), str(path), "exec")
+    except SyntaxError as e:
+        errors.append(f"  {path}:{e.lineno}: {e.msg}")
+print(f"  {sys.version.split()[0]}: compiled {checked} files, {len(errors)} error(s)")
+for line in errors:
+    print(line)
+sys.exit(1 if errors else 0)
+'
+
+PY310="/Library/Frameworks/Python.framework/Versions/3.10/bin/python3.10"
+
+echo "pre-push: checking Python 3.11 syntax compatibility..."
+
+if docker info >/dev/null 2>&1; then
+    if docker run --rm -v "$PWD":/src -w /src python:3.11-slim python -c "$CHECK_SRC"; then
+        echo "pre-push: OK (real 3.11, same image as CI)"
+        exit 0
+    fi
+    echo ""
+    echo "pre-push: BLOCKED -- this will fail CI. Fix the syntax above, or"
+    echo "          push anyway with: git push --no-verify"
+    exit 1
+fi
+
+echo "  Docker is not running -- falling back to a weaker check."
+echo "  For the authoritative one: start Docker, then ./scripts/check_py311.sh"
+
+if [ -x "$PY310" ]; then
+    if "$PY310" -c "$CHECK_SRC"; then
+        echo "pre-push: OK (via 3.10; stricter than 3.11, so a pass is a pass)"
+        exit 0
+    fi
+    echo ""
+    echo "pre-push: BLOCKED -- 3.10 rejected the above, and 3.11 almost certainly"
+    echo "          will too. The one exception is \`except*\`, which is valid from"
+    echo "          3.11 and rejected by 3.10; if that is what you are seeing, this"
+    echo "          hook is wrong and --no-verify is the right answer."
+    exit 1
+fi
+
+if python3 -m pytest tests/test_python_compatibility.py -q >/dev/null 2>&1; then
+    echo "pre-push: OK (AST pre-filter only -- it knows the violations we thought of,"
+    echo "          not all of them. CI remains the real check.)"
+    exit 0
+fi
+
+echo ""
+echo "pre-push: the AST pre-filter objected. Run it for detail:"
+echo "          python3 -m pytest tests/test_python_compatibility.py -v"
+exit 1
