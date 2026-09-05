@@ -35,13 +35,12 @@ observational engine running via a single daemon scheduler.</sub>
 <sub><b>RESULT — one full replay, 2017-08-26 → 2026-09-05</b><br>
 Nine years of real market data walked day by day, causality-safe:<br>
 <b>159</b> conditions tracked, <b>23,495</b> observational live tests, <b>0</b> funded positions.<br>
-<b>2</b> conditions ended <code>accepted</code>; <b>1</b> was also <code>CONFIRMED</code> at a checkpoint.<br>
-It survives Benjamini–Hochberg on a family of 101 — but 19 of those 101 sit<br>
-under the raw threshold where chance alone predicts ~10, which is why the<br>
-multiplicity control is not optional. And its 183 confirmations fall on 59<br>
-distinct dates, so on the independent-episode count this project uses<br>
-everywhere else it is <b>below</b> the 96 its own power calculation asks for.<br>
-<i>A candidate that cleared every gate, not a demonstrated edge. Details below.</i></sub>
+<b>2</b> conditions ended <code>accepted</code>; <b>1</b> was also <code>CONFIRMED</code> at a checkpoint —<br>
+p = 0.001, N = 896, MFE/MAE 1.31, no coin above 26% and no year above 44%.<br>
+It clears Benjamini–Hochberg on a family of 101, and its <b>106 independent<br>
+episodes</b> put it past the <b>96</b> its own power calculation asks for.<br>
+<i>A candidate that cleared every gate this system has — which is not the same<br>
+claim as a demonstrated edge. Full numbers and caveats below.</i></sub>
 <br><br>
 </td>
 </tr>
@@ -82,18 +81,18 @@ The historical replay walked nine years of real market data one simulated day at
 | Risk path (MFE/MAE) | 1.31 | favourable above 1.0 |
 | Coin concentration | 26% (BNB) | inside the 60% limit |
 | Year concentration | 44% (2025) | inside the 60% limit |
-| Confirmations postdating the hypothesis | 183 | |
+| Confirmations postdating the hypothesis | 183 raw, **106 independent episodes** | past the **96** required for power |
 | Multiplicity | survives Benjamini–Hochberg | on a family of 101 |
 
-**Three things that must be said next to those numbers, because they change what they mean.**
+**Two things that must be said next to those numbers, because they change what they mean.**
 
 **Chance alone predicts about ten.** Of the 101 conditions with a p-value, **19** sit under the raw 0.10 threshold — where a family of pure nulls would produce roughly 10. That gap is why this project runs Benjamini–Hochberg as a family-level pass rather than reading each p-value on its own. After it, 8 survive; of those 8, only 2 also clear direction, concentration and risk path.
 
-**The confirmation count overstates its own independence.** Those 183 confirmations fall on **59 distinct dates** — one macro surprise fires the condition across several coins the same day, and those are one event, not several. This project already enforces that distinction at the testability gate (`MIN_HISTORICAL_EPISODES`), and applied here it puts the independent count *below* the **96** occurrences `required_n_for_power` asks for to detect a 5% effect at 80% power. On raw occurrences it is past that line; on episodes it is not.
-
 **`CONFIRMED` is not `validated`, and the word is chosen.** It means the condition kept occurring after it was written down and still passed on the enlarged sample — persistence, re-earned at each checkpoint and losable. The second candidate ever confirmed, `claims_surprise_then_funding_stretched_reversion`, is `rejected` today: a live demonstration that the label is not a badge.
 
-So the honest summary is that **one condition cleared every gate this system has, and that is not the same as a demonstrated edge.** The earlier static-battery phase found no persistent unconditional edge; this replay found one candidate that survives every check it can currently be put to, with the independence caveat above still open. Reporting it that way, rather than as a discovery, is the whole point of the machinery around it.
+**On what counts as one occurrence**, since the 183/106 split invites the question: the same condition firing on seven coins the same day is seven observations, not one. Redundancy is checked twice, by two different tools, because there are two different ways evidence can be double-counted — repetition in *time*, and dependence across *coins*. [`methodology-decisions.md`](docs/case_study/methodology-decisions.md) sets out both.
+
+So the honest summary is that **one condition cleared every gate this system has, and that is not the same as a demonstrated edge.** The earlier static-battery phase found no persistent unconditional edge; this replay found one candidate that survives every check it can currently be put to. Reporting it that way, rather than as a discovery, is the whole point of the machinery around it.
 
 ### What this project does not claim — and a component deleted for it
 

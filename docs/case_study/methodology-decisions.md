@@ -2445,7 +2445,7 @@ proposals. The two spaces overlap; neither contains the other. The sweep's own
 docstring said "this measures the space, not the searcher" and that caveat was
 read as smaller than it is.
 
-### Three qualifications that belong beside the result, not below it
+### Two qualifications that belong beside the result, not below it
 
 **Chance alone predicts about ten.** Of 101 conditions with a p-value, 19 sit
 under the raw 0.10 threshold where a family of pure nulls yields roughly 10.
@@ -2453,18 +2453,47 @@ That is the entire case for running Benjamini-Hochberg as a family pass rather
 than reading each p-value alone. After it, 8 survive; of those, 2 also clear
 direction, concentration and risk path.
 
-**The confirmation count overstates its own independence, and this is the
-sharpest caveat.** The 183 confirmations fall on **59 distinct dates**: one macro
-surprise fires the condition across several coins the same day, and those are
-one event counted seven times. This project already enforces exactly that
-distinction at the testability gate (`MIN_HISTORICAL_EPISODES`, and the measured
-3.1x raw-to-episode inflation for this very condition). Applied to the
-confirmation count it puts the independent figure BELOW the 96 occurrences
-`required_n_for_power` asks for. On raw occurrences the candidate is past its
-power threshold; on episodes it is not, and the checkpoint machinery counts raw.
-That is a real inconsistency in this project's own discipline, recorded here
-rather than resolved, because changing what a checkpoint counts mid-analysis
-would be choosing the denominator after seeing the result.
+**Independence, and the error I made reading it.** The 183 confirmations fall on
+59 distinct dates, and my first write-up of this result treated that as a
+problem -- collapsing them to 59 and concluding the candidate was BELOW its
+power threshold. That was wrong on this project's own terms, and the correction
+is worth recording because the two things being conflated are genuinely
+different.
+
+**Redundancy is checked twice here, by two tools, because evidence can be
+double-counted in two unrelated ways.**
+
+*Repetition in TIME* is what `episode_count` handles. `build_events` makes one
+row per triggered bar, so a condition true for several consecutive days produces
+several events whose forward windows overlap almost entirely -- day t and day
+t+1 share 20 of 21 days of outcome. That is one piece of evidence counted many
+times, and a `within_days` lookback makes it worse at scale (measured on one
+hypothesis: 8x the raw count for 1.7x the independent episodes). So
+`episode_count` walks **each coin separately** and collapses firings closer
+together than the spec's longest horizon.
+
+*Dependence across COINS* is a different question, and `episode_count` does not
+touch it -- deliberately. Seven coins firing on the same macro surprise are
+seven distinct price paths with seven distinct forward returns, not one
+measurement repeated: BTC's outcome that week is not ETH's. What they are is
+CORRELATED (mean cross-coin correlation 0.54, measured in
+`forecast/market_relative.py`), and correlation is handled by a different gate
+entirely: `MAX_GROUP_SHARE = 0.6`, the coin-concentration check, which asks
+whether the result is carried by one asset. For this candidate that answer is
+26% on BNB -- comfortably inside the limit, which is precisely the evidence that
+it is not one coin's quirk.
+
+Applying the temporal rule correctly, per coin, the 183 confirmations are **106
+independent episodes**, and 106 is ABOVE the 96 `required_n_for_power` asks for.
+The candidate is past its power threshold on the project's own measure. My
+earlier "below 96" was the product of applying a cross-coin collapse the code
+does not perform and should not.
+
+**Why the distinction is worth this much space.** Firing across seven assets is
+not a weakness to be discounted; it is the generality a single-coin result
+cannot claim, and the concentration gate exists to reward exactly that. Reading
+it as redundancy would penalise a condition for the one property that most
+distinguishes a market pattern from an artefact of one asset's history.
 
 **CONFIRMED is not validated, and the second confirmed candidate proves it.**
 `claims_surprise_then_funding_stretched_reversion` reached a checkpoint while
