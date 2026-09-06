@@ -36,6 +36,8 @@ from anthropic import Anthropic
 from dotenv import load_dotenv
 
 from candidates.atomic_json import write_json
+from candidates.run_battery import COINS
+from data_ingestion.market_data.binance_fetcher import update_all as update_market_data
 from execution.hyperopt_runner import pending_work_reminder
 from execution.live_testing import _check_parked_proposals, run_once as run_live_testing, send_monthly_digest
 from llm_pipeline.haiku_sonnet_pipeline import run_compression_scan
@@ -127,12 +129,23 @@ def run_forever() -> None:
 
         now = datetime.now(timezone.utc)
         if now - last_hourly >= HOURLY_INTERVAL:
+            # Refresh FIRST, as its own job. Both scans below read the hourly
+            # OHLCV this writes, and the refresh used to live inside the
+            # compression scan -- which runs second, so the mechanical scan
+            # always read data an hour older than it had to. Harmless in a
+            # long-running daemon (a 24-hour window losing its newest hour),
+            # but not on a freshly deployed host: the very first mechanical
+            # scan would run against whatever stale candles the repo shipped
+            # with. Hoisting it also means a market-data outage is reported as
+            # a market-data failure, instead of surfacing as a compression
+            # scan that quietly scanned old data.
+            _run_isolated("market data refresh", lambda: update_market_data(COINS))
             _run_isolated("mechanical trigger scan", run_live_testing)
             # The hourly Haiku headline scan was removed on 2026-09-02: nothing
             # it surfaced could enter a testable hypothesis, and a backfill was
             # measured not to fix that. See llm_pipeline/haiku_sonnet_pipeline.py's
             # module docstring and docs/case_study/methodology-decisions.md.
-            _run_isolated("compression scan", run_compression_scan)
+            _run_isolated("compression scan", lambda: run_compression_scan(refresh=False))
             last_hourly = now
             state["last_hourly"] = now.isoformat()
             _save_state(state)

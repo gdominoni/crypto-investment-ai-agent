@@ -398,7 +398,7 @@ def send_telegram(message: str, reply_markup: dict | None = None) -> bool:
     return True
 
 
-def run_compression_scan(coins: list[str] | None = None) -> None:
+def run_compression_scan(coins: list[str] | None = None, refresh: bool = True) -> None:
     """Refreshes local OHLCV from Binance first, then escalates each confirmed
     compression exit that has not already been escalated.
 
@@ -406,6 +406,13 @@ def run_compression_scan(coins: list[str] | None = None) -> None:
     tested the volatility STATE, so an hourly daemon re-escalated the same
     multi-day shock every hour. `scan_for_compression_exits` keeps a ledger and
     fires once per episode.
+
+    `refresh=False` is for the one caller that has already refreshed: the live
+    daemon now does it as its own hourly job, ahead of BOTH scans, so the
+    mechanical one stops reading data an hour older than it needs (see
+    scheduler/live_daemon.py). The default stays True so running this scan on
+    its own -- by hand, or from anywhere else -- still cannot silently work off
+    stale candles.
     """
     from llm_pipeline.compression_detector import mark_escalated, scan_for_compression_exits
 
@@ -414,7 +421,8 @@ def run_compression_scan(coins: list[str] | None = None) -> None:
         # a heavy exchange client a hard dependency of everything downstream.
         from data_ingestion.market_data.binance_fetcher import update_all as update_market_data
 
-        update_market_data(coins or SHOCK_SCAN_COINS)
+        if refresh:
+            update_market_data(coins or SHOCK_SCAN_COINS)
     except Exception as e:
         print(f"Market data refresh failed, scanning with existing data: {e}")
 

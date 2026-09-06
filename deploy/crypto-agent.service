@@ -1,0 +1,60 @@
+; systemd unit for the live daemon. Copy to /etc/systemd/system/crypto-agent.service
+; on the host, edit the two paths below, then:
+;
+;   sudo systemctl daemon-reload
+;   sudo systemctl enable --now crypto-agent
+;
+; See deploy/README.md for the full walkthrough.
+
+[Unit]
+Description=Crypto pattern-discovery agent (Telegram bot, hourly scans, weekly re-validation)
+; The daemon's first action is a Binance fetch and a Telegram send, so starting
+; before the network is routable means an immediate, avoidable failure alert.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=agent
+WorkingDirectory=/home/agent/crypto-agent
+ExecStart=/home/agent/crypto-agent/.venv/bin/python3 -m scheduler.live_daemon
+
+; ---------------------------------------------------------------------------
+; Restart policy. This is the whole reason for using systemd rather than nohup:
+; a process that dies at 3am and stays dead is the silent failure this project
+; treats as unacceptable, and it is exactly what a detached shell process does.
+;
+; The daemon already isolates every scheduled job internally (see
+; _run_isolated), so reaching the point of process death means something
+; systemd-level went wrong -- OOM, a kill, an unhandled crash in the poll loop.
+; Always restart, but back off: a daemon that crashes on startup (bad .env,
+; unreachable Telegram) would otherwise spin at full speed forever.
+Restart=always
+RestartSec=30
+; If it fails 5 times within 10 minutes, stop trying. A crash-looping daemon is
+; broken in a way restarting will not fix, and burning API credit or Telegram
+; rate limit on the loop makes it worse.
+StartLimitBurst=5
+StartLimitIntervalSec=600
+
+; Logs go to the journal: `journalctl -u crypto-agent -f` to follow,
+; `journalctl -u crypto-agent --since "1 hour ago"` to look back.
+StandardOutput=journal
+StandardError=journal
+; Unbuffered, or Python holds print() output in a 4KB buffer and the journal
+; shows nothing for hours -- which looks exactly like a hung daemon.
+Environment=PYTHONUNBUFFERED=1
+
+; ---------------------------------------------------------------------------
+; Hardening. This process holds an Anthropic API key and a Telegram bot token,
+; and it runs unattended on a public-facing host.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=false
+; The one place it must be able to write: its own directory (runtime state,
+; refreshed market data, the atomic-write temp files).
+ReadWritePaths=/home/agent/crypto-agent
+
+[Install]
+WantedBy=multi-user.target

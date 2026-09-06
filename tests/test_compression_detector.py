@@ -179,3 +179,66 @@ def test_run_compression_scan_reaches_telegram_end_to_end(monkeypatch, tmp_path)
     assert len(queue) == 1
     assert queue[0]["specs"][0]["label"] == "hot_cpi_into_oversold_btc"
     assert C.already_escalated("BTCUSDT", episode["b_date"])
+
+
+class TestTheHourlyBlockRefreshesBeforeItScans:
+    """The market-data refresh used to live INSIDE the compression scan, which
+    the daemon runs second. So the mechanical trigger scan -- which reads the
+    hourly OHLCV that refresh writes -- always ran on data an hour older than
+    it had to.
+
+    In a daemon that has been up for weeks that costs a 24-hour window its
+    newest hour. On a freshly deployed host it is worse: the first mechanical
+    scan runs against whatever candles the repo happened to ship with, which
+    is the same class of silent staleness that already made the entire
+    mechanical arm inert once (see binance_fetcher.update_all's docstring)."""
+
+    def _isolated_job_order(self):
+        """The literal names, in call order, of the jobs run_forever schedules."""
+        import ast
+        import inspect
+        import textwrap
+
+        import scheduler.live_daemon as D
+
+        tree = ast.parse(textwrap.dedent(inspect.getsource(D.run_forever)))
+        names = []
+        for node in ast.walk(tree):
+            if (isinstance(node, ast.Call) and getattr(node.func, "id", None) == "_run_isolated"
+                    and node.args and isinstance(node.args[0], ast.Constant)):
+                names.append(node.args[0].value)
+        return names
+
+    def test_the_refresh_is_scheduled_before_the_scans_that_read_it(self):
+        order = self._isolated_job_order()
+        for job in ("market data refresh", "mechanical trigger scan", "compression scan"):
+            assert job in order, f"{job} is no longer a scheduled job"
+        assert order.index("market data refresh") < order.index("mechanical trigger scan"), (
+            "the mechanical scan runs before the refresh again -- it will read stale hourly data")
+        assert order.index("market data refresh") < order.index("compression scan")
+
+    def test_the_refresh_is_its_own_isolated_job(self):
+        """Hoisted so a Binance outage is reported as a market-data failure,
+        rather than surfacing as a compression scan that quietly scanned old
+        data -- the refresh's own try/except inside the scan swallowed it."""
+        assert "market data refresh" in self._isolated_job_order()
+
+    def test_the_scan_skips_its_own_refresh_when_told_but_never_by_default(self, monkeypatch):
+        """Behavioural, not source-inspection: `refresh=False` must actually
+        reach the fetcher. The default stays True so running the scan by hand
+        cannot silently work off stale candles."""
+        import data_ingestion.market_data.binance_fetcher as fetcher
+        import llm_pipeline.haiku_sonnet_pipeline as H
+
+        calls = []
+        monkeypatch.setattr(fetcher, "update_all", lambda coins: calls.append(coins))
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key-never-used")
+        monkeypatch.setattr(H, "load_dotenv", lambda *a, **k: None)
+        monkeypatch.setattr(H, "Anthropic", lambda **kw: object())
+        monkeypatch.setattr(C, "current_compression_exit", lambda c: None)
+
+        H.run_compression_scan(refresh=False)
+        assert calls == [], "refresh=False still hit the exchange"
+
+        H.run_compression_scan()
+        assert len(calls) == 1, "the default stopped refreshing -- a hand-run scan now reads stale data"
