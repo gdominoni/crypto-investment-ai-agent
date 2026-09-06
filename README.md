@@ -92,13 +92,13 @@ So the layer was removed rather than kept for the badge. The honest scope is mac
 
 <table>
 <tr>
-<td width="33%" align="center"><img src="docs/case_study/assets/telegram_novel_condition_proposal.png" alt="Sonnet proposing a novel condition, with Test It / Don't Test It buttons" width="280"><br><sub>Sonnet proposes a novel condition — human approves with a button, never free text</sub></td>
-<td width="33%" align="center"><img src="docs/case_study/assets/telegram_live_test_resolved.png" alt="A confirmation checkpoint, with real forward return and power progress" width="280"><br><sub>A candidate crosses a confirmation checkpoint <i>(this screenshot predates the message-volume rework: individual live-test resolutions are no longer sent one by one, see "What replaced one message per live test" above — pending an updated screenshot)</i></sub></td>
+<td width="33%" align="center"><img src="docs/case_study/assets/telegram_novel_condition_proposal.png" alt="Sonnet proposing a novel condition, with Test It / Don't Test It buttons" width="280"><br><sub>Sonnet proposes a novel condition (<code>dovish_cpi_then_momentum_confirmed</code>) — human approves with a button, never free text</sub></td>
+<td width="33%" align="center"><img src="docs/case_study/assets/telegram_status_update.png" alt="A STATUS UPDATE message showing a rejected candidate's full verdict and power progress" width="280"><br><sub>A periodic STATUS UPDATE — here, a candidate that reached SAMPLE SUFFICIENT and was rejected on the evidence</sub></td>
 <td width="33%" align="center"><img src="docs/case_study/assets/telegram_prune_decision.png" alt="A keep-or-drop decision after 2+ years untested" width="280"><br><sub>2+ years untested — the human decides Keep or Drop <i>(now delivered as one periodic digest, computed offline)</i></sub></td>
 </tr>
 <tr>
 <td width="33%" align="center"><img src="docs/case_study/assets/telegram_replay_summary.png" alt="/replay_summary grouping every tracked candidate by status" width="280"><br><sub><code>/replay_summary</code> — every tracked candidate, grouped by status, recomputed fresh <i>(verdicts shown are pre-audit)</i></sub></td>
-<td width="33%" align="center"><img src="docs/case_study/assets/telegram_replay_details.png" alt="/replay_details showing the full numeric breakdown for one candidate" width="280"><br><sub><code>/replay_details</code> — every number behind one candidate's verdict <i>(pre-audit figures)</i></sub></td>
+<td width="33%" align="center"><img src="docs/case_study/assets/telegram_replay_details.png" alt="/replay_details showing the full numeric breakdown and dated occurrence history for candidate 44fb" width="280"><br><sub><code>/replay_details 44fb</code> — the same numbers quoted in the "Structured commands" example above</sub></td>
 <td width="33%" align="center"><img src="docs/case_study/assets/telegram_help_pinned.png" alt="The pinned /help reference listing every standard command" width="280"><br><sub>The pinned <code>/help</code> reference — every command, always one scroll away</sub></td>
 </tr>
 </table>
