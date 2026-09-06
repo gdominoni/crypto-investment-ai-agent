@@ -4,6 +4,142 @@ Reference for **why this project has the shape it has** — not a change log. Ev
 
 ---
 
+## Code navigation
+
+Four diagrams, each one real call path rather than a full dependency graph — traced from actual imports and function calls, not redrawn from memory. `candidates/` is the statistical foundation everything else is built on; `llm_pipeline/` is Sonnet's half; `execution/` and `replay/` are the two runtimes (real time vs. simulated history) that share both; `telegram/` and `scheduler/` are where a human or a clock enters the system.
+
+### 1. How the packages depend on each other
+
+```mermaid
+flowchart TB
+    subgraph cand["candidates/ -- the statistical foundation"]
+        methodology["methodology.py<br/>build_events, walk_forward,<br/>pattern_significance, classify_status"]
+        definitions["definitions.py<br/>static C1/C2/C6 triggers"]
+        run_battery["run_battery.py<br/>run_all -- weekly battery refresh"]
+        status_history["status_history.py<br/>CONFIRMED checkpoints"]
+    end
+
+    subgraph llm["llm_pipeline/ -- Sonnet's half"]
+        novel_tester["novel_condition_tester.py<br/>ConditionSpec, test_novel_condition"]
+        dynamic_candidates["dynamic_candidates.py<br/>Sonnet-proposed registry"]
+        haiku_sonnet["haiku_sonnet_pipeline.py<br/>sonnet_compression_response"]
+        context_builder["context_builder.py"]
+    end
+
+    subgraph exec["execution/ -- production runtime"]
+        live_testing["live_testing.py"]
+        hyperopt_runner["hyperopt_runner.py"]
+    end
+
+    subgraph rep["replay/ -- historical-simulation runtime"]
+        engine["engine.py<br/>advance -- one simulated day"]
+        judgment["judgment.py<br/>judge_event, format_*"]
+        battery["battery.py"]
+        orchestrator["orchestrator.py"]
+    end
+
+    subgraph entry["Entry points"]
+        scheduler["scheduler/live_daemon.py"]
+        bot["telegram/bot.py"]
+    end
+
+    run_battery --> novel_tester
+    run_battery --> methodology
+    novel_tester --> methodology
+    haiku_sonnet --> novel_tester
+    haiku_sonnet --> context_builder
+    live_testing --> methodology
+    live_testing --> novel_tester
+    live_testing --> bot
+    engine --> methodology
+    engine --> novel_tester
+    engine --> battery
+    engine --> haiku_sonnet
+    engine --> bot
+    judgment --> haiku_sonnet
+    judgment --> novel_tester
+    battery --> novel_tester
+    orchestrator --> engine
+    orchestrator --> judgment
+    orchestrator --> bot
+    scheduler --> live_testing
+    scheduler --> haiku_sonnet
+    scheduler --> bot
+    bot --> novel_tester
+    bot --> methodology
+    bot --> dynamic_candidates
+```
+
+### 2. One simulated day (`replay/engine.py::advance`)
+
+The same shape production runs continuously, one tick per hour instead of one call per chunk.
+
+```mermaid
+flowchart TD
+    A["advance(): one simulated day"] --> B["_check_live_tests()<br/>resolve any live test due today"]
+    A --> C["_scan_mechanical_triggers()<br/>open a live test on any accepted candidate's trigger"]
+    A --> D{"7 days since last<br/>battery refresh?"}
+    D -->|yes| E["run_replay_battery()<br/>re-test every static + dynamic candidate"]
+    E --> F["_check_prune_decisions()"]
+    E --> G["_check_n50_milestones()<br/>CONFIRMED checkpoints"]
+    A --> H["_check_parked_proposals()<br/>staggered, ~1/7th of the queue per day"]
+    A --> I{"per coin:<br/>_compression_exit()?"}
+    I -->|episode found| J["judgment.format_compression_event()"]
+    J --> K["judgment.judge_event()<br/>asks Sonnet"]
+    K --> L["_handle_assessment()"]
+    L --> M{"recommended_action ==<br/>propose_novel_test?"}
+    M -->|yes| N["filter_redundant_proposals()"]
+    N --> O["state.save_pending_test()"]
+    O --> P["Telegram: Test It / Don't Test It"]
+    P -->|human presses Test It| Q["resolve_pending_test()"]
+    Q --> R["_resolve_one_proposal()"]
+    R --> S["novel_condition_tester.test_novel_condition()"]
+```
+
+### 3. One statistical pipeline, three callers
+
+The acceptance/CONFIRMED machinery lives in exactly one place; the weekly battery, a freshly-proposed hypothesis, and the replay's own battery refresh all run through it rather than each having their own copy.
+
+```mermaid
+flowchart LR
+    subgraph callers["Three callers"]
+        RB["run_battery.py::run_all()"]
+        NT["novel_condition_tester.py::test_novel_condition()"]
+        RBB["replay/battery.py"]
+    end
+    subgraph pipeline["candidates/methodology.py"]
+        BE["build_events()"] --> WF["walk_forward()<br/>per-fold horizon + TP/SL"]
+        WF --> PS["pattern_significance()<br/>block-bootstrapped test"]
+        PS --> CC["concentration_check()<br/>coin, then year"]
+        CC --> CS["classify_status()"]
+    end
+    RB --> BE
+    NT --> BE
+    RBB --> BE
+    CS --> OUT["accepted / watch / rejected / insufficient_data"]
+```
+
+### 4. Telegram command and callback dispatch
+
+Free text and buttons are handled by entirely separate code paths — see [The Telegram interface](../../README.md) in the README for why.
+
+```mermaid
+flowchart TD
+    U["Incoming message"] --> BOT["telegram/bot.py::run_bot()"]
+    BOT --> CMD{"what kind?"}
+    CMD -->|"/summary"| SUM["format_trigger_summary()"]
+    CMD -->|"/details name-or-id"| DET["format_candidate_details()"]
+    CMD -->|"/replay_summary, /replay_details"| REP["same functions, against replay state"]
+    CMD -->|"/help"| HELP["static reference text"]
+    CMD -->|"button: Test It"| TIC["handle_test_it_confirmation()"]
+    TIC --> TNC["test_novel_condition()"]
+    CMD -->|"button: Keep / Drop"| PRU["handle_prune_callback()"]
+    CMD -->|"free text"| NL["handle_natural_language()"]
+    NL --> SONNET["Sonnet -- grounded only in<br/>real computed numbers, never invents one"]
+```
+
+---
+
 ## Vocabulary
 
 ### `accepted` vs `CONFIRMED` — two different claims, never interchangeable
