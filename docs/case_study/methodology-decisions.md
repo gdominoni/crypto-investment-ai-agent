@@ -1,1785 +1,26 @@
-# Methodology Decisions Log
+# Methodology Decisions
 
-A running record of every non-obvious methodology choice in this project, why it was made, and whether it rests on a statistical justification or is a stated compromise (and why the compromise was accepted). Companion to [PROJECT_MAP.md](../../PROJECT_MAP.md) (where it lives in code) and [README.md](../../README.md) (what the system does) — this file exists so a reader can find out *why* a specific number or design choice is what it is, in one place, instead of archaeology through commit history.
-
-Each entry is dated and never silently rewritten — if a decision is later reversed, a new entry says so and links back to the one it supersedes.
+Reference for **why this project has the shape it has** — not a change log. Every entry: what it is, the real setting used, and why. Companion to [PROJECT_MAP.md](../../PROJECT_MAP.md) (where it lives in code) and [README.md](../../README.md) (what the system does). Numbers here are checked against the current code, not against what was once true.
 
 ---
 
-## `accepted` vs `CONFIRMED` — two different claims, never interchangeable
+## Vocabulary
 
-**What they mean.** `accepted` = the historical backtest cleared every statistical gate (see [`classify_status`'s gate](#classify_statuss-gate-pattern-significance-not-pl)). `CONFIRMED` = additionally still `accepted` after a live checkpoint of real, out-of-sample occurrences (see [The CONFIRMED checkpoint](#the-confirmed-checkpoint-milestone_n--20)). A candidate can hold one without the other. The word "validated" is never used for either — see [Why "confirmed", not "validated"](#why-confirmed-not-validated).
+### `accepted` vs `CONFIRMED` — two different claims, never interchangeable
+
+`accepted` = the historical backtest cleared every statistical gate (see [Acceptance: `classify_status`'s gate](#acceptance-classify_statuss-gate)). `CONFIRMED` = additionally still `accepted` after a live checkpoint of real, out-of-sample occurrences (see [The CONFIRMED checkpoint](#the-confirmed-checkpoint-milestone_n--20)). A candidate can hold one without the other. "Validated" is never used for either — see [Why "confirmed", not "validated"](#why-confirmed-not-validated).
 
 **Type.** Definitional.
 
----
+### The CONFIRMED checkpoint: `MILESTONE_N = 20`
 
-## `classify_status`'s gate: pattern significance, not P&L
-
-**Decision.** A candidate is `accepted` if `pattern_significance` finds a statistically significant, out-of-sample directional effect (vs. the coin's own unconditional baseline over the same period) with a favorable risk path (mean MFE > mean MAE at the horizon the effect was found at), and isn't carried by a single coin or period. Sortino, win_rate, and strict_win_rate — the TP/SL-conditioned backtest numbers — are still computed and still reported, but **no longer gate acceptance.**
-
-**Why.** This project's stated purpose is discovering whether a real, reproducible relationship exists between a market condition and subsequent price behavior — not optimizing a specific TP/SL barrier structure. The two questions are related but different: a real, small, reliable pattern can fail a P&L gate simply because the barriers are too wide to register it (a high-timeout-fraction candidate); conversely, a barrier structure can look profitable by fitting the same noise it was graded against. Concretely observed on real data during this rework: a shock-based condition with `win_rate=42.5%` (would have failed the old win-rate gate permanently) turned out to have a statistically significant pattern (`p=0.027`) with a favorable risk profile (`MFE/MAE=2.01`) — exactly the case the old gate was structurally blind to.
-
-**Type.** Statistical rigor. Direct consequence of the project's own stated goal, not an arbitrary preference.
-
----
-
-## `pattern_significance`: how "does a pattern exist" is actually tested
-
-**Decision.** For each walk-forward fold (expanding window, yearly), the holding horizon is chosen on the **train** set only (whichever of `(1, 3, 7, 14, 21)` days shows the strongest `|mean forward return|`), then the effect is measured **only on the held-out test fold** at that horizon — same discipline already used for TP/SL multiplier selection, extended to horizon selection, specifically so the horizon can never be picked and graded on the same data. The test-fold sample's mean forward return is compared against the coin's own unconditional forward-return distribution over the *same calendar stretch* (not the whole multi-year history — that would let a triggered sample from an unusually volatile year get compared against a calmer baseline). Significance is assessed via bootstrap (2,000 resamples), not a textbook t-test, because financial returns violate the assumptions a t-test needs (fat tails, and overlapping-window autocorrelation when trigger events cluster in time).
-
-**Why.** Any single-horizon comparison chosen after seeing the full sample is picking-and-testing on the same data — the exact trap a prior, predecessor research effort's own methodology fell into with data leakage, before this project's own causality-safe rebuild. The train/test split for horizon selection closes that gap the same way it's already closed for TP/SL.
+Every 20 qualifying occurrences, a candidate is re-tested against the exact bar acceptance itself requires (`min_report_events = 20`) — the checkpoint asks nothing new. A Sonnet-proposed candidate's *first* checkpoint counts backtest occurrences too (`_effective_milestone_count`), so it fires almost immediately on acceptance; every checkpoint after that counts only real live occurrences. A static candidate (C1/C2/C6) always counts live occurrences only. At the median discovery rate (10.8 independent occurrences/year), the second, live-only checkpoint arrives in about 3.7 years.
 
 **Type.** Statistical rigor.
 
----
+### Why "confirmed", not "validated"
 
-## `min_report_events = 20` — the sample-size floor for acceptance
-
-**Decision.** `classify_status` requires more than `MethodologyConfig.min_report_events` (20) out-of-sample events before a candidate can be `accepted`, `watch`, or `rejected` at all — below it, the verdict is `insufficient_data`.
-
-**Why.** A compromise, stated plainly: stacking this floor with the other acceptance gates (statistical significance, favorable MFE/MAE, no concentration) risks accepting *nothing at all* if the floor is set too high, given how much real history is available for any one condition. 20 stops sample size itself from being the bottleneck without weakening the gate that actually answers "does a pattern exist" — statistical significance. If nothing clears the bar even here, that is itself a real, reportable finding, not a problem to engineer away further. It is the same number [`MILESTONE_N`](#the-confirmed-checkpoint-milestone_n--20) mirrors for the CONFIRMED checkpoint.
-
-**Type.** Compromise (practical yield vs. rigor), explicitly not a loosening of the pattern-existence test itself.
-
----
-
-## The CONFIRMED checkpoint: `MILESTONE_N = 20`
-
-**What it is.** Every `MILESTONE_N` (20) qualifying occurrences, a candidate is re-tested against the exact bar `classify_status` uses for acceptance (`min_report_events = 20`) — the checkpoint asks nothing the acceptance test doesn't already ask. A dynamic (Sonnet-proposed) candidate's *first* checkpoint counts backtest occurrences too (`_effective_milestone_count`), so it fires almost immediately on acceptance; every checkpoint after that counts only real live occurrences. A static candidate (C1/C2/C6) always counts live occurrences only.
-
-**Why 20.** It is the same floor the statistics themselves already require to report anything at all — not a threshold picked to arrive faster. At the median discovery rate across the current grammar (10.8 independent occurrences/year), a candidate reaches its second, live-only checkpoint in about 3.7 years. See [Why "confirmed", not "validated"](#why-confirmed-not-validated) for what 20 occurrences can, and cannot, prove; there is a separate, unrelated 2-year calendar keep-or-drop safety net for triggers too rare to ever reach 20 at all.
-
-**Type.** Statistical rigor.
-
----
-
-## Live testing: no TP/SL execution, hold for the horizon, measure forward return + MFE/MAE
-
-**Decision.** Once a candidate is `accepted`, a live occurrence of its trigger opens a **live test**, not a funded position with a TP/SL exit. It's held for exactly the horizon `pattern_significance` found significant at (no barrier check in between), then resolved by measuring the realized forward return, MFE, and MAE — the identical measure `pattern_significance` itself uses. `barrier_prices`, `bucket_for_elapsed`, and the TP/SL grid search are no longer part of how a live/replay test opens or resolves.
-
-**Why.** If acceptance is decided by "does a fixed-horizon forward return differ from baseline," then executing with a *different* structure (a Sortino-optimized TP/SL ladder) live would test a derived strategy, not the actual pattern that was accepted — the live occurrence would no longer measure the same concept the backtest measured. TP/SL/Sortino remain useful, reported information (how well a barrier-based structure would have captured this pattern) but are no longer the thing being tested live.
-
-**Type.** Statistical rigor / conceptual consistency, not a compromise. (This originally left open how, or whether, this applies to production's own execution — resolved by the later "This project never opens a funded position" decision below: the same live-test model, no exception.)
-
----
-
-## Simulation start date: earliest available data (2017), not an arbitrary offset
-
-**Decision.** The historical replay's simulated clock starts at `min(coin.index.min() for coin in COINS)` — 2017-08-26 in the current data (BTC/ETH) — rather than a fixed "N years before today" offset.
-
-**Why.** `pattern_significance` needs as many yearly walk-forward folds as it can get, both for a robust horizon choice and to give each tracked trigger a real chance of reaching its own `MILESTONE_N` checkpoint within the simulated run.
-
-**Compromise this creates.** The first several simulated years mostly return `insufficient_data` — there aren't yet enough yearly folds (`min_train_periods = 3`) for `pattern_significance`/`walk_forward` to run at all. This is expected, not a bug, but it does mean roughly the first 3-4 simulated years are statistically quiet. Starting from 2017 instead of a 3-year window also roughly **triples** the number of simulated days the replay has to walk through (~110 chunks of 30 days vs. ~36), which is a real increase in wall-clock time and API calls to complete a full run — accepted deliberately for the sake of a longer, more defensible walk-forward history.
-
-**Type.** Compromise, stated plainly, in service of the statistical goal above.
-
----
-
-## Manually-seeded horizon for the earliest tracked candidates
-
-**Decision.** For a candidate tracked from the very start of the simulated history (the six static, "academic" C1-C6 triggers), there is no prior data at all to run `pattern_significance`'s train/test horizon selection against for the first several years. Until enough yearly folds accumulate for the empirical selection to run, live tests for these candidates are held for a single, **uniform, neutral placeholder horizon** (the middle of the search space, 7 days) — not a different "logical-sounding" horizon hand-picked per trigger.
-
-**Why the uniform default, specifically.** Picking a different horizon per trigger based on domain intuition ("C2 is a reversal pattern, effects concentrate in the first week") would be exactly the kind of unfalsifiable, story-shaped reasoning this project has spent this whole rework moving away from — it would look, to any careful reader, indistinguishable from choosing the answer and writing the justification afterward. A single neutral default, applied uniformly and labeled explicitly as a placeholder, makes the compromise legible instead of disguising it as domain expertise.
-
-**Transition.** The moment `pattern_significance` can actually run for a candidate (enough yearly folds exist) and returns its own empirically-derived horizon, that value takes over for all subsequent live tests — and the switch itself is reported on Telegram (from-placeholder to from-data, with the N and year it happened), not applied silently.
-
-**Type.** Compromise, explicitly labeled, with a defined, documented, and notified exit condition — not a permanent manual override.
-
----
-
-## Trigger detection: hourly; backtest and live-test resolution: daily
-
-**Decision.** The historical/statistical backtest (`pattern_significance`, `walk_forward`, the weekly battery refresh) runs entirely on daily bars — unchanged. Separately, once past the simulated present, **detecting** whether a trigger condition has fired scans hourly bars within each simulated day (day-window indicators like `rsi_14d` are evaluated on a rolling window re-expressed in hours, e.g. 14 days → a 336-hour rolling window on the hourly series), so a condition that only crosses its threshold intraday and reverts by end of day isn't missed entirely by a once-a-day check. Once detected, opening and resolving the live test still uses the existing daily-bar machinery (entry snaps to the day's next daily bar; the horizon is still counted in days).
-
-**Why the split.** Running the full backtest (which re-runs repeatedly, across years, per candidate, with a 2,000-sample bootstrap each time) on hourly bars would multiply compute cost by roughly 24x on top of the ~3x already introduced by starting from 2017 — a genuinely large cost for a self-funded case study, not a funded production system. Detection precision matters for correctly recognizing whether a condition was ever true at all; a few hours of drift in exactly *when* a multi-day pattern's holding period starts does not meaningfully change what it measures.
-
-**Type.** Compromise (explicitly a cost tradeoff for a case study, stated here rather than left undocumented), scoped narrowly to detection only — the actual statistical claims (backtest, and the horizon/measurement used to resolve a live test) remain entirely daily and unaffected.
-
----
-
-## Shock threshold: `z ≥ 3.0`, justified empirically, not by a "3-sigma" claim
-
-**Decision.** `shock_zscore_series`'s threshold stays at 3.0 (a z-score of 5-day realized volatility against its own trailing 252-day distribution). The value itself is unchanged; its justification is rewritten to be honest about what it actually measures.
-
-**Why the original justification was wrong.** "z ≥ 3.0" reads as "a 3-sigma event," which under a normal distribution should occur ~0.13% of the time. It does not: measured on the real pooled data across all 7 coins, `z ≥ 3.0` actually occurs **1.97%** of the time — about 15x more often than the normal-distribution framing implies, because realized-volatility z-scores are strongly right-skewed (empirical skew 1.8-3.3 per coin), not normal.
-
-**What was actually checked before keeping 3.0.** A bootstrap test (same method as `pattern_significance`) comparing the 7-day forward return of the "above threshold" population against "below threshold," at candidate thresholds from z=1.5 to z=4.5: the effect (a positive excess return following elevated volatility) is present and similarly sized across the whole range; there is no sharp natural "elbow." What does change is statistical reliability as the sample shrinks: significant at p<0.05 through z=4.0, no longer significant by z=4.5 (p=0.068, N=126). 3.0 sits comfortably inside the range that stays both statistically reliable and reasonably extreme (~2% of observations), not at either edge of it.
-
-**Type.** Statistical rigor for the justification; the specific value (3.0) is a defensible choice within a validated range, not a uniquely-derived optimum — there is no single "correct" answer the data hands over on its own, and this file says so rather than implying otherwise.
-
----
-
-## Sonnet's role narrowed: no more `propose_trade` / `watch` / `exit_now`
-
-**Decision.** Sonnet's live judgment now does exactly two things: (1) decide whether to ask a human to test a genuinely new condition (`propose_novel_test`), and (2) answer natural-language questions about system state. It no longer decides to open a trade (`propose_trade` — superseded by the mechanical, unattended trigger-detection scan described above, which fires identically for every occurrence of an accepted candidate without needing a per-event LLM judgment), no longer has a `watch` action (verified to have had zero behavioral difference from `no_action` — same downstream consequence, different message wording only), and no longer has an unused, never-implemented `exit_now` action (removed rather than built, since a discretionary live exit would reintroduce exactly the kind of unattributable LLM judgment this project has spent this rework removing from entry and TP/SL sizing).
-
-**Why.** Each of these was either genuinely redundant with a more reliable mechanical process, or a piece of surface area that had no real behavior behind it. Removing dead/redundant paths is itself a form of rigor — fewer places where a claim about what the system does can silently drift from what it actually does.
-
-**Type.** Simplification / consistency, not a compromise.
-
----
-
-## Shock: a fixed statistical rule, never an LLM judgment call
-
-**Decision.** Whether a given day/coin counts as a volatility "shock" stays a fixed, deterministic threshold (`shock_zscore ≥ 3.0`, see above) — never a qualitative judgment from Haiku/Sonnet. Sonnet's role is to interpret and react to an already-detected shock (or an already-published macro release, or a headline), including proposing that a *specific combination* of what it's shown (an indicator reading, a recent release, a headline) looks like a distinct, testable pattern — never to decide what magnitude of price move counts as extreme in the first place.
-
-**Why.** Two reasons, both load-bearing: (1) reproducibility — the backtest needs a regime label it can compute identically over nine years of history, cheaply and deterministically; an LLM call per bar, per coin, per year is both prohibitively expensive and not reproducible run to run; (2) consistency with every other boundary already enforced this way in this project — TP/SL sizing, the indicator whitelist, and now trade execution are all explicitly *never* left to unattended LLM discretion. A qualitatively-judged shock threshold would be the same category of exception in the one place it was never allowed anywhere else.
-
-**Type.** Design principle, applied consistently — not a compromise.
-
----
-
-## This project never opens a funded position -- production gets the same live-test model as the replay
-
-**Decision.** `execution/live_testing.py` + `execution/live_test_state.py` port the replay's exact live-test model to real, unsandboxed data: no TP/SL, no Freqtrade order, a real-dated occurrence held for the horizon `pattern_significance` found significant, resolved by measuring the real forward return/MFE/MAE. `candidates/status_history.py` gained the same checkpoint tracking `replay/status_history.py` already had, so `CONFIRMED` is reachable in production too, on the same real evidence bar.
-
-**Why.** This is a pattern-discovery investigation, not an investment strategy -- there is no funded position to protect or size, so there is nothing stopping the same observational discipline the replay uses from running on real, current data instead of simulated history.
-
-**A genuinely new capability this makes possible: backdating a newly-discovered condition's own triggering occurrence.** By the time Sonnet proposes a new compound condition and a human approves it, real wall-clock time has already passed since the underlying condition first became true -- unlike the replay (which can look up any historical bar on demand), production has nothing tracking an unregistered condition before it's discovered. But since no funded position is ever placed, there is nothing physically stopping an honest, real-data retroactive read: `execution.live_testing.find_backdated_entry` scans the already-recorded hourly price history (kept fresh by `data_ingestion/market_data/binance_fetcher.py`, same data every other real-time check in this project uses) for the earliest hour the condition was already true, and backdates entry to that point instead of the discovery moment -- this would NEVER be legitimate for a real funded order (no exchange lets you buy at a historical price), but is exactly the honest thing to do for an observational record.
-
-**A real bug this caught.** The first version of `find_backdated_entry` sliced the hourly series down to the lookback window *before* computing rolling-window indicators, starving multi-hundred-hour windows (e.g. a 720-hour funding z-score) of their lookback and silently returning nothing but NaN/False -- the exact same bug already caught once in `replay/engine.py`'s mechanical scan. Fixed the same way: compute on the full series, slice the result afterward. Caught by actually running the function against real data, not by reading the code.
-
-**Type.** Statistical rigor / conceptual consistency, direct consequence of the "no funded position" decision above.
-
----
-
-## Freqtrade hyperopt cross-check -- a second, independent optimizer, purely informational
-
-**Decision.** `execution/hyperopt_runner.py` + `execution/freqtrade_bridge.py` + `execution/freqtrade_userdir/strategies/hyperopt_candidate_strategy.py` run Freqtrade's own Bayesian hyperopt engine, periodically and only ever locally, against real data already used everywhere else in this project, to independently re-derive the TP/SL multipliers for each tracked candidate's real anchor set. The result (best tp_mult/sl_mult + the resulting N/win-rate/Sortino/total-profit) is stored in `execution/hyperopt_results.json` and surfaced as one line in the CONFIRMED checkpoint report -- never gates acceptance, never feeds live execution.
-
-**Why.** This project's own walk-forward grid search (`candidates/methodology.py::walk_forward`) already computes an equivalent "if traded with a barrier structure" figure -- the "For reference, trading this with a TP/SL structure..." line shown in every message. Freqtrade's hyperopt is a genuinely *independent* second opinion: different search machinery (Bayesian optimization over a continuous parameter space vs. this project's own 25-point grid), a different, third-party, industry-standard backtesting engine, reusing the exact same real price history -- not a redundant re-implementation, a cross-check using different tooling arriving at (or interestingly failing to arrive at) similar numbers. For a project meant to demonstrate methodological rigor, an independent validation of one's own numbers is worth more than another internally-consistent chart.
-
-**Real, non-obvious issues hit and fixed while building this (not guessed at, actually run against real data):**
-- Freqtrade hardcodes `tickers_have_price=False` for Binance specifically -- config validation fails without `use_order_book: true` on both `entry_pricing` and `exit_pricing`, even in backtest/hyperopt mode where no order book is actually consulted.
-- The `freqtrade[hyperopt]` extra (scikit-optimize/Optuna, filelock, etc.) is a separate install from the base `freqtrade` package.
-- Best-epoch results are read via `freqtrade.optimize.hyperopt_tools.HyperoptTools.load_filtered_results` against the `.fthypt` file named in `hyperopt_results/.last_result.json` -- not scraped from console output.
-
-**Cost.** A real, recurring local compute cost (Bayesian hyperopt runs hundreds of backtest evaluations per candidate) -- accepted explicitly because it's periodic, local-only, and never blocks the live/replay hot path (confirmed: `execution/freqtrade_bridge.py` imports `freqtrade` lazily, inside function bodies, specifically so importing `replay/engine.py` or `execution/live_testing.py` never requires the freqtrade package to be installed at all unless a hyperopt run is actually invoked).
-
-**Type.** Enhancement for methodological credibility, not required for the system's own statistical claims (which stand on `pattern_significance` and the walk-forward grid search regardless) -- explicitly scoped as informational-only from the start.
-
----
-
-## Q&A context bloat -- caught by running the historical replay for real, not by reading the code
-
-**Decision.** `_trades_by_candidate_summary()` / `_trades_by_candidate_and_coin_summary()` (`replay/judgment.py`) and `build_live_test_summary()` (`llm_pipeline/context_builder.py`) now cap themselves at the top 15 rows ranked by `|mean_return|`, with a note pointing to the free, local `/summary`/`/replay_summary` command when truncated. `_all_candidates_status_summary()` (`replay/judgment.py`) collapses the (usually large) `insufficient_data` bucket into one count-plus-name-list line instead of one detailed line per candidate. See PROJECT_MAP.md's "Cost Optimization" section for the full breakdown of what each Sonnet call actually sends and why.
-
-**Why.** This was a real, measured incident, not a hypothetical worth guarding against in the abstract: running the historical replay for real (this case study's own demonstration mechanism) discovered that `answer_market_question()`'s context had grown to ~10,400 tokens by the time the replay had tracked 96 candidates and logged 1,728 live tests -- 74% of that from two functions that, by design, listed *every* candidate and *every* (candidate, coin) pair ever seen, in full detail, on every single call, regardless of whether that call's question had anything to do with most of them. This is exactly the kind of cost/latency regression that's invisible from reading the code in isolation (each function looks reasonable on its own) and only shows up once real, accumulating state is actually exercised over a long run -- which is the whole reason this project insists on running things for real rather than trusting a static review.
-
-**A distinction that matters here: not every Sonnet call has this problem.** The automated per-event judgment calls (`judge_event()`, `sonnet_strategist()`, `sonnet_shock_response()`) were never affected -- their context is built from the current indicator snapshot, the last 10 days of macro releases, and the currently-*accepted* candidate list, none of which are keyed to the total candidate or trade-log count. Only the human-Q&A path (built specifically to answer "give me everything" style questions) had this growth, because it deliberately listed exhaustive detail rather than a summary. The fix keeps that same category of information available (nothing is omitted, only the long tail past 15 rows is deferred to a free local command), it just stops the exhaustive part from being repeated, in full, on every single future call regardless of relevance.
-
-**Type.** Cost/scalability fix, caught live -- not a statistical or methodology change, no effect on any candidate's classification.
-
----
-
-## `/details` -- the exact numbers behind a status word, kept out of every other message on purpose
-
-**Decision.** `/details <name>` (`telegram/bot.py`, and `/replay_details <name>` for the replay) shows a single named candidate's full numeric breakdown: the trigger's own exact threshold (`candidates/definitions.py::TRIGGER_NUMERIC_DEFINITIONS`, e.g. "funding z-score below -2.0" rather than `TRIGGER_DESCRIPTIONS`'s prose-only "an extreme funding rate"), N, p-value, excess return, MFE/MAE ratio, coin/year concentration as an exact percentage, the reference TP/SL backtest stats, and `explain_non_acceptance()`'s reason if it isn't accepted (`candidates/methodology.py::format_candidate_details()`). None of this detail is added to `/summary`, a Sonnet proposal, or a live-test notification -- those stay a one-line-per-candidate verdict by design (see the Q&A context-bloat entry above for the same instinct applied elsewhere: exhaustive detail belongs in a free, on-demand local command, not repeated in every message regardless of relevance).
-
-**Why.** A real gap, not a hypothetical: a phrase like "high futures concentration" or "not statistically significant" tells a reader *that* a candidate failed a check, not *by how much* -- there was no way to answer "elevated concentration -- how elevated, exactly?" without reading the code. Folding the full numeric breakdown into every summary line or every proposal would fix that but make either too long to scan at a glance (a dynamic-registry `/summary` can already run to dozens of candidates). A separate, on-demand command answers both needs without trading one off against the other.
-
-**A real bug this caught.** `dominant_year` (from `concentration_check()`'s groupby on a `period` column that's assigned as an int but can get upcast to `float64` by an unrelated NaN elsewhere in the same frame) rendered as e.g. `2023.0` instead of `2023` wherever a human read it -- including `explain_non_acceptance()`'s own "Why:" line, already shipped and visible in `/summary` before `/details` existed. Invisible until `/details` was run against real battery output and a live number was actually read end to end, not caught by reading `concentration_check()`'s code in isolation (a plain `int` output would look correct there). Fixed with a small formatting guard (`_format_dominant_year()`) applied in both places.
-
-**Type.** UI/reporting addition plus a real formatting bug fix, caught live -- no effect on any candidate's classification (the underlying `max_year_share` value used for the 60% concentration gate was always numerically correct; only its display leaked the float artifact).
-
----
-
-## Production never re-synced a candidate's horizon after its first "Test It" -- replay always did
-
-**Decision.** `candidates/run_battery.py::run_all()` now re-derives and re-saves every candidate's horizon (`execution/live_test_state.py::save_horizons()`) on every run a `pattern_significance` result exists for it -- independent of accepted/watch/rejected, mirroring `replay/battery.py`'s own sync exactly. `scheduler/weekly_revalidation.py` also now sends a Telegram notice ("Horizon updated -- ...") whenever a candidate's horizon actually changes, mirroring `replay/engine.py`'s own notice.
-
-**Why.** `pattern_significance()`'s `chosen_horizon` is the last walk-forward fold's own pick -- what an occurrence discovered *now* should be held for -- and it can legitimately shift week to week as more data accumulates. `execution/live_testing.py::_open_live_test()` reads the horizon to hold a new live test for from `execution/live_test_state.py::load_horizons()`, a SEPARATE file from the one `run_all()` writes its own per-candidate `"horizon"` field into (`execution/live_battery_state.json`). Before this fix, nothing in production's weekly cycle ever called `save_horizons()` -- the only call anywhere in production code was in `telegram/bot.py::handle_test_it_confirmation()`, fired once, the moment a human approves a brand-new novel condition. In practice this meant: a static candidate's (C1/C2/C6) horizon was **never** set at all in production, so every live test for one silently used the `PLACEHOLDER_HORIZON_DAYS=7` fallback regardless of what `pattern_significance` actually found; a dynamic candidate's horizon was set once at approval and then frozen forever, never updated by any of the dozens of weekly re-validations that followed.
-
-**A real gap between production and replay, not a hypothetical.** `replay/battery.py` already called `state.save_horizons()` on every single run, for both static and dynamic candidates (lines 77-82 and 116-121) -- the fix makes production match code that was already correct on the replay side, rather than inventing new logic. Caught not by reading the code in isolation but by a direct question about whether the live system genuinely re-optimizes its own horizon over time, followed by grepping every call site of `save_horizons()` in the repository and finding production's weekly cycle simply never among them.
-
-**Type.** Real bug fix, production/replay parity -- a live test's held-for-period was silently wrong (or stuck) for every candidate until this fix; no effect on any backtest classification, since `pattern_significance`'s own computation of `horizon` was always correct, only its propagation to where a NEW live test actually reads it was missing.
-
----
-
-## `_effective_milestone_count()` — static and dynamic candidates count differently toward CONFIRMED
-
-**What it is.** A static candidate (C1/C2/C6) counts only real resolved live tests toward its checkpoint. A dynamic (Sonnet-proposed) candidate uses a rolling window of the most recent `MILESTONE_N` occurrences, live ones first, topped up with backtest occurrences only while `live_n` is still short: `min(backtest_n, MILESTONE_N - live_n) + live_n`. The window only decides *when* a checkpoint fires — `pattern_significance`/`classify_status` are untouched either way, always computed over the full available history.
-
-**Why.** Static candidates were mined directly from this project's own historical data before being fixed in code — a direct look-then-test risk, so only genuinely prospective (live) evidence should count toward their checkpoint. Dynamic candidates carry a far weaker version of the same risk (Sonnet never sees this project's backtest results before proposing a condition), so their already-substantial backtest evidence can legitimately top up the first checkpoint. See [The CONFIRMED checkpoint](#the-confirmed-checkpoint-milestone_n--20).
-
-**Type.** Statistical rigor.
-
----
-
-## A well-established candidate's own aggregate is, by design, slow to react to a real regime change -- a fast informational alert covers the gap
-
-**Decision.** `_check_consecutive_failures()` (`execution/live_testing.py`, mirrored in `replay/engine.py`) fires immediately after each live test resolves, only for a candidate that's currently CONFIRMED (`milestone_cleared`). If its most recent resolved live tests, counted backward, show `CONSECUTIVE_FAILURE_ALERT_THRESHOLD=2` or more negative forward returns in a row, it sends a Telegram alert showing the last `max(streak, 5)` occurrences with their individual forward return/MFE/MAE, plus the mean return and MFE/MAE ratio over that window. Purely informational -- it never changes any candidate's status; `classify_status`/`pattern_significance` are completely untouched by it.
-
-**Why.** Directly measured: reconstructing `c2_long`'s (N=62, marginal p=0.034) and `c6_long`'s (N=289, strong p=0.0005) real out-of-sample return populations and simulating consecutive additions of each candidate's own worst-ever observed loss showed `c2_long` flips out of significance after only 3 such worst-case failures, while `c6_long` needs roughly 30. A large, statistically overwhelming sample is *correctly* resistant to short-term noise -- but that same resistance means a genuine regime change (a market-structure shift, an inefficiency getting arbitraged away) could take a well-established candidate months to reflect in its own aggregate. The alert closes that gap without touching the aggregate's own correct behavior.
-
-**Scoped to CONFIRMED candidates only, deliberately.** A candidate that's merely `accepted` but not yet CONFIRMED still has a comparatively small sample (`n` only just above `min_report_events = 20`), so its own aggregate is already reasonably sensitive to new occurrences -- see `c2_long` above, which flipped after 3 failures with no separate alert needed. The alert exists specifically where the aggregate's own resistance to noise becomes a blind spot.
-
-**Type.** Methodology decision, additive and purely informational.
-
----
-
-## `run_bot()`'s unprotected `_get_updates()` -- a documented gap that actually crashed the process
-
-**Decision.** `run_bot()`'s long-poll loop now wraps its own `_get_updates()` call in try/except (10s backoff, then retries) -- previously only the per-update dispatch was protected, mirroring the same fix `scheduler/live_daemon.py` already had for its own polling.
-
-**Why.** This exact gap was already documented in PROJECT_MAP.md's "Partial Failures & Crashes" as "known, not yet handled" -- reasoned to be acceptable because `run_bot()` was meant for isolated testing, with `live_daemon.py` as the real, intended way to go live. It stopped being theoretical the moment `run_bot()` was actually run standalone as a real, ongoing process (deliberately, to answer commands without the daemon's proactive hourly/weekly jobs): a second, unrelated `getUpdates` call made from outside the running loop (Telegram allows only one active long-poll per bot token) caused the *next* poll inside `run_bot()` to receive an HTTP 409 Conflict, unhandled, which killed the entire process silently -- no crash alert, no auto-restart, just a bot that stopped answering until someone noticed and manually restarted it.
-
-**Type.** Real bug fix, caught live -- promotes a previously-accepted, explicitly-scoped gap to fully handled once the assumption behind accepting it ("only ever run via live_daemon.py") stopped holding.
-
----
-
-## `/replay_summary`'s "still under test" message silently never arrived -- over Telegram's real length limit
-
-**Decision.** `telegram/bot.py::_send()` now splits any message over Telegram's real 4,096-character limit into several messages (`_chunk_message()`), preferring paragraph then line boundaries so no HTML tag is ever split across two messages, falling back to a raw character split only for a single line that's still too long on its own. `reply_markup` attaches only to the last chunk; `pin` applies only to the first. Returns `True` only if every chunk sent.
-
-**Why.** A real, observed failure, reported directly by a human who noticed a response was simply missing: `/replay_summary`'s "still under test" message (Accepted + Watch + Insufficient data, one combined string) reached 6,880 characters once the dynamic registry grew to 96 tracked candidates -- Telegram's `sendMessage` rejects anything over 4,096 outright. `format_trigger_summary()` already splits its output into two SEPARATE messages ("still under test" vs. "already discarded") specifically reasoning about this exact risk -- but that split alone doesn't protect against either HALF growing past the limit on its own as the registry keeps growing, which is exactly what happened here. Worse, nothing at the `/replay_summary`/`/summary` call sites checked `_send()`'s own return value, so the failure was completely silent: no error, no alert, the human just never received that message and had no way to know why.
-
-**Type.** Real bug fix, caught live by a human noticing an entire response section was missing -- fixed at the `_send()` layer (every caller benefits automatically) rather than patched at the two call sites that happened to trigger it, since any sufficiently large, unbounded state (a growing dynamic registry, in this case) could hit the same limit from a different message in the future.
-
----
-
-## `/replay_details` on a replay-only dynamic candidate showed "trigger definition not found"; `/details`/`/replay_details` never showed the reference TP/SL multipliers
-
-**Decision.** Two real bugs, caught back to back on the same real candidate. (1) Added `_replay_trigger_numeric_description()` (`telegram/bot.py`), mirroring `replay/engine.py::_trigger_description()`'s own lookup against `replay/state.py::load_dynamic_candidates()` -- the `/replay_details` handler now uses it instead of `_trigger_numeric_description()`, which only ever checked production's registry. (2) `format_candidate_details()` now takes `tp_mult`/`sl_mult` and shows them in the "Reference TP/SL backtest" line; both bot.py handlers now read them from the data they already had in hand (production: `run_all()`'s own `live_state` return value, previously discarded as `_live_state`; replay: `replay/state.py::load_battery_status()`, populated by `run_replay_battery()`'s own side effect).
-
-**Why.** (1) Production and the replay track two entirely separate dynamic-candidate registries (see PROJECT_MAP.md's "Historical Replay" section) -- a candidate discovered only during the replay was never going to be found by a lookup that only ever checks production's, exactly what happened: `/replay_details high_efficiency_breakout_with_volume_confirmation` showed "trigger definition not found" for a real, CONFIRMED, currently-accepted candidate. (2) The "Reference TP/SL backtest" line showed win rate, Sortino, and total expectancy, all of which are meaningless without knowing what TP/SL structure produced them -- the data (`tp_mult`/`sl_mult`, the project's own walk-forward grid search's chosen multipliers against the duration-bucketed anchors) was already being computed and returned by both `run_all()` and `run_replay_battery()`, just never read at the one place a human asks for exactly this level of detail.
-
-**Type.** Real bug fixes, both caught live in immediate succession by a human actually reading the command's output line by line -- same pattern as every other fix in this section of the log: the missing piece was an input never passed in, not a flaw in `format_candidate_details()`'s own logic.
-
----
-
-## Candidate names bolded consistently everywhere, not just in some messages
-
-**Decision.** Every candidate/trigger name shown in any Telegram message is now wrapped in `<b>...</b>` -- `/summary`/`/replay_summary`'s per-line listing (`_trigger_summary_line()`) and its "no historical occurrences yet" name list (`_insufficient_data_block()`), both "not found" error messages, the live-test-opened/resolved messages, the consecutive-failure alert's closing paragraph, and `weekly_revalidation.py`'s status-change diff line.
-
-**Why.** A real, spot-checked inconsistency: headers ("Checkpoint at 50 occurrences -- X", "Consecutive-failure alert -- X") were already bold, but the exact same name one line below, in the body of the same message or in a different command entirely, often wasn't -- `/summary`'s own per-candidate listing, the single most-read command in this whole system, never bolded a name at all. Nothing here changes what any message says, only how consistently a name reads as a name across every message a human might see it in.
-
-**Type.** Consistency/formatting fix, requested directly -- no effect on any computation or classification.
-
----
-
-## 2026-08-29 -- Statistical audit: the significance test was not directional, and its bootstrap was badly miscalibrated. Every previously-reported result is superseded.
-
-This is the largest correction in this log. A deep audit of `candidates/methodology.py` found four defects that compounded, and together they were the reason this project appeared to be finding patterns. **After the fix, no candidate in either the production battery or the historical replay is `accepted`, and none is `validated`.** The previously-reported "1 validated out of 98" is withdrawn.
-
-> **Superseded in part, 2026-09-05.** The `0 accepted` figures below were correct for the registry that existed when this audit ran. A later full replay -- under the corrected grammar, with threshold relaxation and the two-proposal split -- produced two accepted candidates and one CONFIRMED. The four defects and their fixes stand unchanged; only the count does not. See "The full replay finished" at the end of this file.
-
-### Defect 1 (critical) -- the test ignored the direction the candidate trades
-
-Two halves of the same root cause:
-
-- **Horizon selection used `abs()`.** `score = abs(float(np.mean(rets)))` picked whichever horizon showed the strongest effect *in either direction* -- so a `long` candidate could have its holding horizon chosen precisely because the effect was strongly **negative** there.
-- **The p-value's tail was chosen after seeing the data.** `np.mean(boot >= observed) if observed >= baseline else np.mean(boot <= observed)` is a two-sided procedure priced as one-sided.
-
-Neither `classify_status` nor anything downstream read `excess_return`, so a pattern running *opposite* to its own traded direction was labelled `significant`. Measured on the real static battery: **four of six candidates were "statistically significant" with a negative excess return** (c1_long −1.67% at p=0.010, c1_short −4.92% at p=0.0045, c2_short −7.79% at p=0.0070, c6_short −3.46% at p=0.0020). A synthetic candidate with p=0.001, MFE/MAE=2.4 and excess=−5% returned **`accepted`**. Only coincidence -- all four happened to have MFE/MAE < 1 -- kept them out of production.
-
-**Fix.** `_forward_return` already signs its output by direction, so a positive excess always means "works in the direction actually traded." The horizon is now selected by *signed* mean, and the p-value is a *pre-specified* upper tail. No doubling is needed because the side is fixed in advance rather than read off the data. `classify_status` independently re-checks `excess_return > 0`, and `explain_non_acceptance` names a wrong-direction effect as its own distinct reason rather than collapsing it into "not significant."
-
-### Defect 2 (critical) -- the bootstrap resampled i.i.d. from overlapping windows
-
-The baseline pool is built from overlapping h-day forward-return windows (day 2's 21-day window shares 20 days with day 1's). Resampling them independently destroys that serial dependence and understates the null distribution's variance, biasing every p-value downward. The module's own docstring acknowledged this and did nothing about it.
-
-**This was measured, not argued.** Under a *true null* -- observed sample drawn from the same process as the baseline, so there is no effect to find -- the shipped i.i.d. bootstrap rejected at **43.3%** against a nominal 5%. Nearly 9x over-rejecting. That single fact explains why six of six candidates looked significant.
-
-**Fix.** A moving-block bootstrap (`_block_bootstrap_means`), sampling contiguous blocks within a chunk, never across chunk boundaries. Block length calibrated empirically against that same true-null harness:
-
-| resampling | false-positive rate (target 5%) | power vs. a real +4% effect |
-|---|---|---|
-| i.i.d. (shipped) | **43.3%** | — |
-| block = 1x horizon | 15.3% | 39.0% |
-| **block = 3x horizon (chosen)** | **8.7%** | 25.0% |
-| block = 4x horizon | 7.7% | 23.5% |
-
-Verified unbiased: block and i.i.d. bootstrap means agree to 0.0015 (the block version is 3.7x wider, which is the entire point). The residual **8.7% is stated rather than rounded to 5%** -- and it is an upper bound, because the calibration harness draws the observed sample as a fully contiguous slice (maximum dependence) while real trigger events are clustered but scattered.
-
-### Defect 3 -- concentration was measured on a different quantity than acceptance
-
-Acceptance is decided by `pattern_significance`'s raw forward returns; `concentration_check` only ever ran on `walk_forward`'s **TP/SL-conditioned** `net_return`. Two different quantities that genuinely disagree -- on identical events, 96.8% concentration on the TP/SL basis versus 50.0% on the forward-return basis. The README's "no single coin or year may carry more than 60% of the positive return" never said which return, and the two answers differed.
-
-**Fix.** `pattern_significance` now returns per-event `oos_events` (group, period, forward_return), and all three callers (`run_battery`, `replay/battery`, `novel_condition_tester`) run concentration on that. `concentration_check` gained a `value_col` parameter; the TP/SL basis is still computed and reported as a diagnostic.
-
-### Defect 4 -- `concentrated: False` when there was nothing to concentrate
-
-When no group had a positive return, `concentration_check` returned `concentrated: False` -- so a candidate losing money on **every single coin** cleared both concentration gates. Harmless while significance was a real gate; not harmless combined with Defect 1. Now returns `concentrated: None` ("cannot assess"), which `classify_status` treats as `watch`, not as a pass.
-
-### Two smaller correctness fixes found in the same pass
-
-- **A flawless candidate was rejected.** `sortino_ratio` returned NaN whenever `downside_dev == 0` -- which happens both for an empty sample *and* for a candidate with no losing trade at all. `classify_status` rejects on a NaN Sortino, so a candidate that never lost was rejected for it. Now returns `+inf` for the no-losses case, NaN only for genuinely unusable input.
-- **Silent end-of-series clamping.** `_forward_return` and `path_outcome` clamped `exit_loc` to the last available bar, so an occurrence near the edge of the data returned a *0-bar hold* dressed up as a full-horizon result (measured: `+0.0000%` forward return, and a real-looking `+1.20%` from `path_outcome` with NaN excursions). Unreachable from the battery -- `build_events`'s `entry_loc + max_h >= len(idx)` filter is exactly correct, verified -- but reachable from **live resolution**, precisely where a wrong number becomes recorded evidence. Both now return NaN, and both live-test resolvers leave the test open and retry rather than recording a partial hold.
-
-### What was verified clean, and is worth saying plainly
-
-The audit tried to break the causality layer and could not. Recomputing all six triggers on truncated history (first 2,000 bars) versus full history produced **zero** differing past values in every trigger column; `shock_zscore_series` max |diff| on the overlap was **0.0**. Across 49 real events: zero entries at or before the trigger bar, `entry_loc == trigger_loc + 1` for 100%, full horizon room for 100%. No zero-division artifacts in the funding z-score on real data (0 infinities, max |z| = 5.3). The rolling-then-slice ordering -- the bug caught twice before in `find_backdated_entry` and `_scan_mechanical_triggers` -- is correct throughout this module.
-
-### The result, and why it is reported rather than tuned away
-
-| | before | after |
-|---|---|---|
-| static battery `accepted` | 2 of 6 | **0 of 6** |
-| static battery "significant" | 6 of 6 | 0 of 6 (best: c6_long, p=0.075) |
-| replay `accepted` (98 candidates) | 2 | **0** |
-| replay `validated` | 1 | **0** |
-
-`high_efficiency_breakout_with_volume_confirmation`, previously the project's one validated candidate, does not clear the corrected bar. Its earlier VALIDATED checkpoint was real in the sense that it genuinely fired -- but it fired on a statistic that was measuring the wrong thing.
-
-This is the outcome README's own Phase 1 "honest finding" predicted and the Dynamic Agent Thesis was built to test against. The correct response is to report it, not to relax a threshold until something passes: a 43% false-positive rate producing candidates is not a discovery, and a project whose entire stated purpose is distinguishing real patterns from flattering noise does not get to keep the flattering noise.
-
-**Type.** Critical statistical bug fix. Supersedes every previously-reported acceptance and validation result in this repository, including this log's own earlier entries on `_effective_milestone_count` and the consecutive-failure alert (both remain correct mechanisms -- they simply have no `accepted` candidate to act on right now). Found by audit, every claim above confirmed by execution against real data before being written down.
-
-
----
-
-## 2026-08-29 (later the same day) -- making the actual thesis testable: sequences, the right control group, graded macro events, and multiplicity control
-
-The audit above fixed how a hypothesis is *tested*. This entry is about what could be *expressed* and *asked* at all -- five changes, four of them prompted by a single observation: this project's title promises patterns from **market conditions combined with events**, and the pipeline could not represent that claim.
-
-### The gap, measured
-
-Of the 92 conditions Sonnet actually proposed in the replay: 49 (53%) included `shock_zscore`, 12 (13%) `is_macro_day`, and **31 (34%) contained no event term at all** -- pure chart patterns, indistinguishable from something written directly in Freqtrade with no LLM involved. `high_efficiency_breakout_with_volume_confirmation`, the project's former validated candidate, was one of these.
-
-Worse, of **771 live tests** opened for Sonnet-discovered candidates, **zero** were news-linked. All 771 came from the mechanical hourly scan, which reads price, OHLC and funding only. Haiku's sentiment decides *which* condition gets proposed and then disappears entirely from both the test and the track record. Going live does not fix this: acceptance is always decided by a backtest, and there is no historical news archive to backtest against (verified: CryptoCompare's endpoint is live-only, `lTs` backward paging returns empty, 3,527 days missing).
-
-### 1. Sequenced conditions (`Clause.within_days`)
-
-Every clause was evaluated on the same bar, so the grammar could express *"news AND crash on the same day"* but not *"crash, THEN news"* -- the central case. `within_days=K` means "was true at any point in the last K days" (0 = today, the previous and default behaviour). All three orderings are now writable **and comparable**, so ordering itself becomes a testable hypothesis. Causality holds: the window looks strictly backward, the trigger bar is where the last clause becomes true, entry is still the next bar's open. Rendered explicitly to humans, because "crash then news" and "crash and news together" must never read identically.
-
-### 2. The incremental baseline -- the change that matters most
-
-`pattern_significance` compared every condition against the coin's **unconditional** forward returns. Testing `shock AND negative_news` that way is close to meaningless: the shock *alone* already differs from an ordinary day, so the news clause could be pure decoration and the test would still pass it. `baseline_events` switches the control to the **same condition with its event clause removed**, same period, with the treated events excluded so it is a genuine treatment-vs-control contrast. Demonstrated on a real hypothesis (macro-release day AND RSI<45 → long):
-
-| question | excess | p |
-|---|---|---|
-| unconditional -- "does anything happen at all?" | **+1.09%** | 0.356 |
-| incremental -- "what does the macro day ADD?" | **−0.23%** | 0.483 |
-
-The entire apparent effect belongs to the market state. The unconditional test would have credited it to the event. `baseline_kind` is now reported so the two claims are never worded identically.
-
-### 3. Graded macro surprises, from data already on disk
-
-`is_macro_day` is binary. The ALFRED vintages needed to grade *how far* a print moved were already downloaded, and `latest_release_with_prior` already computed the delta for Sonnet's prompt -- it was simply never a testable indicator. Three added (`cpi_surprise`, `rate_surprise`, `jobless_claims_surprise`), point-in-time correct on publication date with `shift(1)`-ed trailing stats, using each period's first print rather than its revision.
-
-*A real bug caught by reading the output rather than trusting it:* the Fed funds rate sits flat for years, collapsing its rolling std, and a bare `sd > 0` guard produced a surprise of **−2,613,348 sigma**. A scale-free floor now yields NaN when the trailing window is degenerate -- the honest answer when there is no scale to judge against. Deliberately *not* suppressed: jobless claims at +137.94 on 2020-03-26 (281,000 → 3,283,000) is the real COVID spike.
-
-### 4. Multiplicity control (Benjamini-Hochberg)
-
-Flagged as unaddressed in the audit entry above, and no longer optional now that the search space includes orderings and graded events. Testing ~98 candidates at p<0.05 is *expected* to manufacture ~5 significant results with nothing behind them. `apply_fdr_demotion` runs as a family-level second pass and is **demotion-only** -- BH is uniformly at least as strict as raw p<α, so it can remove a candidate from `accepted` but never add one. BH rather than Bonferroni: at n=98 Bonferroni implies a per-test threshold of 0.0005 and no power for the modest real effects being sought. Validated against the canonical Benjamini & Hochberg 1995 worked example (15 hypotheses → exactly 4 discoveries) and cross-checked against `scipy.stats.false_discovery_control`.
-
-### 5. A pre-existing bug found while verifying train/serve agreement -- worse than the one being looked for
-
-Four of twelve indicators were **not distributionally comparable** between the daily backtest and the hourly live scan (BTCUSDT, 1st–99th percentile):
-
-| indicator | daily | hourly@scale=24 | |
-|---|---|---|---|
-| `rsi_14d` | 22.3 – 85.4 | **42.6 – 58.5** | 0.25× spread |
-| `atr_pct_14d` | 0.021 – 0.151 | 0.004 – 0.032 | 0.22× |
-| `daily_range_pct` | 0.008 – 0.194 | 0.001 – 0.047 | 0.24× (ignores `scale` entirely) |
-| `efficiency_ratio_20d` | 0.003 – 0.760 | 0.001 – 0.185 | 0.24× |
-
-A condition accepted on `rsi_14d < 35` fires **289 times** in the daily backtest and fired **zero** times in the live scan -- a 336-period RSI mean-reverts to ~50 and never reaches the threshold. The candidate looks merely *rare*, not broken. `shock_zscore` already carried a hardcoded exception for exactly this reason; it was never generalised. `DAILY_NATIVE_INDICATORS` now covers all of them and both scanners delegate to one shared `clause_signal_hourly`. After: 289 → 289, zero missed, production and replay byte-identical.
-
-*Also found in the same pass:* all three serializers wrote only indicator/op/threshold, so a sequenced condition would round-trip back as a same-day one -- approved as "crash then news", then silently tested and tracked as "crash and news together". `clause_to_dict`/`clause_from_dict` are now the single pair everywhere, the latter doubling as the sanitiser for model output.
-
-### What is still missing, stated plainly
-
-**Headline sentiment remains untestable**, and therefore the "Market Sentiment" half of this project's title remains unproven. The whitelist has no sentiment term because there is no historical news archive to backtest one against. Closing it requires backfilling news history (GDELT 2.0 is the only free source plausibly covering 2017→present; scoring it with Haiku batched by day costs roughly $11–35, since ~3,500 daily calls is far cheaper than per-article scoring). Until then the honest scope of this system is **market conditions combined with market and macro events** -- which is now genuinely expressible and correctly tested, and was not before.
-
-**Type.** Capability + methodology. Four fixes make the project's own stated hypothesis representable and correctly controlled; one is a real pre-existing bug that silently prevented a whole class of accepted candidates from ever firing live. Tests 49 → 73.
-
----
-
-### 2026-08-29 — Sample size, not method: real release dates, jobless claims, and a lower shock threshold
-
-**Context.** A power analysis of the acceptance gate, run against real 7-day
-forward returns (sd = 13.2%) using the project's own `_block_bootstrap_means`,
-produced two findings. The false-positive rate is correctly calibrated at every
-sample size tested — 5.0% / 4.5% / 6.5% / 5.5% / 3.5% at n = 15 / 20 / 30 / 50 /
-100 under a true null, confirming the moving-block bootstrap works. But **power
-is very low**: at n=50 a +6% effect is detected 23% of the time; at n=100, 41%.
-Meanwhile the necessary-condition rule (an event clause is mandatory) makes
-on-thesis conditions rare — "macro AND shock, same day" had 35 events in 9 years
-across 7 coins, 11 of them out-of-sample, which `classify_status` auto-**rejects**
-for falling under `min_report_events`. The system was structurally unable to test
-its own central question: the more specific and more on-thesis the hypothesis, the
-more certainly it was discarded before measurement.
-
-**The bug this uncovered.** Before changing any threshold, the event dates
-themselves turned out to be wrong. `cpi_days()` **approximated** every CPI release
-as the 13th of the month, rolled off weekends. Checked against the real release
-dates already present in `data/macro/fred_vintage/cpi.csv` (ALFRED's
-`realtime_start` IS the publication date):
-
-    exact match      21%
-    off by 1 day     33%
-    off by >= 2 days 46%   (worst case 20 days)
-    mean abs error   2.16 days
-
-CPI was 108 of ~176 macro days, so **the majority of macro events were being
-studied on the wrong day.** At 3- and 7-day horizons this smears a real reaction
-into the baseline and attenuates the effect toward zero — indistinguishable from
-"no pattern exists". Every null this project produced was measured through that
-smearing.
-
-**Changes made.**
-1. `cpi_days()` now reads real publication dates from the ALFRED vintages.
-2. `jobless_claims_days()` added and unioned into `macro_release_days()`. The
-   vintages were already downloaded and already graded into
-   `jobless_claims_surprise`, and the replay was **already spending 506 Sonnet
-   calls judging claims releases** — but `is_macro_day` excluded them, so any
-   condition Sonnet built on `is_macro_day` in response to a claims event could
-   never fire on that event. The calendar is now consistent with what the replay
-   already pays to judge.
-3. `SHOCK_ZSCORE_THRESHOLD` 3.0 → 2.0, on evidence the codebase already carried:
-   a bootstrap across z=1.5–4.5 found the effect similarly sized throughout with
-   no natural cutoff, thinning only past ~4.0. If the effect is flat across the
-   range, set the threshold where it yields the most events — sample size is the
-   binding constraint, not drama.
-
-**Effect on event counts** (out-of-sample, 7 coins, 9 years):
-
-    condition                              before   after
-    macro AND RSI14<35                        147     552
-    macro AND shock within 7d (ordered)        54     382
-    macro AND shock, same day                  11     177   (was auto-rejected)
-    macro AND RSI<35 AND shock within 7d        4      78   (was insufficient_data)
-
-**Effect on the static battery — and this is the part worth reading.** Re-running
-the identical code with the old calendar and threshold isolates the change:
-
-    candidate   n before  n after   p before  p after   excess b   excess a
-    c1_long          325      314     0.7830   0.7775     -1.79%     -1.79%
-    c1_short         166      163     0.8855   0.9030     -0.26%     -0.28%
-    c2_long           62      241     0.2545   0.8230     +2.50%     -2.33%
-    c2_short          86      202     0.8635   0.8905     -1.50%     -1.83%
-    c6_long          289      264     0.0750   0.0710     +9.49%     +9.28%
-    c6_short         184      167     0.7635   0.8745     -3.36%     -3.69%
-
-C2 is the only macro-driven candidate, and it is the only one that moved: n
-nearly 4x, and its apparent positive edge **inverted** (+2.50% → −2.33%, p 0.25 →
-0.82). The small, mis-dated sample had been producing a spurious positive. The
-non-macro candidates (C1 funding, C6 efficiency-ratio) barely moved at all, which
-is the consistency check this result needed to pass — a macro calendar fix should
-not perturb a funding-rate candidate, and it didn't.
-
-**Outcome: still 0 accepted.** The fixes removed a false signal rather than
-producing a true one. That is the correct behaviour and the honest result. C6_long
-remains the only near-miss (p=0.071, excess +9.3%, MFE/MAE 2.67, well distributed
-across coins and years) — but C6 is a pure chart pattern with no news term, so it
-is off-thesis by this project's own current standard and cannot answer its
-question whatever its p-value does.
-
-**Known cost of change 2, stated rather than buried.** `is_macro_day` now fires on
-~18.9% of days (was ~5.2%). A weekly jobless-claims print is a much smaller event
-than an FOMC decision, and the binary flag treats them identically, so the flag is
-now a weaker instrument than it was. The mitigation already exists and should be
-preferred going forward: `cpi_surprise` / `rate_surprise` /
-`jobless_claims_surprise` are graded, point-in-time-correct indicators that can
-demand a LARGE surprise rather than merely a release.
-
----
-
-### 2026-08-30 — Which gate was actually too tight: an autopsy, and three fixes it justified
-
-**Why this was done.** The standing worry was that the acceptance and validation
-gates were too strict and were discarding good candidates. Rather than argue
-about it, a POSITIVE CONTROL was built (`forecast/positive_control.py`,
-`forecast/control_sweep.py`): synthetic "sentiment" signals planted, by
-deliberate lookahead, on days that genuinely are followed by strong returns, at
-three strengths, plus a pure-noise arm that must stay silent. That gives ground
-truth, and ground truth allows the only question that matters to be asked
-directly: **when a signal really is there, which gate kills it?**
-
-**The autopsy, 294 known-good conditions:**
-
-    significance (p >= 0.05)     154   52.4%
-    n gate (n <= 20)              70   23.8%
-    pattern test unusable         56   19.0%
-    ACCEPTED                      10    3.4%
-    concentration                  4    1.4%
-    MFE/MAE                        0    0.0%
-
-Of those with a valid test AND adequate data, **92% died at significance**.
-Concentration killed four. MFE/MAE killed none. This redirected the work
-entirely: the gates that felt strict were not the problem, and statistical
-power was. Two of the three changes below came directly out of it.
-
-**1. `SIGNIFICANCE_ALPHA` 0.05 -> 0.10.** Measured on the control, where the
-noise arm's detection count IS the false-positive rate:
-
-    alpha   planted detected   noise arm (false positives)
-    0.050        8.3%                0.0%
-    0.100       27.4%                0.0%
-    0.150       38.1%                0.0%
-    0.200       44.0%                4.0%
-
-Detection of real effects more than triples while this arm shows no false
-positives at all.
-
-**That last column depends on how dense the noise arm is, and both densities
-matter.** The table above uses a SPARSE arm -- 50 conditions, events on ~2% of
-days -- whose p-values run unusually conservative. A denser measurement
-(`forecast/sentiment_power.py`, 41 null conditions, events on up to 16% of days)
-puts the figure at 2.4% at alpha=0.05 and 4.9% at alpha=0.10: below nominal,
-since the block bootstrap genuinely is conservative on overlapping windows, but
-not zero. **The honest price of alpha=0.10 is therefore about a 5%
-false-positive rate**, and a sparse arm alone would understate it. Both are
-reported because the difference between them is itself the lesson: a
-false-positive rate measured on rare events is not the rate you get on common
-ones. The moving-block bootstrap is CONSERVATIVE on heavily
-overlapping event windows, so the nominal rate overstates the real one, and
-0.05 was buying error control the test already provided for free. 0.20 is where
-the noise arm finally breaks, leaving 0.10 a wide margin. BH still runs on top,
-and nothing is ever traded: a false positive costs an observational live test,
-a false negative costs a finding permanently.
-
-**2. Horizon selection scored the wrong statistic -- a real bias, not a tuning
-choice.** Each fold picked the horizon maximising the TRAIN mean forward
-return. But mean forward return across this universe grows monotonically with
-horizon out of pure market drift:
-
-    1d 0.19% | 3d 0.57% | 7d 1.39% | 14d 2.97% | 21d 4.74% | 30d 7.30% | 45d 12.10%
-
-so "highest mean return" was very nearly "longest horizon offered", whatever
-the event did. The narrow (1..21) grid MASKED this. Widening it to 45 exposed
-it at once: all seven folds chose 45 and the p-value got WORSE (0.0815 vs
-0.0430) -- the selector was chasing drift, away from the real effect.
-
-Now scored as **standardised excess over the period-matched baseline at that
-same horizon**: subtracting the baseline removes the drift, and dividing by the
-event returns' own SD makes horizons comparable (excess grows ~linearly in h,
-noise only ~sqrt(h), so an unstandardised excess still tilts long). Verified
-against ground truth: a signal planted at a 7-day horizon is now selected at
-7 in every fold on BOTH grids, where before the wide grid chose 45 every time;
-its p-value went 0.0430 -> 0.0000. The noise arm still drifts long but stays
-`rejected`, so no false positive was bought. Selection remains train-only and
-signed -- both properties load-bearing and unchanged.
-
-**3. Market-relative outcomes: a genuine gain, but ONLY for coin-specific
-hypotheses.** Power goes as effect/(sigma/sqrt(n)) and every earlier change
-attacked `n`; sigma had never been touched, and it enters quadratically.
-Measured: pooled SD of 7-day forward returns is 16.18% raw and 11.41% after
-subtracting the equal-weight basket (mean cross-coin correlation 0.54), i.e.
-half the sample for the same power.
-
-Measured against a planted signal that fires on days when a coin's RAW return is
-high, it makes things WORSE (10 accepted -> 7). That result is real and it is
-instructive: at 0.54 cross-coin correlation such days are mostly days the whole
-market rose, so the signal is a market-timing one, and removing the market
-removes the effect (17.29% -> 4.66% excess) faster than the noise (sigma 0.70x).
-The subject of the test decides the answer, which is why the coin-specific case
-below had to be measured separately rather than inferred from this one.
-
-Re-run with a signal planted on MARKET-RELATIVE returns (a coin outperforming
-its peers -- the "SEC sues Ripple" shape), the prediction held:
-
-    accepted, raw outcome measurement            2 / 9
-    accepted, market-relative measurement        6 / 9
-
-with excess returns SHRINKING in every row (+13.82% -> +7.50%) while p-values
-fell -- noise removed faster than signal, which is what a real power gain looks
-like. Both results agree: market-relative helps exactly when the signal is
-coin-specific and hurts when it is not. It therefore CANNOT be a global switch;
-it must be declared per hypothesis in the spec, like the concentration rule --
-raw outcome for market-wide events (subtracting the basket would delete a CPI
-reaction by construction), market-relative for coin-specific ones. Caveat kept
-explicit: the plant used the same 7-day relative return the test then measures,
-so 3x is an optimistic ceiling.
-
-**Compute cost of the horizon fix, stated rather than discovered later.** The
-old selector computed one baseline per fold (for the chosen horizon). The
-corrected one needs the period-matched baseline at EVERY candidate horizon in
-order to subtract that horizon's own drift, so baseline work grows by the size
-of the horizon grid -- about 5x at the default (1,3,7,14,21). Measured on the
-dense synthetic sweeps this roughly doubles wall-clock per condition. Accepted:
-the weekly revalidation runs six static candidates plus the dynamic registry,
-where this is seconds, and the alternative is a selector that provably picks the
-wrong horizon. Worth knowing before anyone benchmarks a large sweep and assumes
-something regressed.
-
-**What was deliberately NOT changed.** Concentration thresholds and the
-MFE/MAE gate: the autopsy shows they cost 4 and 0 known-good candidates
-respectively, so tuning them would achieve nothing. `FDR_ALPHA` stays 0.05 --
-the 92% die at the RAW threshold, before FDR ever runs, so raising it would
-address the wrong stage.
-
-**Hierarchical / partial pooling across coins: measured, then NOT built.** The
-proposal was to replace complete pooling (all coins collapsed into one mean)
-with an empirical-Bayes model allowing per-coin effects with shrinkage, on the
-theory that complete pooling dilutes an effect present in only some coins. The
-existing controls could not test this -- their planted signals are homogeneous
-across coins by construction -- so a HETEROGENEOUS plant was built: a real
-effect in XRP/ADA/DOGE, pure noise in BTC/ETH/BNB/LTC.
-
-Complete pooling detected it comfortably: **p=0.003, excess +9.60%, n=243** --
-in fact a *stronger* p-value than testing only the three coins that carry the
-effect (p=0.01, n=95), because the larger sample more than compensates for the
-dilution. There is no detection problem for partial pooling to solve, so it
-would be real complexity for no measured gain. Dropped.
-
-What DID block that candidate is worth recording, because it was not what was
-expected: it passed significance, direction, MFE/MAE and coin concentration
-(55%, under the 60% bar) and was held at `watch` by YEAR concentration at 61%
--- one point over the threshold. That is the concentration rule behaving as
-designed on a plant whose top-quintile returns cluster in 2021, not evidence
-against the rule; noted so a future reader does not mistake the `watch` for a
-statistical failure.
-
----
-
-### 2026-08-30 — Would a real sentiment feed have helped? Measured before building it
-
-**Why.** The GDELT backfill was the largest remaining item in this project
-(3-5 days, ~$35 API, plus a replay re-run). It was about to be started on the
-assumption that a sentiment feed would be usable. That assumption is testable
-with no news data at all, so it was tested first.
-
-**Method** (`forecast/sentiment_power.py`). Sentiment modelled as a CONTINUOUS
-daily score -- what a real feed gives you, mostly low with a right tail -- not
-the rare binary event an earlier control used:
-
-    score_t = rho * z(forward_return_t) + sqrt(1 - rho^2) * noise_t
-
-so `rho` is exactly the correlation between the feed and the future return.
-Swept at 0.30 / 0.15 / 0.08 / 0.04 / 0.00, crossed with three trigger
-thresholds (>=1.0/1.5/2.0 sigma, ~16%/7%/2% of days, making sample size a
-parameter) and with the real macro terms in the state grammar. 285 conditions.
-
-**Result.**
-
-    rho    meaning                     accepted   vs noise (Fisher, one-sided)
-    0.30   oracle, not achievable         23/41    p<0.0001  DISTINGUISHABLE
-    0.15   exceptional feed               20/41    p<0.0001  DISTINGUISHABLE
-    0.08   very good feed                  5/41    p=0.216   indistinguishable
-    0.04   realistic news sentiment        3/41    p=0.500   indistinguishable
-    0.00   pure noise (the floor)          2/41    --
-
-**Verdict: do not build broad news ingestion.** A feed at the quality general
-news sentiment actually achieves produces the same number of acceptances as a
-feed containing no information whatsoever. Only rho >= 0.15 separates, which is
-far above what broad news scoring delivers. A narrow, high-signal source
-(exchange listings, regulatory filings, protocol incidents) is the version
-worth pursuing.
-
-**Two things this run pinned down, both worth stating.**
-
-1. **The false-positive rate depends on how dense the events are.** The
-   `SIGNIFICANCE_ALPHA` decision was first measured on a sparse noise arm (50
-   conditions, events on ~2% of days), which showed no false positives at all.
-   This denser design (41 null conditions, events on up to 16% of days) puts it
-   at 2.4% at alpha=0.05 and 4.9% at alpha=0.10 -- below nominal, since the
-   block bootstrap really is conservative on overlapping windows, but not zero.
-   The alpha=0.10 decision holds either way; what changes is the stated price,
-   which is ~5% rather than nil. A rate measured on rare events is not the rate
-   on common ones, and this project needed both figures to know which it had.
-
-2. **A verdict rule has to be a test, not a margin chosen by eye.** An arm was
-   initially called detectable if it beat the noise floor by any amount, on
-   which rho=0.08 (5/41 vs 2/41) reads as a success and the recommendation comes
-   out as "build GDELT". Fisher's exact puts that pairing at p=0.216 --
-   indistinguishable. The guard now uses Fisher against the floor, and expects
-   that floor to be NON-empty: at alpha=0.10 a null arm should produce some
-   acceptances, so a check demanding exactly zero would condemn a
-   correctly-behaving test. Both properties matter, and neither is obvious until
-   a multi-day engineering decision turns on them.
-
-### 2026-08-30 — Coin-scoped hypotheses: `coins`, `outcome`, and a conditional concentration check
-
-**The problem, demonstrated rather than argued.** A genuine single-coin pattern
--- the "SEC sues Ripple" shape, where one asset moves against its peers -- was
-not merely unsupported, it was actively rejected. Run through the pipeline, a
-planted XRP-only signal produced p=0.016, +21.45% excess and MFE/MAE 8.57, and
-came back `watch`: `classify_status` treats single-coin dominance as evidence of
-overfitting. That heuristic is right for a market-wide hypothesis and exactly
-backwards for a genuinely coin-specific one. Separately, the indicator signature
-`(df, funding, scale)` carried no coin identity at all, so a coin-attributed
-indicator could not be WRITTEN -- the test above had to identify XRP by its
-price series LENGTH.
-
-**Four changes, which are one feature.**
-
-1. `symbol` threaded through every indicator, `clause_signal`,
-   `clause_signal_hourly` and both hourly scanners. Almost every indicator
-   ignores it -- RSI does not care what it is computing on -- but without it a
-   news or sentiment score attributed to one coin cannot exist.
-2. `ConditionSpec.coins` -- which coins the claim is about. Intersected with the
-   caller's universe rather than replacing it, so a caller that legitimately
-   restricts the coin set is never silently overridden.
-3. `ConditionSpec.outcome` -- `"raw"` or `"market_relative"`. Raw for
-   market-wide events (a CPI print moves all of crypto, so subtracting the
-   basket deletes the effect); market-relative for coin-specific ones.
-4. The coin-concentration check is skipped for a spec that DECLARED itself
-   single-coin. The year check is untouched: a single-coin pattern still has to
-   hold across time. The skip keys off `spec.coins`, fixed before the test runs
-   -- never off which coin turned out to dominate, which would be choosing the
-   answer after seeing it.
-
-**Measured end to end** on a real XRP-only planted signal:
-
-    configuration                      n     p        excess    year conc   status
-    whole universe, raw outcome      136   0.0125    +15.48%     flagged    watch
-    + coin-scoped to XRP             136   0.0125    +15.48%     flagged    watch
-    + scoped AND market-relative     136   0.0005     +9.94%     passes     ACCEPTED
-
-Coin scoping alone is NOT enough -- the year check still blocked it. The pair
-together works, and market-relative incidentally fixed the year concentration
-too (0.64 -> 0.43) by removing the 2021 bull-market factor that had been
-clustering returns into a single year. Concentration is still REPORTED
-truthfully (coin share 1.0, flagged) in the accepted row; it simply no longer
-gates. Report honestly, gate deliberately.
-
-**One shared serializer, finally.** `spec_to_dict`/`spec_from_dict` replace
-seven hand-rolled versions. Every field ever added to `ConditionSpec` has been
-dropped by at least one of them: `within_days` was lost by all three at once, so
-a sequenced "crash, THEN news" hypothesis round-tripped back as a same-day one
-and was tested as a different claim than the human approved. `coins` and
-`outcome` would fail identically and just as invisibly -- an XRP-scoped
-market-relative spec returning as whole-universe raw, same label, nothing
-looking wrong. Optional fields are omitted at their defaults so existing
-registry files do not churn, and dicts written before these fields existed still
-load.
-
-**A capability-parity bug the earlier audit missed.** The replay's own
-`REPLAY_SYSTEM_PROMPT` never mentioned `within_days`, so the replay's Sonnet
-could not propose a SEQUENCED condition at all -- the exact hypothesis shape
-this project was rebuilt around. The 2026-08-29 parity audit verified 12/12
-parity in CODE and did not check the prompts, which are just as load-bearing:
-a capability the model is never told about does not exist. Both prompts now
-document `within_days`, `coins` and `outcome`, with the market-wide vs
-coin-specific rule stated explicitly, since choosing `market_relative` for a
-market-wide event would guarantee a null result.
-
----
-
-### 2026-08-30 — Two things the system computed and told nobody, and one it should ask for
-
-**1. `/details` now says whether a null result means anything.** `required_n_for_power`
-was implemented, correct, and reported to no one. A p-value above the threshold
-is routinely read as "we tested it and there is nothing here" when at these
-sample sizes it usually means "we could not have detected it either way", and
-those are different claims. `/details` now says which one applies, from the
-candidate's OWN realised volatility:
-
-    NOT conclusive:  "it would take roughly 379 occurrences to have an 80%
-                      chance of detecting a 5% effect, and there are 60.
-                      'Not significant' here means undetermined, not disproved."
-    IS informative:  "roughly 37 occurrences give an 80% chance ... There was
-                      power to find one, and none was found."
-
-Only shown for candidates that are NOT significant -- it answers a question
-about a negative result and would be noise on a positive one.
-
-**2. Prior-weighted FDR, measured before being built.** The proposal was that
-Sonnet assign each condition a plausibility weight at proposal time, with
-Benjamini-Hochberg allocating alpha in proportion (Genovese, Roeder & Wasserman
-2006). Whether that is worth paying for reduces to one number: how strongly the
-model's judgement correlates with which hypotheses are real. Simulated at this
-project's own family size (m=300) and its own measured power (27%), rather than
-textbook power:
-
-    prior quality q   true found   vs unweighted   realised FDR
-    0.0 (noise)            0.37          +0%           4.7%
-    0.2                    0.54         +45%           4.1%
-    0.4                    0.80        +114%           3.6%
-    0.6                    1.09        +193%           2.4%
-    1.0 (oracle)           1.82        +387%           0.9%
-
-Even a WEAK prior (q=0.2) yields ~45% more true discoveries, and realised FDR
-stays at or under alpha at every quality level -- which is the property that
-makes this safe: a useless prior is wasteful, never dangerous. Implemented, with
-`prior_weight` on `ConditionSpec` (clamped 0.25-4.0), both system prompts asking
-for it, and both batteries carrying it into `apply_fdr_demotion`.
-
-**On the real battery, the diagnostic separates the candidates immediately** --
-three of the five non-significant candidates have INFORMATIVE nulls and two do
-not, and nothing in the p-values alone distinguishes them:
-
-    c1_long   n=314  sd=7.3%   needs ~80    null IS informative
-    c2_long   n=241  sd=3.4%   needs ~18    null IS informative
-    c2_short  n=202  sd=16.8%  needs ~417   NOT conclusive
-    c6_short  n=167  sd=14.7%  needs ~322   NOT conclusive
-
-c2_long and c2_short have almost the same N and both read "not significant",
-but one of them is genuine evidence of absence and the other is a shrug. That
-distinction was computable all along and was never shown to anyone.
-
-**The honest caveat on magnitude.** The relative gains are large and the
-absolute ones are small: 0.37 -> 0.54 true discoveries per run means roughly one
-extra real pattern every six runs. This is worth having because it is cheap and
-provably safe, not because it transforms the project.
-
-**Two guards that matter more than the feature.** Weights are normalised to mean
-1, so marking every hypothesis highly plausible achieves exactly nothing --
-without that, uniformly large weights would simply buy a laxer alpha for the
-whole family, which is not a prior but cheating. And the weight is recorded at
-PROPOSAL time and never revised: a weight raised because a result looked good is
-choosing the answer, and voids the FDR guarantee outright. Both prompts state
-this to the model explicitly, including that weighting one condition up makes
-every other condition tested alongside it harder to accept.
-
-**How realised FDR must be estimated here, because the obvious way is wrong.**
-FDR is E[V/max(R,1)] -- the expectation of the PER-TRIAL ratio -- not the ratio
-of pooled totals across trials. The two diverge sharply in exactly this regime,
-where most trials make zero discoveries: the pooled form reports 16.4% at the
-unweighted baseline and makes a correctly-behaving BH procedure look as though it
-were failing to control FDR at all. Estimated correctly the baseline is 4.7%,
-comfortably under alpha. Worth stating explicitly because the pooled ratio is the
-natural thing to write and produces an alarming, entirely spurious result.
-
----
-
-### 2026-08-30 — Cleanup, and a correction to how the coin-scoping gain was attributed
-
-**Duplicated thresholds removed at the source.** The four numbers behind the
-static triggers (funding z 2.0, range multiple 1.5, efficiency ratio 0.40,
-volume multiple 1.8) appeared twice: in `compute_triggers` and again, hand-
-copied, inside the prose of `TRIGGER_NUMERIC_DEFINITIONS` that `/details` shows
-a human as the authoritative definition of what a candidate tests. Drift there
-means telling someone a trigger is something it is not. Now named once and the
-description is built from them, with tests guarding both directions -- that the
-description quotes the constants, and that `compute_triggers` uses them rather
-than literals.
-
-**`daily_range_pct`'s unused `scale` documented** rather than left implying a
-scaling it does not do. It is safe only because the indicator is in
-`DAILY_NATIVE_INDICATORS`; were it ever removed from that set, an hourly
-evaluation would silently measure one HOUR's range against a threshold
-calibrated on a DAY's (0.008-0.194 daily vs 0.001-0.047 hourly).
-
-**A break the `forecast/` harness caught.** Adding `symbol` to every indicator
-signature broke every synthetic indicator in `forecast/`, which still had the
-old three-argument form. Nothing failed loudly -- the sweeps caught the
-`TypeError` per-condition and recorded it as a status string, so a full run
-would have completed and reported nothing but errors. Fixed across all four
-modules. The lesson worth keeping: the offline harness is not covered by the
-test suite and has to be exercised deliberately after any signature change.
-
-**`forecast/coin_specific_test.py` modernised** to use the shipped
-`ConditionSpec.coins`/`outcome` instead of monkeypatching `_forward_return` and
-reloading modules to undo it. It is now a regression test for the feature rather
-than a parallel implementation of it that could quietly diverge. It also drops
-the hack that identified a coin by its price-series LENGTH -- the exact gap that
-motivated threading `symbol` through in the first place.
-
-**The correction.** That re-run changed the finding's attribution. The original
-test reported 2/9 raw vs 6/9 market-relative and credited the gap to
-market-relative measurement. That was half right: at the time, the
-coin-concentration check was still gating a declared single-coin spec, and it
-was killing the raw arm. With both changes in place the contributions separate:
-
-  * declaring a spec coin-scoped -- which waives a coin-concentration check that
-    is meaningless for a single-coin hypothesis -- does most of the work:
-    0/9 -> 6/9 acceptances.
-  * market-relative measurement no longer changes the COUNT at this signal
-    strength, but shrinks every p-value roughly 5-10x (0.0140 -> 0.0005,
-    0.0480 -> 0.0000). It buys margin rather than new acceptances, which is what
-    matters for a weaker signal and for surviving family-level FDR.
-
-Both are worth having; the honest split is not the one first reported.
-
----
-
-### 2026-08-30 — Running out of API credit mid-replay must stop the run, not empty it
-
-**The failure mode, found by asking what happens on a partial budget rather than
-by hitting it.** Both LLM paths in `replay/engine.py` wrapped their call in a
-single `except Exception` that printed "skipping" and continued. That is right
-for a malformed model response -- one bad JSON payload should not end a run that
-is otherwise working. It is badly wrong for a systemic failure.
-
-If the Anthropic account runs out of credit at, say, 2020, every subsequent call
-raises, each is caught and skipped, and the day is **checkpointed as done**
-before the date advances. The replay then walks silently through the remaining
-~2,000 simulated days doing no LLM work whatsoever, finishes, and leaves a
-checkpoint claiming it reached the present. Because the checkpoint advanced,
-resuming later never revisits those years. The run looks complete, costs almost
-nothing, and contains nothing -- and the only clue is a suspiciously small bill.
-
-**The fix distinguishes the two cases.** `_is_systemic_api_failure()` returns a
-reason for an exhausted account, a rejected key, or an unreachable API, and
-`None` for anything that looks like one bad response. Out-of-credit arrives as a
-generic 400 rather than a dedicated exception type, so it is recognised from the
-message text -- deliberately broadly, because a false positive costs a stopped
-replay that resumes cleanly while a false negative costs the silent empty run.
-
-**`_halt_replay()` checkpoints the day BEFORE the failure, not the failing day.**
-That day was only partially processed -- some of its events may already have
-been judged -- so marking it done would drop the remainder. Redoing one day
-costs a handful of calls; skipping one loses events with nothing to show for it.
-The alert goes to Telegram as well as stdout, since the entire point is that
-this must not be something discovered afterwards.
-
-**Practical consequence.** A replay can now be run deliberately on a partial
-budget: it will stop where the money stops, say so, and resume exactly there
-once topped up. That was already the intent of checkpointing after every
-simulated day; it just did not survive the API failing.
-
-**And then it happened for real, from a cause the message-matching missed.**
-Launching the replay, every single call returned a 400: **"`temperature` is
-deprecated for this model."** The API now rejects the parameter on these models
--- which is why the 1.x SDK dropped it. Pinning `anthropic<1.0` earlier the same
-day had treated the symptom one layer below the cause: the SDK accepted the
-argument, the API refused it, so the pin bought nothing and the calls failed
-anyway.
-
-`_is_systemic_api_failure` did not catch it, because it looks for credit and
-billing wording and this message carried neither. The run therefore did exactly
-what the halt logic exists to prevent: skipped every event, advanced, and
-checkpointed normally, reaching 2018-04-06 with **zero** candidates before being
-stopped.
-
-Worth being precise about the cost, since it bears on how the guard is designed:
-**this consumed no credit at all.** The API rejected each request with a 400
-before any inference ran, and rejected requests are not billed -- which is also
-why `llm_pipeline/usage.py` recorded nothing for them, reading as it does from
-`response.usage`. That is precisely what makes the silent-empty-run dangerous
-rather than merely expensive: the bill gives no signal. A run that fails this way
-looks complete, costs nothing, and contains nothing, and the only thing that can
-catch it is the code itself.
-
-Two changes followed. `temperature=0` is removed from all seven call sites, so
-the code now runs on both 0.x and 1.x SDKs (verified against the live API on
-each), and the version pin is gone. And a **count-based halt** was added:
-`CONSECUTIVE_FAILURE_HALT = 8` stops the replay after eight consecutive event
-failures regardless of what the error says. Message-matching requires
-anticipating the next breaking change; a count does not. The counter resets on
-every success, so an isolated malformed response is still merely skipped.
-
-The honest cost of the fix: `temperature=0` was a deliberate reproducibility
-decision, and it is no longer available on these models. Repeated LLM runs are
-no longer guaranteed identical. Everything statistical in this project remains
-fully deterministic -- the LLM only ever PROPOSES conditions, and every verdict
-is computed offline -- but the specific proposals a replay produces may now vary
-between runs. That is a real reduction in reproducibility, forced by the API,
-and it is recorded rather than quietly absorbed.
-
----
-
-### 2026-08-30 — Prompt caching: on the system block, and measured rather than assumed
-
-**Sizing it first.** Measured on 83 real replay calls: 2,855 input tokens and
-632 output tokens per call, so input is 47% of cost and output 53%. Of that
-input, only the system prompt is identical between calls -- the event, the
-indicator snapshot, the lead-up table and the battery context all change every
-time. Caching therefore addresses roughly 41% of 47%, about 17% of total spend:
-~$5 across a full replay. Real, but the smaller of the available levers, and
-worth saying so before implementing it.
-
-**Where the breakpoint goes, and why not the obvious place.** Cache prefixes are
-built tools -> system -> messages, so the last position identical across calls
-is the **system block**. Putting `cache_control` on the user message instead --
-the intuitive "mark the end of the prompt" move -- is the documented classic
-mistake: every request would hash a different prefix, find no prior entry to
-read, and pay a fresh cache WRITE at 1.25x forever. That is strictly worse than
-not caching at all, and it looks like it is working. One breakpoint suffices
-here: each call is a fresh single-turn request, so nothing grows toward the
-20-block lookback limit.
-
-**Only three of six prompts qualify.** The minimum cacheable prefix is 1,024
-tokens for Sonnet and 2,048 for Haiku. Counted with the API's own
-`count_tokens`, not estimated from characters:
-
-    SONNET_SYSTEM_PROMPT   2408   cached
-    REPLAY_SYSTEM_PROMPT   1575   cached
-    SHOCK_SYSTEM_PROMPT    1399   cached
-    PRUNE_SYSTEM_PROMPT     529   below the floor
-    MARKET_CHECK_PROMPT     316   below the floor
-    HAIKU_SYSTEM_PROMPT     187   below the floor (and Haiku's floor is 2048)
-
-The three short ones are deliberately NOT marked. Below the floor a breakpoint
-is silently ignored, and marking them would leave code that reads as cached and
-is not. Worth noting `REPLAY_SYSTEM_PROMPT` sits 551 tokens above the floor:
-trimming that prompt would disable its caching entirely, with nothing to signal
-it.
-
-**Verified on live calls, not assumed.** Two requests with the same system
-prompt and deliberately different user content:
-
-    call 1: input=13  cache_write=1570  cache_read=0
-    call 2: input=13  cache_write=0     cache_read=1570
-
-Second call reads. `llm_pipeline/usage.py` now records
-`cache_creation_input_tokens` and `cache_read_input_tokens` separately, prices
-them at 1.25x and 0.1x, and `/usage` prints **reads / (reads + writes)**. That
-ratio is the health check: near 0% means the breakpoint has drifted onto content
-that changes, which is otherwise invisible because the calls still succeed.
-
----
-
-### 2026-08-31 — 228 proposals, none testable: capping clauses and widening thresholds
-
-**The finding, from the replay's own output rather than a simulation.** Over 5.5
-simulated years the replay auto-approved and tested **197 proposals** from Sonnet,
-registering 228 candidates in total. The outcome:
-
-    insufficient_data   193
-    watch                39
-    rejected              2
-    accepted              0
-
-Almost nothing was *rejected on the evidence*. It was **untestable**: the
-conditions never accumulated enough occurrences to be judged at all. A hypothesis
-that has essentially never happened cannot be confirmed or denied either way.
-Establishing that ratio -- and locating where in the funnel it arises -- is what
-this run was for, and it is the input to both changes below.
-
-**Where the rarity comes from, measured two ways.** First, by clause count:
-
-    clauses  proposed  testable
-       2        56        18%
-       3       141        18%
-       4        30         0%
-       5         1         0%
-
-Every 4-and-5-clause condition was hopeless. But 2 and 3 clauses are EQUALLY
-testable, so the count alone is not the cause. Second, by threshold width, on
-"macro day AND 5-day fall AND RSI below X" against the real data:
-
-    5-day fall < -20%, RSI < 40  ->    51 usable occurrences
-    5-day fall < -20%, RSI < 50  ->    56
-    5-day fall < -10%, RSI < 50  ->   220
-    5-day fall <  -5%, RSI < 50  ->   508
-    macro day AND RSI < 50 only  ->  1552
-
-Widening the RSI from 40 to 50 moved it by 10%. Relaxing the price move from
--20% to -10% quadrupled it. **The binding constraint is the extremity of the
-thresholds, especially on price-move clauses** -- a 20% five-day fall is a
-once-in-years event, and asking for it alongside anything else produces a
-condition that essentially never fires. This is worth recording precisely
-because the intuitive fix (fewer clauses, slightly looser RSI) is the weaker
-half of the answer.
-
-**Two changes.** `MAX_CLAUSES = 3` is enforced in `ConditionSpec`, refusing
-proposals that provably cannot produce a result rather than letting them consume
-a backtest. And both system prompts now carry the measurement above, telling the
-model that the point is to choose the ONE market-state term carrying its actual
-idea and set its threshold where it fires often enough to measure -- "a normal
-bad week, not a historic crash". The cap is the backstop; the threshold guidance
-is the part expected to do the work.
-
-**Context for why the prompt guidance may not be enough on its own.** In the
-same run, **87 proposals were refused for having no news/macro clause at all**,
-despite that rule being stated explicitly in the prompt. Left to itself the
-model gravitates toward pure chart patterns, and toward dramatic thresholds. The
-hard checks exist because the instructions alone have a measured compliance
-problem.
-
----
-
-### 2026-08-31 — Framing the model as a researcher, and the cost metric that justifies it
-
-**The unit of cost that matters is not the call.** A replay call costs $0.0114.
-That number is nearly useless for deciding anything, because most calls buy
-nothing usable. The metric that governs the discovery budget is **cost per
-testable hypothesis produced**, and measured over the 2017-08 to 2023-03 run it
-was **$0.34** -- thirty times the headline figure.
-
-The funnel, measured:
-
-    calls to Sonnet                          1203    $13.75
-      no_action (no proposal at all)          162
-      proposals formulated                    284
-        discarded: no event term               87    31% of proposals
-        passed validation and tested          197
-
-    candidates registered                     234
-      never judgeable (insufficient_data)     193    82%
-      judgeable                                41    18%
-
-    cost per judgeable hypothesis           $0.34
-
-Two multiplicative losses. Roughly a third of proposals never contained the
-event term this project exists to test, so they were discarded before any
-computation. Of what survived, four fifths described conditions so rare they
-never accumulated enough occurrences to be judged either way. From 284 proposals,
-41 usable hypotheses: **14%**.
-
-**The first loss is governed by how the model's ROLE is framed, not by whether it
-follows instructions.** The 31% above was measured with the model addressed as
-*"a market strategist for a crypto trading system"*, with the news/macro
-requirement stated several paragraphs further down. That pairing pulls in two
-directions: a market strategist for a trading system looks for entry setups, and
-entry setups are built from RSI, Bollinger position, volume and volatility. A
-constraint stated later in the prompt does not override the job named in its
-first sentence -- on this evidence it loses roughly a third of the time. The
-lesson generalises past this project: a requirement placed downstream of a role
-definition competes with it rather than qualifying it.
-
-The prompts open as a quantitative researcher whose subject is whether a
-macro or news EVENT produces a measurable change in prices, with no position ever
-opened and no entry signal to find -- and with the operative test stated plainly:
-*if the idea would still make sense with the macro release deleted from it, it is
-a chart pattern and does not belong here.* Technical readings are named as
-CONTEXT for the event rather than as the subject. The second loss is addressed
-separately by the clause cap and the threshold guidance.
-
-**Where the optimisation actually lands.** Spend per call is fixed at $0.0114
-and no prompt change moves it: the call is complete before the spec is validated,
-so every proposal costs the same whatever it contains. The lever is therefore
-YIELD, not price -- how many judgeable hypotheses a fixed budget produces. As
-arithmetic on the funnel above, a projection rather than a measurement:
-
-    off-thesis rate falls to 20%   ->  1.15x testable hypotheses  ->  $0.29 each
-    off-thesis rate falls to 10%   ->  1.30x testable hypotheses  ->  $0.26 each
-
-**Left as a prediction on purpose.** 31% is the measured off-thesis rate under a
-market-strategist framing; the rate under a research framing is not yet known and
-requires a run to establish. Recorded before that run so the comparison is honest
-afterwards rather than reconstructed to fit whatever it produces. Note that the
-same $13.75 that established this baseline also produced 5.5 years of replay
-history, 234 registered candidates and the clause-count and threshold-width
-measurements below -- the funnel is one output of that run among several, not its
-purpose.
-
-**A separate note on what belongs in a prompt.** Numbers like the funnel above do
-not belong in the system prompt itself. The model has no memory of the proposals
-they describe and no notion of this project's history, so such text costs tokens
-and constrains nothing it can decide. A prompt carries rules and consequences the
-model can act on -- the threshold table earns its tokens because it says what a
--20% versus a -10% choice does to sample size, which is a property of the data
-the model cannot derive on its own. Everything explanatory belongs here.
-
----
-
-### 2026-08-31 — The keep-or-drop review: one digest a year, and no model opinion in it
-
-**Where the replay's budget was actually going.** Instrumented across a 5.5-year
-run, the LLM calls split like this:
-
-    prune advice      665    55%
-    macro events      427    35%
-    shock events      110     9%
-
-**More than half of every call was the keep-or-drop opinion, not discovery** --
-$2.73 of $10.11. The mechanism fired per candidate, after two years without an
-acceptance, re-asking every six months; with 234 candidates almost none of which
-were ever accepted, it compounded to ~2.8 requests each.
-
-**The opinion could not have added evidence, by construction.**
-`sonnet_prune_advice` received the candidate's name, its trigger description,
-years tracked, and its numbers -- and its own docstring described the output as
-"a qualitative opinion only, no verification machinery behind it". Meanwhile
-`explain_non_acceptance()` already produced the concrete computed reason
-("97% of it comes from a single coin (XRPUSDT) -- too concentrated to trust as
-general"). The model was being asked to narrate the same figures the human was
-already reading.
-
-**What replaced it uses more of the evidence, not less.** `prune_recommendation()`
-derives keep-or-drop offline, and turns on the distinction the opinion had no
-access to -- whether there was POWER to detect an effect:
-
-    well-powered and nothing found    -> DROP   (evidence of absence)
-    underpowered                      -> KEEP   (undetermined, never asked)
-    never enough occurrences          -> KEEP   (not a negative result)
-    still significant                 -> KEEP   (blocked only by robustness)
-
-Two candidates with the same p-value and the same "not significant" verdict now
-receive opposite recommendations, correctly, because their own volatilities say
-one test could have found an effect and the other could not.
-
-**Delivery changed too, for a human reason rather than a cost one.** The review
-is now a single annual digest split into "Recommended to DROP" and "Recommended
-to KEEP", each line carrying N, p, MFE/MAE and the reason. One message per
-candidate does not get read; 234 candidates in one message is roughly six
-Telegram messages, which also does not get read. Only candidates actually due
-are listed -- a few dozen a year, which fits in one message a person will
-actually work through.
-
-Each candidate carries a short code, `2019-0001`, derived from the year it
-entered the registry and its order within that year. The human replies with the
-codes to drop. Nobody types
-`soft_cpi_oversold_bounce_post_claims_beat` on a phone, and buttons cannot carry
-a thirty-item review. Codes are derived rather than stored, so the same history
-always produces the same codes and nothing extra has to stay in sync.
-
-**Effect.** 665 calls to 0, since the digest needs no model at all: roughly a 27%
-reduction in the cost of a replay, with the decision resting on strictly more of
-the available evidence than before. Applied to the milestone checkpoint as well,
-for the same reason -- it was showing the same kind of opinion from the same kind
-of numbers.
-
----
-
-## A too-rare condition is loosened toward measurability, not discarded
-
-**Decision.** When a proposed condition occurs fewer than `MIN_HISTORICAL_OCCURRENCES`
-(35) times, the system does not reject it. It searches locally for the smallest
-loosening of its thresholds that reaches the floor, and tests that instead —
-disclosing the substitution in the approval message and storing it with the result.
-
-**Why the previous behaviour left value on the table.** The rarity gate returns a
-yes or a no. Sonnet receives nothing back from it, so a proposal whose *direction*
-is sensible and whose *numbers* are merely extreme was discarded whole. Measured on
-the 118 candidates the replay had accumulated, 17 sat below the floor. All 17 were
-recoverable: loosening reached a measurable sample in every case, at 10% for six of
-them. Those are seventeen hypotheses that the pipeline had already paid an API call
-to generate and was throwing away over a threshold choice.
-
-**Why this is a power calculation and not p-hacking**, which is the obvious
-objection and the one that decides whether any of this is admissible. The search
-criterion is the occurrence count and nothing else. No forward return, no p-value,
-no outcome of any kind is consulted while a threshold is being chosen —
-`relax_to_testable` is not given access to one. Loosening until a condition fires
-often enough to be *measured* is a sample-size decision. Loosening until it becomes
-*significant* would be p-hacking, and the separation between the two is structural
-here rather than a matter of discipline.
-
-Three further constraints keep it honest:
-
-- **The smallest step that works is taken** (10%, then 25%, then 50%), so the tested
-  hypothesis is the nearest measurable neighbour of the proposed one, not the loosest
-  version that clears the bar.
-- **`as_of` is respected.** The search counts occurrences only up to the simulated
-  date, so a 2018 replay day cannot consult 2024 to decide how far to loosen. The
-  time sandbox applies one level up from `count_occurrences`, where it would
-  otherwise have been a second entry point for the same leak.
-- **The substitution is disclosed**, in the Telegram approval message before the
-  human presses the button and in the stored record afterwards. The condition being
-  tested is not the one that was proposed; an approval that did not say so would not
-  be an approval of anything in particular.
-
-**Thresholds move toward the indicator's neutral point, never past it.** The
-straightforward implementation — shift each threshold by a percentage of its own
-magnitude — passes its occurrence-count test while destroying the hypothesis it
-claims to preserve, and did so on real proposals:
-
-| Proposal | Naive relaxation | Problem |
-|---|---|---|
-| hot CPI with the market **overbought**, `rsi_14d >= 70` | `rsi_14d >= 52.5` | 52.5 is the neutral line. Half of all days qualify. Nothing is overbought. |
-| **cool** CPI, `cpi_surprise <= 0` | `cpi_surprise <= +0.1` | The threshold crossed zero and began matching **hot** prints. |
-
-Both look like successes, because the occurrence count rises — which is precisely
-what the search optimises. `RELAXATION_NEUTRAL` fixes it by naming the value at
-which each indicator says nothing: RSI's midline at 50, and consensus (zero) for
-everything measured as a deviation. A threshold may move toward its neutral, never
-onto it and never through it. RSI 70 relaxes to 60, still overbought; `cpi_surprise
-<= -1` relaxes to `-0.5`, still cool. A threshold already sitting at its neutral
-cannot be loosened at all, which is correct: `cpi_surprise <= 0` is already "any
-cool print", and there is no weaker version that is still the same claim.
-
-Four indicators (`atr_pct_14d`, `daily_range_pct`, `efficiency_ratio_20d`,
-`is_macro_day`) are deliberately absent from the table — strictly positive or
-binary scales, where zero is an extreme rather than a midpoint and no neutral
-exists to move toward. They are never relaxed. That costs recall, and is the
-right trade: inventing a neutral for them is how the sign flip above got in.
-
-With the semantic bound applied, the recovery rate is unchanged at 17/17. The
-constraint cost nothing in this instance and removes the failure mode entirely.
-
----
-
-## `is_macro_day` is removed from the proposal grammar entirely, not just demoted
-
-**Decision.** `is_macro_day` can no longer appear in an LLM-proposed condition at
-all. It was previously dropped from `NEWS_EVENT_INDICATORS`, which stopped it
-satisfying the necessary-condition rule *on its own* while leaving it usable as a
-secondary clause. That half-measure did not hold.
-
-**Why the demotion was not enough.** The objection to the indicator is that it is
-contentless: it records that a publication was scheduled, never what the
-publication said, so a condition built on it cannot distinguish a hawkish shock
-from a print that landed exactly on consensus. Release dates are also known months
-in advance, so nothing about it *arrives*. That objection does not weaken when the
-term is secondary. Paired with a graded surprise it is very nearly redundant — a
-CPI surprise **is** a macro day — and paired with anything else it re-admits the
-hypothesis the removal existed to exclude. Measured on the 118 candidates the
-replay had accumulated, 31 (26%) used it; six of those had it only as a secondary
-clause, which is precisely the back door the demotion left open.
-
-**The more expensive half of the same problem: the prompt still advertised it.**
-Both system prompts listed `is_macro_day` among the indicators satisfying the
-`HARD REQUIREMENT`, and gave it as the worked example for sequenced conditions
-("news FIRST, then the move"), while the validator rejected exactly that. The
-system was paying Sonnet to produce proposals its own instructions requested and
-its own code refused — the 21% of proposals failing for "no real news term" were
-being induced by the prompt, not merely permitted by it. A prompt naming an
-indicator the validator bans is not a wording defect; it is a billed one.
-
-**Fixed so it cannot recur.** The whitelist shown to the model is now *derived*
-from the proposable set (`proposable_indicators()`) rather than written out by
-hand, so an indicator added to `NON_PROPOSABLE_INDICATORS` disappears from every
-prompt at once. A test asserts no banned indicator appears in either system
-prompt — it caught a third occurrence during this change, a generated indicator
-list neither of the two hand-edited passages covered.
-
-The ban is enforced in `spec_from_proposal`, not only in the prompt, on this
-project's standing rule that a prompt is a request and code is a guarantee.
-
-**What was deliberately not changed.** `is_macro_day` remains in
-`SUPPORTED_INDICATORS`, and `candidates/definitions.py` still uses it internally
-for the C2 static candidate family (post-macro-release reaction), which is a
-different code path and a different question. The committed sweeps in `forecast/`
-contain arms built on it, and their recorded JSON results must stay reproducible.
-Deleting the indicator outright would silently invalidate published measurements
-in order to tidy a rule that belongs to the proposal path alone.
-
----
-
-## The volatility shock is the explanandum, so it cannot be a clause
-
-**Decision.** `shock_zscore` is removed from the proposal grammar entirely
-(`NON_PROPOSABLE_INDICATORS`). It remains the trigger — the only one measured to
-select days that differ from ordinary days — but it can no longer appear inside a
-condition.
-
-**The argument, in its decisive form.** The replay asks Sonnet precisely because
-a shock occurred. A shock is therefore present at **every** proposal by
-construction: it is a constant of the sampling frame, not a variable. It can add
-nothing discriminating at the moment the hypothesis is formed, while still
-narrowing the condition when that condition is later tested across all history —
-the worst of both. The shock is the situation the condition is supposed to
-explain, not part of the explanation.
-
-The previous rule was weaker: `shock_zscore` was excluded from
-`NEWS_EVENT_INDICATORS`, so it could not satisfy the necessary condition alone,
-but the prompt then said "use shock_zscore freely as an ADDITIONAL
-market-condition clause". That reasoning treated it as a market state. It is not
-a state; it is an outcome.
-
-**Measured on 118 real proposals**, 11 contained `shock_zscore` and **9 of those
-11 used `within_days=0`** — a shock on the very day that prompted the question.
-Only 2 used it as a genuine antecedent ("a crash three days ago, then a
-release"). That sequenced form is more defensible, but at 2 cases in 118 an
-exception is harder to reason about than the rule, and it is still the model
-proposing back the thing it was shown.
-
----
-
-## Raw `daily_range_pct` is not proposable; `range_zscore_30d` replaces it
-
-**The defect.** `daily_range_pct` is `(high - low) / close`, unnormalised. Crypto
-volatility roughly halved across this project's window, so a fixed threshold on
-it is a filter on the **calendar** wearing the costume of a filter on market
-state. Measured on BTC, `daily_range_pct >= 0.05` selects:
-
-    2021  62% of days        2023  17%        2026  16%
-
-**Why it matters beyond tidiness.** A condition whose threshold silently selects
-a period rather than a state runs straight into the 60% year-concentration gate,
-and does so for a reason that has nothing to do with the hypothesis being tested.
-
-**The forms compared**, by spread in yearly selection rate — a stationary form
-must select the same share of days every year:
-
-    raw >= 0.05                    54.5%   unusable
-    z-score 30d >= 1.5              2.3%
-    percentile rank 180d >= 0.95    3.0%
-    ratio to 30d mean >= 2          1.5%
-
-`range_zscore_30d` was chosen over the marginally flatter ratio for grammar
-consistency: `volume_zscore_30d` and `funding_zscore_30d` already exist, and a
-single idiom is easier for a model composing conditions than three.
-
-**Why this indicator at all.** The daily range measured *better than the shock
-trigger* as a trigger (`forecast/trigger_value.py`: p=0.0000 at 1 and 3 days,
-0.0039 at 7, against shock's 0.0000/0.0086/0.0919). It was not adopted as a
-trigger because the two describe different things — a shock says what has already
-happened, a wide range says the market is undecided, typically around an
-announcement — and the question the system asks is "what caused this", which
-needs the shock. The predictive content is real, so it belongs where the system
-can actually use it: as a condition term.
-
-Neither `daily_range_pct` nor `atr_pct_14d` appeared in any of the 118 proposals,
-so banning the raw form costs nothing measurable. Both stay in
-`SUPPORTED_INDICATORS` so the committed sweeps in `forecast/` remain reproducible.
-
----
-
-## The replay's only trigger is a confirmed exit from volatility compression
-
-**Decision.** Macro releases and volatility shocks are both removed as triggers.
-Sonnet is consulted at exactly one kind of moment: a period of unusually low
-volatility for a coin has just ended, and the exit has been confirmed.
-
-**Why both incumbents had to go, on one principle.** A trigger must be neither
-one of the causes being sought nor the outcome being explained. A macro release
-is a candidate cause — triggering on it conditions the search on the very thing
-under investigation. A volatility shock is an outcome. Each also failed its own
-measurement (`forecast/trigger_value.py`):
-
-    trigger                   days   p @1d   p @3d   p @7d
-    macro release (any)       3411   0.088   0.990   0.611     selects nothing
-    volatility shock z>=2      227   0.000   0.009   0.092     selects magnitude
-
-The shock trigger passes a test of MAGNITUDE. But this project looks for the
-causes of a **trend**, and a shock is not a trend. Scored against a defined trend
-— a move of at least one standard deviation whose path is also directional
-(forward efficiency ratio >= 0.5) — the shock trigger is an **anti-precursor**:
-
-    trigger                   trend after   baseline
-    shock z>=2 (14d)                 8.8%      11.8%
-    shock z>=2 (21d)                 4.0%       6.8%
-    compression (14d)               16.1%      11.1%
-
-Post-shock days trend *less* often than ordinary days, which is intuitive after
-the fact: a shock is followed by churn. The original measurement missed this
-because it asked only whether a trigger precedes a bigger move. Magnitude and
-directionality are different questions and only the second is the one being
-asked.
-
-**Why compression is the right shape, beyond the numbers.** It says a directional
-move is brewing **without saying which way**. The direction is then exactly what
-the macro context and market state have to explain — the question the pipeline
-exists to ask. A trigger that predicted direction would be doing the pipeline's
-job for it.
-
-**Threshold 1.25**, measured (lift = trend rate over the unconditional rate):
-
-    threshold   firings   14d lift   21d lift
-         1.00      2764      1.41x      1.59x
-         1.25      1464      1.62x      1.72x
-         1.50       718      1.72x      1.56x
-         2.00       118      1.45x      0.88x
-
-1.25 is the strictest level at which both horizons agree and are strong. Past
-1.75 the sample thins and they contradict each other — at 2.5, 40% at 14 days and
-0% at 21 on fifteen events, the shape of noise rather than of a stronger effect.
-
-**Compression is a STATE, so the trigger fires on the EXIT.** Episodes run a
-median of 4 days and up to 38; triggering on the state would ask the same
-question up to 38 times about the same market — a measured 6.7x duplication
-(1,463 compressed coin-days across 217 episodes). This was found only because the
-project's director asked for it directly, and a first attempt to measure it was
-wrong: `~` applied to an object-dtype Series does bitwise negation, so the
-transition mask silently collapsed onto the state and reported no duplication at
-all.
-
-**The exit is confirmed over 5 days.** An exit followed by re-compression is a
-flicker inside the same lull, not a regime change, and is followed by a defined
-trend less often — 15.2% against 23.8%, over a 5-day window.
-
-The window is deliberately short, and the reason is a trap worth recording. At 10
-days the comparison *inverts* (19.6% for flickers against 14.9% for confirmed
-exits), because a long window swallows the LATER genuine exit and credits its
-trend to the earlier flicker. A first pass measured at 14 days, concluded the
-filter discarded the best cases, and was wrong; the director rejected it on
-logical grounds — a market still in compression cannot be producing a trend —
-before the artefact was located.
-
-The 5 days are a **definition** of when two episodes are one, not a parameter
-fitted to maximise a statistic: 3 and 5 give near-identical numbers, which is what
-a definition should do and a tuned parameter would not. The difference is also
-not significant on its own (p=0.147 at n=214); it is the direction, the size, and
-the prior logic that carry it.
-
-**The confirmation decides whether to ask, never what is shown.** Everything
-handed to the model is dated to point B, the exit itself, five days before the
-replay's actual position — including `as_of` for the backtest. Sonnet never sees
-the confirmation window.
-
-**Cost.** 217 triggers across the whole replay, about **$3.32**, against roughly
-1,200 calls and $18 before — of which 650 went to macro releases that selected
-nothing.
-
----
-
-## The sequenced form is not a refinement — it is the only reliably testable one
-
-**Measured** over 324 two-clause conditions drawn from the current grammar (a
-macro-surprise clause plus one market clause, thresholds spanning the range a
-model would plausibly propose), varying only the `within_days` on the news term:
-
-    within_days   testable as proposed   rescued by relaxation   lost   median occurrences
-              0                    24%                     58%    18%                  14
-              3                    67%                     33%     0%                  62
-              7                    84%                     16%     0%                 127
-
-**What this settles.** A same-day conjunction — "a CPI surprise AND an oversold
-market, both today" — is the natural way to phrase a hypothesis and is mostly
-untestable: its median is 14 occurrences against a floor of 35, and 18% cannot
-be rescued at all. The same hypothesis phrased as a sequence — "a CPI surprise
-within the last week, and an oversold market today" — has a median of 127 and
-nothing is lost.
-
-That is not a small difference in convenience. `within_days` decides whether a
-hypothesis can produce a result, and the prompts describe it as a way to express
-ORDERING, which is true but undersells it. Both prompts already carry a worked
-sequenced example; this measurement is the reason it belongs there.
-
-**It also explains the relaxation mechanism's value differently than expected.**
-At `within_days=0` the relaxation rescues 58% of the grammar — it is carrying the
-whole design. At `within_days=7` it rescues 16%, because little needs rescuing.
-The relaxation is a safety net for badly-scoped proposals, not a substitute for
-scoping them well.
-
----
-
-## `MIN_HISTORICAL_OCCURRENCES = 35` does not do what its own reasoning claims
-
-**Measured**, by sampling conditions from the current grammar in bands of
-occurrence count and running the real test on each:
-
-    counted occurrences   ended insufficient_data   accepted
-                  35-60                       90%         0%
-                 60-100                       40%         0%
-                100-200                       10%         0%
-                   200+                        0%         0%
-
-**Nine out of ten conditions admitted at the floor produce no result at all.**
-The gate exists precisely to stop a walk-forward test being spent on a condition
-that cannot produce one, and at its own threshold it fails that job almost
-always.
-
-**Why the stated reasoning was optimistic.** The constant's comment sets 35 by a
-single conversion: out-of-sample is "roughly two thirds of all occurrences", so
-35 total should give ~23 OOS against `min_report_events = 20`. There are in fact
-TWO conversions — counted (coin, day) pairs become events, and events are then
-split into folds of which only the held-out ones count — and measured, the
-events actually reaching the test are around 50-60% of the counted occurrences
-before the fold split is applied at all. Compounded, 35 counted lands below the
-minimum rather than comfortably above it.
-
-**What is NOT established.** The counted-to-tested ratio varies widely across
-conditions (11% to 63% in the cases examined) and the driver was not isolated.
-An early hypothesis -- that `within_days` inflates the count, since one release
-makes several consecutive days true -- was tested directly and does not hold: the
-ratio stays near 50-60% at `within_days` of 0, 3, 7 and 14. The band table above
-is the finding; the mechanism behind its spread is open.
-
-**Two independent lines point at the same replacement value.** Raising the floor
-to roughly 120 occurrences would put the insufficient-data rate near 10% — and
-separately, 120 occurrences is the rate at which a candidate reaches
-`MILESTONE_N` live occurrences several times faster. The testability floor and
-`MILESTONE_N` disagreed at the numbers on record when this was measured; ~120 is
-where they agree — the value `MIN_HISTORICAL_OCCURRENCES` uses today.
-
-**Deliberately not changed here.** Raising the floor discards hypotheses that are
-merely rare rather than wrong, and statistical power is already this project's
-binding constraint — a stricter gate cuts the sample the whole system is starved
-of. That is a real trade-off and belongs to the project's director, not to a
-tidying commit. What belongs on the record now is that 35 is not defensible on
-the reasoning currently written next to it.
-
----
-
-## The rarity gate counts episodes as well as occurrences
-
-**Found by the project's director, asking whether `within_days` and the outcome
-horizon interact.** They are structurally independent -- one looks backward from
-the firing day, the other forward from entry -- but they are coupled through the
-gate, and the coupling had made a decision taken minutes earlier partly
-self-defeating.
-
-**The mechanism.** `build_events` creates one row per triggered bar with no
-deduplication. A clause's `within_days` holds the news term true for K days, so
-the condition fires on every day in that window where the market term is also
-true, and each firing's forward window overlaps the previous one almost
-entirely. Measured on one hypothesis:
-
-    within_days   raw events   distinct episodes   inflation   % overlapping
-              0           49                  49        1.0x              0%
-              3          198                  65        3.0x             67%
-              7          397                  82        4.8x             79%
-             14          856                 134        6.4x             84%
-
-Eight times the count for 1.7 times the independent evidence.
-
-**Why this mattered immediately.** The floor had just been raised to 120 to
-require more evidence, and the prompts had just been told to use a lookback of
-3-7 so proposals could clear it. Those two changes work against each other: the
-lookback clears the floor by counting the same evidence repeatedly. The
-guidance was removed and replaced with an explanation of what the two forms of
-the hypothesis MEAN, since choosing a lookback for testability is choosing it
-for nothing.
-
-**It also put the gate on a different unit from the checkpoint it feeds.** The
-live side already deduplicates -- `_scan_mechanical_triggers` will not open a
-second test on a (candidate, coin) pair while one is open -- so live occurrences
-were always episodes while the gate counted firings.
-
-**Two floors now, guarding two different failures.** Neither replaces the other,
-and they bind in different regimes:
-
-  * `MIN_HISTORICAL_OCCURRENCES = 120` (raw firings) guards whether the test can
-    RUN. `classify_status` needs more than `min_report_events = 20` out-of-sample
-    events and events are raw rows, so this necessarily counts firings.
-  * `MIN_HISTORICAL_EPISODES = 40` guards whether the RESULT MEANS ANYTHING.
-
-40 is anchored to a number the methodology already committed to rather than
-chosen for how much it admits: `min_report_events` is 20 out-of-sample, and
-out-of-sample is roughly half to two thirds of the sample, so 40 total episodes
-targets 20-27 independent ones. Share of the current grammar clearing it:
-
-    within_days      0      3      7     14
-    clears 40      34%    63%    73%    87%
-
-At `within_days=0` raw and episodes are equal, so the 120 raw floor binds and
-admits little (median 24 occurrences). That is honest scarcity rather than a
-counting artefact -- same-day conjunctions of a macro release and a market state
-genuinely are rare -- and it is the difference the episode count makes: the
-penalty is now a measurement rather than an artefact of the unit.
-
-**Both floors are checked in one function**, `is_testable`, called by the
-proposal gate and by the relaxation search. They disagreed once already, when
-the relaxation targeted a floor the gate had moved past.
-
-**Not verified, and recorded rather than assumed.** The moving-block bootstrap
-sizes its blocks to the horizon and so protects the BASELINE against
-autocorrelation. Whether the variance of the OBSERVED mean accounts for overlap
-among the sample's own events was not checked. If it does not, p-values are
-optimistic in proportion to the inflation factor above, and that would matter
-most exactly where the lookback is widest.
-
----
-
-## The episode floor is currently inactive, and that is worth stating
-
-**Measured after the fact**, running the whole grammar through both gates. Of
-1,224 two-clause conditions, 38% clear both floors as proposed, 41% are rescued
-by relaxation, 21% are lost — and **every single loss is to the raw floor. Not
-one condition fails on episodes.**
-
-**Why, and it partly walks back the alarm that motivated the episode floor.**
-The inflation is real on the grammar as a whole — a seven-day lookback produces
-about three to five times the firings for the same independent evidence. But it
-does not translate into weak conditions PASSING. Among conditions that actually
-clear 120 raw occurrences:
-
-    within_days   passing   median episodes   minimum episodes
-              0         5               133                116
-              3        15               123                 46
-              7        18                99                 49
-             14        20               134                 72
-
-A condition frequent enough to fire 120 times is genuinely frequent, not merely
-repetitive, whatever its lookback. The raw floor already does the work the
-episode floor was added to do.
-
-**What follows.** `MIN_HISTORICAL_EPISODES = 40` is kept, and described honestly:
-it is insurance against a failure mode this grammar does not currently produce,
-not an active safeguard. The observed minimum of 46 is close enough to it that a
-different set of thresholds could bring it into play, and it costs nothing to
-leave armed. What it must not do is appear in a write-up as a gate that is
-filtering anything, because it is not.
-
-**The direction of the correction matters more than the number.** The concern was
-raised on the inflation factor alone, and the inflation factor was the wrong
-quantity to reason from -- what mattered was the episode count of the conditions
-that survive, which is a different distribution and had to be measured
-separately. Reasoning from the first to the second was the mistake.
-
----
-
-## What the new grammar actually produces, measured before spending anything
-
-The whole redesign — compression trigger, two clauses, two proposals per call,
-floor at 120 — was checked against the question it exists to answer, offline and
-free, before any replay was run:
-
-    within_days   testable as proposed   rescued   lost
-              0                     5%       25%    70%
-              3                    30%       58%    13%
-              7                    51%       47%     2%
-             14                    67%       33%     1%
-          total                    38%       41%    21%
-
-**79% of the grammar is reachable.** Projected over the replay's 217 triggers at
-two proposals each, and the measured 56% rate at which a call yields a usable
-spec: **roughly 190 testable candidates**, against 118 accumulated by the
-previous system — which made about 1,200 calls to get them, against 217.
-
-More material, from a trigger measured to precede what the project is looking
-for, at roughly a sixth of the cost. That is the case for running it; it is not
-evidence that anything will be found.
-
----
-
-## The static battery is the control arm, not a second class of candidate
-
-**Raised by the project's director**: do C1/C2/C6 still serve any purpose, now
-that discovery runs on compression-triggered LLM proposals?
-
-**The sharp version of the problem.** They are held to a standard the LLM is
-forbidden from meeting. Every proposed condition must contain a real news or
-macro SURPRISE term — enforced in code, not requested in a prompt. C1
-(funding-rate crowding) and C6 (efficiency-ratio trend) contain no event term at
-all. C2 rests on `is_macro_day`, which is barred from proposals precisely because
-it records that a release was scheduled and never what it said. Run through
-`spec_from_proposal` today, **all six variants are rejected by this project's own
-validator.** The battery is also empty: nothing accepted.
-
-**They are not deleted, because they are already the control arm — it was just
-never said.** This project's question is whether market conditions COMBINED WITH
-a real macro event produce a repeatable pattern. That question needs a baseline
-of conditions built from market state ALONE, put through identical machinery: the
-same walk-forward, the same moving-block bootstrap, the same concentration check,
-the same milestone rule. That is exactly what C1/C2/C6 are.
-
-Read as a control arm they stop being an inconsistency and become the comparison
-the project otherwise lacks: **if LLM-discovered news+market conditions do no
-better than pure chart patterns, the thesis has not been demonstrated.** A null
-result on the treatment arm means little without one; a null on both means the
-method, not the data.
-
-**It costs nothing.** They are detected by the mechanical hourly scan, which
-never calls a model. Their entire ongoing cost is local compute.
-
-**What this obliges.** The comparison has to actually be reported. A control arm
-nobody looks at is decoration, and the replay's results section must state both
-arms side by side rather than listing the static candidates as if they were
-ordinary candidates that happened not to work.
-
----
-
-## A proposal too rare to test today is parked, not discarded
-
-**Raised by the project's director**: with a floor of 120 occurrences, a replay
-walking from 2018 cannot accept anything for years — so why run those years at
-all?
-
-**Measured, and the objection holds.** Share of the current grammar that is
-testable as of each 1 January:
-
-    2019   8%      2021  35%      2023  60%      2025  78%
-    2020  25%      2022  50%      2024  70%      2026  78%
-
-In 2019, 92% of proposals would be refused. **The defect was not the refusal —
-it was that a refused proposal was stored nowhere and lost permanently.** A
-condition written in 2019 that becomes testable in 2022 was discarded in 2019
-and never seen again. Four years of discovery, thrown away.
-
-**Parked instead.** A proposal that is well-formed and on-thesis but has not
-occurred often enough YET goes into `parked_proposals.json`, and the weekly
-battery refresh — which already runs and costs no API call — promotes the oldest
-one that has become testable. Oldest first, never best first: choosing which
-parked hypothesis to promote by any measured quality would be selecting on the
-outcome at proposal time, which is the one thing the proposal path must not do.
-
-Promotion goes through the same human gate a fresh proposal would, because it
-never reached one: it was refused before it could be shown.
-
-**The wait makes the eventual test STRONGER, and this is the part worth keeping.**
-A hypothesis written in 2019 and tested in 2022 is tested partly on data that did
-not exist when it was written. Nothing about the condition could have been shaped
-by that data.
-
----
-
-## `prospective_split` — the only genuinely out-of-sample number here
-
-**A distinction worth being precise about.** `pattern_significance` holds out a test FOLD inside the walk-forward, and the code calls those rows `oos_returns`. That is a real discipline — it stops thresholds being fitted to the rows they are graded on — but every one of those rows already existed when the hypothesis was written. **It is out-of-sample with respect to the PARAMETERS, not with respect to the IDEA.**
-
-The genuine out-of-sample evidence is elsewhere: `accepted` means the historical statistics passed; CONFIRMED means the candidate has additionally lived through its own tracking window (see [The CONFIRMED checkpoint](#the-confirmed-checkpoint-milestone_n--20)). Only the live occurrences are truly out-of-sample with respect to the idea itself.
-
-`prospective_split(spec, coins, proposed_at)` reports the two halves separately:
-how many occurrences predate the hypothesis, how many postdate it, and what the
-post-formulation ones did against the same coins' unconditional return over the
-same span. The baseline is that span, not zero, because comparing to zero would
-credit a bull market to the condition.
-
-**Reported, never gated, and deliberately not a p-value.** At the counts this
-usually yields, a significance test would be underpowered, and a test that cannot
-detect anything must not be presented as a negative result.
-`required_n_for_power` says what would be needed; this says what there is.
-
-**Its practical effect.** A parked proposal arrives with a prospective component
-already built in, so the honest version of "has this held up since we thought of
-it" is available years before the live-occurrence milestone can answer it.
-
----
-
-## Why "confirmed", not "validated"
-
-**What 20 occurrences can actually prove.** `required_n_for_power` (`candidates/methodology.py`) computes the sample needed to detect a `MIN_INTERESTING_EFFECT` of 5% at 80% statistical power:
+`required_n_for_power` (`candidates/methodology.py`) shows what 20 occurrences can actually prove, at 80% power for a 5% effect:
 
     horizon    occurrences needed    smallest effect detectable at n=20
      3 days                   121                                12.3%
@@ -1787,525 +28,313 @@ it" is available years before the live-occurrence milestone can answer it.
     14 days                   742                                30.4%
     21 days                 1,337                                40.9%
 
-At `MILESTONE_N = 20`, only a 20-40% move over the horizon is detectable — a result that size would be a bug to go chase, not a discovery. Raising the milestone to 50 or 100 does not close this gap either; the required sample is in the hundreds, against a median candidate producing about 10.8 independent occurrences a year.
+Only a 20-40% move is detectable at n=20 — a result that size would be a bug to chase, not a discovery. So the word is "confirmed": the condition kept occurring and still passes re-test, nothing stronger. A real caveat: because the checkpoint re-fires every 20 occurrences, a candidate with no real effect has roughly a 58% chance of reaching CONFIRMED at least once by chance over 150 occurrences — one reason it's re-earned fresh each time, not kept permanently.
 
-**So the word is "confirmed", meaning persistence, not proof.** The checkpoint says the condition kept occurring and still passes when re-tested on the enlarged sample — nothing stronger. Every checkpoint message states both numbers together ("occurrence 23 — 307 needed for 80% power") so the achieved count is never read as more than it is.
+**Type.** Statistical rigor.
 
-**A real caveat, not swept under the rug.** Because the checkpoint re-fires at every new multiple of 20, a candidate with no real effect has roughly a 58% chance of reaching CONFIRMED at least once purely by chance over 150 occurrences (measured by re-running the real bootstrap at `SIGNIFICANCE_ALPHA = 0.10`) — one reason CONFIRMED is re-earned fresh each checkpoint rather than kept permanently once reached. See [`accepted` vs `CONFIRMED`](#accepted-vs-confirmed--two-different-claims-never-interchangeable) and [The CONFIRMED checkpoint](#the-confirmed-checkpoint-milestone_n--20).
+### `min_report_events = 20` — the sample-size floor for acceptance
 
----
+`classify_status` requires more than 20 out-of-sample events before ruling `accepted`/`watch`/`rejected` at all — below it, the verdict is `insufficient_data`. Set low enough that sample size itself isn't the bottleneck ahead of the gate that actually answers "does a pattern exist" (statistical significance); if nothing clears the bar even here, that's a real finding, not something to engineer around. Mirrors [`MILESTONE_N`](#the-confirmed-checkpoint-milestone_n--20) by design.
 
-## An occurrence counts when it postdates the hypothesis — not when it is "live"
-
-**`_effective_milestone_count` was topping up dynamic candidates with their FULL
-backtest count**, so a condition with 120 historical occurrences reached its
-first checkpoint on its first day with zero prospective evidence. The
-justification on record was that Sonnet never sees this project's backtest
-results, so the look-then-test risk is weak.
-
-That is true and it is not the point. **An occurrence from 2019 cannot confirm a
-hypothesis written in 2023, however uncontaminated the model was.** The
-distinction is not who saw what; it is which came first.
-
-The rule is now one line: an occurrence counts toward confirmation when it
-happened after the hypothesis was written down. That puts two things on the same
-footing which the code had treated differently, and which the director identified
-as equivalent:
-
-  * occurrences accumulated while a proposal sat PARKED waiting for enough
-    history to be testable — in the backtest, not the trade log, but prospective
-    by construction;
-  * live tests opened after registration, which are the same thing arriving one
-    day at a time.
-
-`confirmation_priors.json` holds the first count, computed once at registration
-via `prospective_split`. Static candidates are unaffected: they were derived by
-mining this project's own history, so none of their occurrences postdates the
-hypothesis, and the general rule gives them the zero their special case gave.
-
-**The consequence, stated because it runs against what was wanted.** A freshly
-proposed condition now starts at zero and needs real time to reach a checkpoint —
-roughly 1.9 years at the median rate — where before it arrived instantly. There
-will be FEWER confirmations in the replay, and later. The ones that arrive will
-mean something.
+**Type.** Compromise (yield vs. rigor).
 
 ---
 
-## The hyperopt cross-check runs after the replay, not during it
+## Acceptance: how a hypothesis clears the bar
 
-**The problem, and why it is not the problem it looks like.**
-`hyperopt_runner.run_all` optimises TP/SL over `timerange="20180101-"` — the
-whole history, to the present. A replay message dated 2020 quoting that figure
-would be showing information from 2026.
+### `classify_status`'s gate: significance, not P&L
 
-**That misalignment is an artefact of the replay, not a property of the system.**
-Live, "the whole history to the present" IS the present: the two coincide and
-there is nothing to reconcile. The replay compresses nine years into a short run,
-and this is one of the few places where that compression shows. It is also
-harmless in the direction that matters — the cross-check never gates any verdict,
-and its output goes to a human rather than to the model, so nothing downstream
-could be contaminated by it either way.
+A candidate is `accepted` if `pattern_significance` finds a statistically significant, out-of-sample effect in its own traded direction, with a favorable risk path (mean MFE > mean MAE), not carried by a single coin or period. Win rate, Sortino, and a TP/SL backtest are still computed and shown, but do not gate acceptance — a real, small edge can fail a P&L gate purely because a barrier structure is too wide to register it, and a barrier structure can look profitable by fitting the same noise it's graded against.
 
-Recorded here explicitly because a reader who spots the anachronism should find
-it already accounted for rather than assume it went unnoticed.
+**Type.** Direct consequence of the project's stated goal (find a real relationship, not optimize a barrier).
 
-**Moved rather than removed**, for two reasons. The independent second opinion is
-worth having — a different optimiser (Bayesian over a continuous space) on a
-different engine (Freqtrade) is a real check on this project's own 25-point grid
-— it just should not carry a date it could not have been computed on. And inline
-it would be ruinous: several real minutes per candidate against a replay that
-discovers roughly 190, so 10-16 hours added to a run whose whole API cost is
-about $3.
+### The significance test: one-sided, block-bootstrapped
 
-`replay/post_replay_hyperopt.py` runs it once, after the replay reaches the
-present, over the candidates that survived. Live-test messages meanwhile print
-`TP/SL: pending hyperopt cross-check`, which is accurate.
+`pattern_significance` compares a condition's mean forward return, at its own walk-forward-selected horizon, against the same coin's own returns over the *same calendar stretch* — never the whole multi-year history, which would compare a volatile year to a calm baseline. The test is one-sided (only "works in the direction actually traded" counts), via a moving-block bootstrap rather than a t-test, because financial returns are fat-tailed and overlapping windows are serially correlated — both break a t-test's assumptions. See [The bootstrap itself](#the-significance-bootstrap-_block_bootstrap_means).
 
----
+**Type.** Statistical rigor.
 
-## The replay clock and the backtest's data cutoff are two different dates
+### `SIGNIFICANCE_ALPHA = 0.10`, not the textbook 0.05
 
-**A nine-year run destroyed overnight, and a first diagnosis that was wrong.**
+Measured against a real synthetic null: the moving-block bootstrap is conservative on overlapping windows, so alpha=0.10's real false-positive rate is about 5% — the price 0.05 usually buys elsewhere. Detection of real planted effects roughly triples (8% → 27%) for that same real cost. Benjamini-Hochberg still runs on top of every acceptance — see [Multiplicity control](#multiplicity-control) — so nothing here is unchecked.
 
-The compression trigger asks at point C — the confirmation date — about point
-B, the compression exit five days earlier. `as_of` must be B: the hypothesis is
-tested on history up to the exit, never on the confirmation window that decided
-whether to ask at all. That part was right.
+**Type.** Statistical rigor, measured rather than assumed.
 
-What was wrong is that the pending test carried only that one date, and
-`resolve_pending_test` wrote it straight back as the checkpoint. So the replay's
-own clock was rolled back five days on every resolved proposal, walked forward
-into the same compression exit, proposed again, and rolled back again.
+### Horizon selection: chosen on train, scored on standardized excess
 
-**A deterministic single-process infinite loop.** Its signature in the log is
-unmistakable once you know what to look for: forty consecutive chunks all
-reporting the same simulated date, ~300 near-duplicate proposals for one
-episode (Sonnet is not deterministic, so each re-ask returned a slightly
-different label for the same idea), and a trade log with 218 entries dated up
-to eight days AFTER the final checkpoint. Cost ran to $16.78 against an
-estimated $5-7 — the overrun was the duplication factor, nothing else.
+Each walk-forward fold picks its holding horizon (from 1/3/7/14/21 days) using only the training fold, then measures the effect only on the held-out test fold — the same discipline already applied to TP/SL multiplier selection. The score is excess return over the period-matched baseline, divided by the event sample's own standard deviation — not raw mean return, which grows with horizon from pure market drift and would just pick the longest horizon on offer regardless of any real effect.
 
-**The first diagnosis blamed two concurrent processes**, on the strength of the
-checkpoint appearing to move backward and the trade-log dates being ahead of it.
-Both facts were real; the inference was not. The decisive evidence against it
-was already in the log and went unexamined: the gap between the checkpoint
-(2019-11-21) and the date every chunk reported (2019-11-26) was exactly five
-days — `COMPRESSION_CONFIRM_DAYS` — and forty consecutive chunks reported the
-*same* date, which is what a deterministic loop looks like and is not what two
-independent processes interleaving would produce.
+**Type.** Statistical rigor (fixes a real measured bias — see [Selection-bias defects](#four-defects-found-in-one-statistical-audit)).
 
-**The fix is one field.** A pending test now records `as_of` (the data cutoff,
-point B) and `resume_from` (the replay's clock, point C) separately, and the
-checkpoint resumes from the clock. Entries written before the split still
-resolve, falling back to `as_of`.
+### Market-relative vs. raw outcome (`ConditionSpec.outcome`)
 
-**The invariant that would have caught it** — the replay clock never moves
-backward — is now a test (`tests/test_checkpoint_monotonic.py`), verified by
-reintroducing the bug and confirming the test fails.
+A hypothesis is graded against either the coin's own raw return (`"raw"`) or its return minus the equal-weight basket (`"market_relative"`). Raw is correct for a market-wide event (a CPI print moves all of crypto, so subtracting the market deletes the effect); market-relative is correct for a coin-specific claim, where it roughly halves the noise (pooled SD 16.2% → 11.4%) by removing the ~0.54 average cross-coin return correlation. Declared per hypothesis, never inferred after the fact.
 
-**A lock was also added** during the wrong diagnosis and is kept, relabelled as
-what it is: precautionary. The state files have no concurrency protection at
-all, so two orchestrators would in fact corrupt each other — that just is not
-what happened here, and the lock would not have prevented what did.
+**Type.** Statistical rigor (a real, measured power gain, but only in the case it applies to).
+
+### Coin-scoped hypotheses (`ConditionSpec.coins`)
+
+A spec can declare itself about specific coins, which both restricts which coins its trigger fires on and waives the coin-concentration check for that spec — a coin-concentration gate is meaningless for a claim that was never about generality. The year-concentration check still applies unchanged. See [Concentration checks](#concentration-checks-no-single-coin-or-year-above-60).
+
+**Type.** Statistical rigor.
+
+### Concentration checks: no single coin or year above 60%
+
+`concentration_check` (`MAX_GROUP_SHARE = 0.6`) flags a candidate whose positive out-of-sample return is more than 60% attributable to one coin or one year — the failure mode that let a single-coin or single-year fluke pass as a general pattern in an earlier version of this project. Runs on the same raw per-event forward returns `pattern_significance` itself uses, never on a TP/SL-conditioned number, so the two can't disagree about what "the return" means.
+
+**Type.** Statistical rigor.
+
+### Four defects found in one statistical audit
+
+A deep audit of `candidates/methodology.py` found the significance test was badly miscalibrated, compounding into every prior "accepted" result being false:
+
+1. **Direction wasn't checked.** Horizon selection used `abs()` and the p-value's tail was chosen after seeing the data — a candidate could be `accepted` while its measured effect ran opposite to its own traded direction.
+2. **The bootstrap resampled independently from overlapping windows**, understating the null's variance. Measured false-positive rate under a true null: **43.3%** against a nominal 5%. Fixed by the moving-block bootstrap above.
+3. **Concentration was measured on a different return than acceptance was** (TP/SL-conditioned vs. raw). Fixed: both now use the same per-event forward returns.
+4. **`concentrated: False` when there was nothing to concentrate** — a candidate losing on every coin cleared the concentration gate by having no positive return to concentrate. Fixed: returns `None` ("cannot assess"), treated as `watch`.
+
+After the fix: 0 of 98 candidates remained `accepted` (from 2). The false result was reported, not tuned away.
+
+**Type.** Critical statistical bug fix, found by audit and confirmed by execution against real data.
 
 ---
 
-## Tests could write to the live replay's own state, and one did
+## Multiplicity control
 
-**Found while fixing the checkpoint rollback**, by noticing the supposedly-wiped
-state directory had a candidate in it named `x` — the dummy label from a test
-written minutes earlier.
+### Benjamini-Hochberg, not Bonferroni (`apply_fdr_demotion`)
 
-**Why the isolation failed.** `replay/state.py` computes each path once at
-import:
+Every accepted candidate is re-checked as a **family**: `apply_fdr_demotion` demotes any candidate that doesn't survive Benjamini-Hochberg at `FDR_ALPHA = 0.05` back to `rejected` — it can only remove acceptances, never add one. BH rather than Bonferroni because Bonferroni's per-test threshold at a family of ~100 conditions would be ~0.0005, with no power left for the modest real effects this project looks for. The custom implementation was checked against `scipy.stats.false_discovery_control` on the canonical Benjamini & Hochberg 1995 worked example (15 hypotheses → exactly 4 discoveries).
 
-    STATE_DIR = Path(__file__).resolve().parent / "state"
-    CHECKPOINT_PATH = STATE_DIR / "checkpoint.json"
+**Type.** Statistical rigor, required once the search space includes many candidates tested at once.
 
-Patching `STATE_DIR` afterwards changes nothing — every `*_PATH` constant
-already holds an absolute path into the real directory. The test looked
-isolated, passed, and wrote to live state. `replay/status_history.py` is worse:
-its `HISTORY_PATH` never referenced `STATE_DIR` at all, so patching that one
-could never have helped.
+### The family is the testable set, not every row with a p-value
 
-**This is not untidiness.** A test run while a replay is advancing would corrupt
-a nine-year run in progress, and the corruption would look exactly like a
-statistical result.
+A p-value on a sample of one occurrence isn't a test, so `apply_fdr_demotion` only counts rows `classify_status` could actually classify. Including untestable rows shrinks BH's per-rank threshold for every candidate that could actually be accepted — measured on a 672-condition sweep, more than half the "family" was unusable, making the real threshold roughly twice as strict as intended.
 
-**Two fixes, because one is opt-in.** `isolated_replay_state` in
-`tests/conftest.py` redirects every path constant by name rather than trusting
-`STATE_DIR`. And an `autouse` backstop compares modification times across the
-real state directory around every single test, failing with the offending
-filename — because a fixture only protects the tests that remember to ask for
-it, and the one that caused this did ask, incorrectly.
+**Type.** Statistical rigor.
 
-Verified by writing a probe test that deliberately writes real state and
-confirming the backstop catches it.
+### Prior-weighted FDR (`ConditionSpec.prior_weight`)
+
+Sonnet can assign each proposal a plausibility weight (clamped 0.25–4.0, normalized to mean 1 across the family), and Benjamini-Hochberg allocates its alpha budget in proportion — a real, published technique (Genovese, Roeder & Wasserman 2006), not invented here. Weights are fixed at proposal time and never revised, since a weight raised after seeing a result would void the FDR guarantee. Simulated at this project's own family size and power: even a weak prior lifts true discoveries by ~45% while realized FDR stays at or under alpha.
+
+**Type.** Statistical rigor, measured before being built.
 
 ---
 
-## Parked proposals are re-checked daily, not weekly
+## The proposal grammar: what Sonnet may write
 
-**The original placement was a rationalisation.** The check sat inside the weekly
-battery refresh, justified as "a queue would add complexity for no benefit". The
-real constraint was mechanical: the replay holds a single pending slot and halts
-on it, so one promotion per entry to that block was simply the easy thing.
+### Every proposal needs a real macro/news term
 
-**The cost is concentrated exactly where it hurts.** In 2021 the walk-forward
-crosses its four-distinct-years threshold and a large block of parked proposals
-becomes testable at once. At one per weekly refresh, ~107 parked entries would
-take two simulated YEARS to clear — a hypothesis testable in January 2021 not
-actually tested until late 2022, losing precisely the prospective evidence
-parking exists to preserve.
+At least one of `cpi_surprise`, `rate_surprise`, `jobless_claims_surprise` (`NEWS_EVENT_INDICATORS`) is mandatory in every proposal, enforced in `spec_from_proposal` — not only requested in the prompt. This is the project's actual scope boundary: a condition that would still make sense with the macro release deleted from it is a chart pattern, not what this system exists to test.
 
-Moving the check into the daily loop is a one-line relocation, drains the queue
-7x faster (months rather than years), and costs nothing: promotion makes no API
-call, only a local backtest at resolve time.
+**Type.** Definitional / scope enforcement.
 
-**Still one per check, deliberately, and not a batch.** Promoting every testable
-proposal into a single pending set would work — `resolve_pending_test` already
-loops over a set — but one button approving fifty unrelated hypotheses empties
-the human gate of meaning, and that gate is the point of the design. Draining
-several within one simulated day would instead require re-entering the same day,
-which is the exact mechanism behind the checkpoint rollback loop that destroyed
-an overnight run. Not worth repeating for a queue that daily checking already
-clears in months.
+### Sequenced conditions (`Clause.within_days`)
 
-**"Oldest first" survives but barely matters now.** With a daily check the queue
-rarely accumulates enough for ordering to be significant. It stays because the
-alternative — promoting by any measured quality — would be selecting a hypothesis
-on its outcome at proposal time.
+`within_days=K` means a clause was true at any point in the last K days, not only today — the only way to express "crash, THEN news" as distinct from "crash AND news, same day." Measured directly: a same-day conjunction has a median of 14 historical occurrences (below the testability floor); the identical hypothesis phrased as a 7-day sequence has a median of 127. The lookback is a claim about the hypothesis, never a knob turned for sample size.
 
----
+**Type.** Capability, closes a real expressiveness gap.
 
-## The primary trigger stopped notifying anyone, and a broad `except` made it look like nothing was happening
+### The control group: incremental, not unconditional
 
-**Found while answering an unrelated question about the README.** The TL;DR
-claims Haiku pre-screens headlines before anything reaches Sonnet. Checking
-whether that was still true surfaced something much worse in the same file.
+A condition's effect is measured against the *same condition with its event clause removed*, same period (`baseline_events`) — not the coin's unconditional return. Comparing "shock AND bad news" to an ordinary day credits the shock's own effect to the news; comparing it to "shock alone" isolates what the news actually added. On one real hypothesis this flipped the answer: +1.09% unconditional vs. −0.23% incremental.
 
-**Three functions were called but did not exist.** Commit `20b134f`
-(2026-08-31, "Align production onto the compression trigger") deleted
-`send_telegram`, `format_sonnet_message` and `_asset_to_coin` from
-`llm_pipeline/haiku_sonnet_pipeline.py` while rewriting the neighbouring
-shock→compression code. Nothing in that commit message mentions removing them
-and every call site was left in place, so this reads as collateral damage from
-a block deletion rather than an intentional removal.
+**Type.** Statistical rigor — the single change with the largest effect on what a result actually means.
 
-**The damage is concentrated on the compression trigger, not the headline
-path.** `run_compression_scan()` calls `send_telegram` on its last line —
-*after* it has queued the proposal and called `mark_escalated()`. Reproduced by
-executing the pre-fix code against mocked network boundaries:
+### `MIN_HISTORICAL_OCCURRENCES = 120` — the testability floor
 
-    Failed to process compression exit 'BTCUSDT': name 'send_telegram' is not defined
-    pending queue entries:                        1
-    episode marked escalated (never retried):     True
+Below 120 raw historical firings, a proposal isn't tested at all (`insufficient_data`). Chosen because the insufficient-data rate falls to about 10% at this value; at a naively "safe-looking" 35, nine of ten proposals admitted at the floor still produced no usable result, because two separate conversions (firings → events, events → held-out folds) both shrink the count before `min_report_events` ever sees it.
 
-So each live compression exit left the worst available state: the episode
-permanently ledgered as already-escalated, a pending test sitting behind
-buttons no human ever saw, and that queue entry expiring silently 48 hours
-later. Every live compression exit since 2026-08-31 was lost this way. The
-ordering that caused it is itself deliberate and still correct — marking before
-the send is what stops a failed notification re-escalating the same episode
-every hour — it simply assumed the send could fail, not that it could not run.
+**Type.** Compromise, set to stop sample size being the binding constraint.
 
-**The headline path was broken too, and earlier in the call chain.**
-`_asset_to_coin` is called inside `sonnet_strategist` itself, seventeen lines
-before its `client.messages.create`, so every escalated headline died *before*
-Sonnet was ever asked. Haiku ran, screened, and escalated into nothing. A
-fourth latent break sat behind it: `run_once` still tested the singular
-`novel_condition_spec` key and called `spec_from_dict`, a name this module
-never imported, while `SONNET_SYSTEM_PROMPT` had moved to the plural
-`novel_condition_specs` list in `b32683d`.
+### `MIN_HISTORICAL_EPISODES = 40` — the redundancy floor
 
-**Why a year of running never surfaced it — three things compounding.** Each
-call site's own broad `except Exception` printed the NameError rather than
-raising it, so production emitted a log line and no alert. No test invoked
-either function end-to-end; the only references to `run_compression_scan` in
-`tests/` were a `hasattr` and a source-string check, both of which pass against
-completely broken code. And the replay — the thing that actually gets run and
-watched, and this project's own evidence mechanism — sends via
-`telegram/bot.py::_send` and never imports this module's sender at all, so no
-amount of replaying could have exercised it.
+A `within_days` lookback can inflate one real event into many overlapping firings (measured: 8x the raw count for 1.7x the independent evidence). `episode_count` collapses firings into independent episodes **per coin** (never across coins — see [Temporal vs. cross-coin redundancy](#temporal-vs-cross-coin-redundancy-are-two-different-checks) below), and a proposal needs 40 of those, not just 120 raw firings. Currently rarely the binding constraint — the raw floor already screens out most of what this would catch — kept armed because it costs nothing.
 
-This is the same failure shape as the 6,880-character `/replay_summary` that
-silently never arrived: a broad catch turning a hard failure into no output,
-which is indistinguishable from a quiet week. The lesson that entry drew — check
-the return value, do not assume silence means nothing happened — applies to an
-exception handler exactly as much as to a send.
+**Type.** Statistical rigor, insurance against a failure mode this grammar mostly avoids by construction.
 
-**Fixed, and the fix is verified by the failure it produces.** All three
-functions restored (`send_telegram` byte-identical; the other two
-reimplemented, each saying so in its own docstring), and `run_once` rewritten
-onto the same `proposals_from_assessment` → `spec_from_proposal` →
-`filter_redundant_proposals` → `push_pending_test` pipeline
-`run_compression_scan` already used correctly. The regression tests were
-checked the way this project checks every regression test: by reverting the
-source to the broken original and confirming they fail — 10 of them do,
-including the end-to-end compression case.
+### Threshold relaxation, never toward significance
 
-**One gap carried over rather than closed.** The restored `send_telegram` does
-not chunk past Telegram's 4,096-character limit the way `_send` does. That is
-faithful to the deleted original and unreachable at a proposal message's few
-hundred characters, but it is the same latent bug in a second sender, and it is
-recorded here rather than left to be rediscovered.
+A too-rare proposal is loosened in the smallest working step (10%, then 25%, then 50% — `relax_to_testable`) toward each indicator's own neutral point (`RELAXATION_NEUTRAL`: 50 for RSI, 0 for anything measured as a deviation) — never past it. The search sees only the occurrence count; no p-value or return is consulted while choosing how far to loosen, which is what keeps this a sample-size decision rather than p-hacking. The substitution is always disclosed before a human approves it.
+
+**Type.** Statistical rigor by construction (structural separation from the outcome, not a discipline that could slip).
+
+### `MAX_PROPOSABLE_CLAUSES = 2`, two proposals per call
+
+A condition may combine at most 2 clauses, and Sonnet returns at most `MAX_PROPOSALS_PER_CALL = 2` proposals per call. Each added clause divides how often a condition has actually happened by roughly eight, so a single three-part idea is usually untestable where two separate two-part ideas both are — and if only one survives, that's a finding a single combined idea would have hidden.
+
+**Type.** Statistical rigor (a direct consequence of the occurrence-count arithmetic).
+
+### Two indicators banned from the grammar, on one principle
+
+`is_macro_day` and `shock_zscore` cannot appear inside a proposed condition (`NON_PROPOSABLE_INDICATORS`) — a trigger must be neither a candidate cause nor the outcome being explained. `is_macro_day` is contentless (a publication happened, not what it said) and is superseded by the graded surprise terms above; `shock_zscore` is present at every proposal by construction (it's why Sonnet was asked at all), so it discriminates nothing at proposal time while narrowing the tested population later.
+
+**Type.** Definitional / scope enforcement.
+
+### `range_zscore_30d` replaces raw `daily_range_pct` as a condition term
+
+Raw daily range is non-stationary — crypto's volatility roughly halved over this project's window, so a fixed threshold on it selects a calendar period (62% of days in 2021, 16% in 2026), not a market state. The z-scored form (30-day rolling window — see [z-score](#z-score-zscore-candidatesdata_loadingpy)) selects a stable ~2% of days every year. Raw form kept in `SUPPORTED_INDICATORS` for reproducibility of past sweeps, but not proposable.
+
+**Type.** Statistical rigor.
 
 ---
 
-## Haiku and the news-headline path were deleted, because a measurement said they could never produce evidence
+## The trigger: a confirmed exit from volatility compression
 
-**The question that started it** was narrow: the README's TL;DR claimed Haiku
-pre-screens headlines before anything reaches Sonnet — was that still true? It
-was. Haiku ran hourly, screened live CryptoCompare headlines, and escalated the
-significant ones. The path worked. It also could not, structurally, contribute
-anything to this project's evidence, and checking why is what produced this
-entry.
+### Why compression, not a macro release or a shock
 
-### A headline can never appear in a testable condition
+The only trigger consulted for a new proposal is a confirmed exit from unusually low volatility (`COMPRESSION_ZSCORE_THRESHOLD = 1.25`) — never a macro release or a volatility shock directly. A trigger must be neither a candidate cause (a macro release is one of the things being tested for) nor the outcome being explained (a shock is a magnitude event, and measured post-shock days trend *less* often than ordinary days — 8.8% vs. 11.8% baseline). Compression says a directional move is brewing without saying which way — exactly the question macro context and market state exist to answer.
 
-`proposable_indicators()` holds 13 indicators and not one is a headline, a
-sentiment score, or anything derived from news text. The three named
-`NEWS_EVENT_INDICATORS` — `cpi_surprise`, `rate_surprise`,
-`jobless_claims_surprise` — are all FRED series, and at least one of them is
-**mandatory** in every proposal, enforced in code.
+**Type.** Statistical rigor (the trigger itself was measured, not assumed).
 
-So Haiku could flag "XRP lawsuit ruling, magnitude 5", Sonnet could read it, and
-the only hypothesis Sonnet was permitted to write back had to be phrased in
-macro surprises and market state — the exact vocabulary the compression trigger
-already supplies. The headline was a prompt to ask a question, never part of the
-answer. This log already recorded the consequence without drawing the
-conclusion: of **771 live tests** opened for Sonnet-discovered candidates,
-**zero** were news-linked, and "Haiku's sentiment decides which condition gets
-proposed and then disappears entirely from both the test and the track record."
+### The exit is confirmed over `COMPRESSION_CONFIRM_DAYS = 5`
 
-### The obvious repair was measured, and it does not work
+A compression episode is a *state* lasting a median of 4 days (up to 38), so triggering on the state itself would re-ask the same question repeatedly within one episode (measured 6.7x duplication). The trigger fires once, on an exit that holds for 5 days afterward — a definition of when two exits count as one event, not a threshold tuned to a result (3 and 5 days give near-identical numbers).
 
-Backfill news history, add a sentiment indicator, and the clause becomes
-testable. `forecast/sentiment_power.py` was built to price exactly that, before
-committing to it — modelling sentiment as a continuous daily score parameterised
-by `rho`, its correlation with the forward return, so the output is one
-checkable number: **how good would a feed have to be?** Accepted conditions out
-of 57 at each quality:
-
-| feed quality (`rho`) | accepted / 57 | significant | median p | median excess |
-|---|---|---|---|---|
-| 0.00 — pure noise floor | 2 | 2 | 0.486 | −0.04% |
-| **0.04 — real news sentiment** | **3** | 4 | 0.357 | +0.64% |
-| 0.08 — optimistic | 5 | 7 | 0.215 | +1.24% |
-| 0.15 — implausible | 20 | 23 | 0.092 | +3.54% |
-| 0.30 — oracle | 23 | 36 | 0.004 | +7.61% |
-
-At the quality a real feed achieves, three conditions clear against a noise
-floor of two, out of 57. That is not a weak signal; it is no signal. The median
-p-value only crosses 0.10 at `rho = 0.15`, three to four times better than
-published work reports for news sentiment against next-week returns.
-
-**Both available forms are closed, for different reasons.** A *continuous* daily
-sentiment score is the only form that could reach the testability floors — and
-the table above says it is undetectable at achievable quality. A *discrete* news
-event (a hack, a lawsuit, an ETF ruling) is the only kind of headline not already
-redundant with FRED — and it can never accumulate `MIN_HISTORICAL_EPISODES = 40`
-independent episodes across seven coins in nine years. Neither branch survives.
-
-### What was removed, and one gap it closed on the way out
-
-Deleted: `haiku_scout`, `HAIKU_SYSTEM_PROMPT`, `HAIKU_MODEL`,
-`sonnet_strategist`, `SONNET_SYSTEM_PROMPT`, `run_once`,
-`format_sonnet_message`, `_asset_to_coin`, and the headline block in the
-compression prompt; `run_headline_scan` is unwired from `live_daemon`.
-`HAIKU_MODEL` moved to `forecast/model_comparison.py`, its only remaining
-caller, which asks the separate and still-live question of whether Haiku could
-replace Sonnet as the *judge* — that experiment's committed results stay
-reproducible. `cryptocompare_fetcher.py` is kept but is now wired to nothing.
-
-**A real gap closed as a side effect.** `sonnet_compression_response` was
-including `RECENT NEWS HEADLINES` in its prompt while the replay's `judge_event`
-never did — so production and the replay were *not* answering the same prompt on
-the primary trigger, despite the docstring asserting they were. That is the same
-train/serve mismatch commit `20b134f` was written to eliminate when it moved
-production off shocks, surviving in a second place. Sonnet was being shown, in
-production only, something it had no way to encode into a clause.
-
-### Why this is reported as a deletion rather than kept as a feature
-
-The honest scope of this system is **market conditions combined with macro
-events**, and the README's title and TL;DR now say so; the "Sentiment" framing
-and the `Haiku` badge are gone with the code. That costs the project a component
-and a logo, and it is the right trade: **I modelled the minimum feed quality
-this pipeline could detect, measured that realistic feeds fall below it, and
-deleted the component rather than keep it for the badge.**
-
-A component whose output cannot reach the evidence is decoration, and this
-project's entire argument is that decoration is what makes a null result look
-like a discovery. Keeping a Haiku box on the architecture diagram while its
-output appeared in none of the 771 live tests would have been exactly the kind
-of claim this log exists to catch.
-
-**Guarded, not just deleted.** `test_the_haiku_headline_path_is_gone_from_production`
-asserts every removed name stays removed, that the daemon does not schedule the
-scan, that the compression prompt shows no headlines, and — the premise the
-whole decision rests on — that no proposable indicator is news-derived. If that
-last assertion ever fails because a real sentiment backfill landed, the right
-response is to revisit this decision, not the test.
+**Type.** Definitional.
 
 ---
 
-## The daily parked re-check cost nine hours of compute, and a free dry run is what caught it
+## Confirmation and live testing
 
-**Found by running the replay with the model calls stubbed out**, before spending
-anything — which is the point of the exercise and the reason it is worth
-repeating before any paid run.
+### Live testing: hold for the horizon, no TP/SL
 
-**The regression.** Moving the parked-proposal check from the weekly battery
-refresh into the daily loop (see "Parked proposals are re-checked daily, not
-weekly" above) was correct in intent and careless about cost.
-`_check_parked_proposals` called `is_testable()` on **every** parked proposal,
-and `is_testable` counts occurrences across real history at ~146ms a call. On a
-day when nothing has become testable — overwhelmingly the common case in the
-early years — the whole queue was paid for and nothing was learned.
+Once `accepted`, a live occurrence opens a live test held for exactly the horizon `pattern_significance` found significant at, then resolved by measuring realized forward return, MFE, and MAE — the same measure acceptance itself used. No barrier check in between, and no funded position, ever, in production or replay: executing with a *different* structure than what was actually tested would measure a different thing than what was accepted.
 
-Measured on the dry run at its 2020 state, with 68 proposals parked:
+**Type.** Conceptual consistency, not a compromise.
 
-    68 parked x 0.146s  =  9.9 seconds per simulated day
-    x 3,294 days        =  ~9 HOURS of the run, growing as the queue grows
+### `prospective_split` — the only genuinely out-of-sample number
 
-The run was pacing at 47 simulated days per minute at the start and 7.7 by 2020,
-with an extrapolated 8-10 hours remaining. That cost is local compute, so it
-would have applied identically to the paid run, where it is invisible next to
-217 API calls and would simply have looked like the replay being slow.
+`pattern_significance`'s own held-out test fold is out-of-sample with respect to *parameters*, not with respect to the *idea* — every one of those rows already existed when the hypothesis was written. `prospective_split(spec, coins, proposed_at)` reports what happened only in occurrences that postdate the hypothesis, against the same coins' unconditional return over the same span — reported, never gated (usually underpowered at these counts), but the only number here that answers "has this actually held up since it was thought of."
 
-**The fix separates two things the daily change had conflated.** The queue is
-still examined every day; each individual proposal is now re-examined at most
-once per `PARKED_RECHECK_DAYS = 7`, staggered by a stable hash of its label so
-roughly a seventh of the queue is checked daily and every proposal is seen
-exactly once per window. Cost fell from 9.9s to 1.4s per simulated day, and the
-restarted run paced at **121 simulated days per minute against 7.7**.
+**Type.** Statistical rigor.
 
-**What this trades, stated plainly.** A proposal can now wait up to six extra
-days before anyone notices it became testable. That is latency, not loss:
-occurrence counts only ever grow, so a deferred check cannot miss anything. And
-it is not what the daily cadence was bought for — that was the DRAIN RATE, one
-promotion per day rather than one per week, so the ~107 proposals that become
-testable together in 2021 clear in months instead of two years. The drain rate
-is unchanged, because a promotion can still happen on any day.
+### An occurrence counts toward CONFIRMED when it postdates the hypothesis
 
-It also weakens "oldest first" to "oldest first among those examined today", and
-the docstring now says so rather than glossing it. The property that actually
-carries the epistemology survives untouched: the ordering is independent of any
-measured outcome, since a hash of a label cannot know how a condition performed.
+Only occurrences that happened *after* a hypothesis was written down count toward its checkpoint (`confirmation_priors.json`) — an occurrence from 2019 cannot confirm a hypothesis written in 2023. Static candidates (mined directly from this project's own history) get zero prior credit, since none of their occurrences postdates the hypothesis by construction.
 
-**A defect in the first version of the fix, caught by an existing test.**
-Staggering the whole function also deferred dropping proposals the grammar can
-no longer express — cheap work (one `spec_from_dict`, no history scan) that has
-no reason to wait, and `test_a_proposal_the_grammar_no_longer_accepts_is_dropped_not_stuck`
-failed on exactly that. The two passes are now separate: cheap cleanup over the
-whole queue every day, expensive testability check only on today's slice. The
-test was tightened to assert the cleanup happens on *every* day of a re-check
-window rather than on one convenient date.
+**Type.** Statistical rigor.
 
-Two further tests were added for the properties the stagger has to preserve:
-that no proposal starves (each seen exactly once per window) and that the
-stagger is stable as the queue changes — hashed on the label rather than list
-position, so promoting or parking one proposal does not reshuffle everyone
-else's slot mid-run.
+### The consecutive-failure alert (scoped to CONFIRMED only)
+
+`_check_consecutive_failures` fires after each live test resolves, only for a CONFIRMED candidate, if its last 2+ resolved tests were negative in a row. Purely informational — never changes status. Why it's needed: a large, statistically overwhelming sample is *correctly* resistant to short-term noise, but that same resistance means a genuine regime change could take months to show up in the aggregate. Measured directly: a marginal candidate (N=62) flips out of significance after 3 worst-case losses; a strong one (N=289) needs about 30 — the alert closes that gap without touching the aggregate's own correct behavior.
+
+**Type.** Additive, purely informational.
+
+### Freqtrade hyperopt cross-check: informational only
+
+A separate, independent optimizer (Freqtrade's own Bayesian hyperopt, a different search method on a different third-party engine) re-derives TP/SL multipliers for each tracked candidate, purely as a cross-check against this project's own 25-point grid search. Never gates acceptance, never feeds live execution — an independent second opinion is worth more for demonstrating rigor than another chart from the same code path. Runs once after a replay completes, not inline, since it costs several real minutes per candidate against ~190 discovered.
+
+**Type.** Additive verification, zero influence on any verdict.
+
+### The static battery is a fixed control arm, not a second class of candidate
+
+C1/C2/C6 are three deterministic, rule-based conditions tested once under full walk-forward validation before this project's adaptive, LLM-driven discovery layer was built. They found no persistent edge — the finding the whole rebuild exists to test against, kept running as a constant baseline rather than re-litigated by re-running the same fixed rules hoping for a different answer.
+
+**Type.** Design principle.
 
 ---
 
-## 2026-09-05 -- The full replay finished: one candidate cleared every gate. This supersedes the "0 accepted" line in the 2026-08-29 audit.
+## The LLM's role and cost
 
-**What the audit entry above says, and why it needed updating.** That entry
-closes with `replay accepted (98 candidates): 0`, and it was correct when
-written. It measured a registry built under the pre-correction grammar, before
-`relax_to_testable` searched for the nearest measurable version of a proposal
-and before the two-clause / two-proposal split. This run is not that run.
+### Framing the model as a researcher, not a strategist
 
-**The replay: 2017-08-26 to 2026-09-05, nine years, day by day.** 159 conditions
-proposed, tested and tracked. 23,495 observational live tests opened. Zero
-funded positions, at any point.
+Measured on a real 5.5-year replay run: with Sonnet addressed as *"a market strategist,"* 31% of proposals contained no real macro/news term at all, despite that requirement being stated explicitly later in the prompt — a constraint placed downstream of a role definition competes with it rather than qualifying it. The prompts now open by framing the model as a quantitative researcher whose subject is whether an EVENT changes prices, with the operative test stated plainly: *if the idea would still make sense with the release deleted, it's a chart pattern.*
+
+**Type.** Prompt engineering, backed by a measured before/after.
+
+### Cost per testable hypothesis, not cost per call
+
+A single Sonnet call costs $0.0114 — nearly useless for deciding anything, since most calls buy nothing usable. The real metric is cost per testable hypothesis, measured at **$0.34** (thirty times the headline figure) over one real run: about a third of proposals lack a real event term, and four-fifths of what survives never accumulates enough occurrences to be judged. The lever that matters is proposal *yield*, not price per call, since the call costs the same regardless of what it produces.
+
+**Type.** Cost engineering, measured rather than assumed.
+
+### Prompt caching: only the system block, and only when it clears the floor
+
+Cache breakpoints are placed only on the system prompt (the one block genuinely identical across calls) — putting one on the user message instead would hash a different prefix every call and pay a fresh cache-write penalty forever. Only prompts above the API's minimum cacheable size (1,024 tokens for Sonnet) are marked; a shorter prompt with a breakpoint would silently never cache. `/usage` reports cache reads / (reads + writes) as a live health check — near 0% means the breakpoint drifted onto content that actually changes.
+
+**Type.** Cost engineering.
+
+### Keep-or-drop review: deterministic, not a model opinion
+
+`prune_recommendation()` decides whether to keep testing a long-tracked, never-accepted candidate offline, from `required_n_for_power`: well-powered and nothing found → drop (evidence of absence); underpowered or too few occurrences → keep (undetermined, not a negative result). Replaces an earlier version that asked Sonnet for a qualitative opinion built from the same numbers a human could already read directly — the model was narrating figures, not adding evidence.
+
+**Type.** Methodology decision — uses strictly more of the available evidence than an LLM opinion could.
+
+### Haiku and the news-headline path: removed, because a measurement said they couldn't produce evidence
+
+A Claude Haiku layer used to screen live news headlines before Sonnet ever saw them. No indicator this project can test is derived from headline text — the whitelist is entirely FRED-sourced macro surprises — so a flagged headline could prompt a question but never become part of an answer. Before backfilling news history to fix that, `forecast/sentiment_power.py` modeled sentiment as a continuous score parameterized by `rho` (its correlation with the forward return):
+
+    rho     meaning                  accepted/57
+    0.00    pure noise floor              2
+    0.04    realistic news sentiment      3
+    0.08    optimistic                    5
+    0.15    implausibly good             20
+
+At the quality a real feed achieves, results are indistinguishable from pure noise. The component was deleted rather than kept for the badge: **I modelled the minimum feed quality this pipeline could detect, measured that realistic feeds fall below it, and deleted the component rather than keep it for the badge.**
+
+**Type.** Capability removal, backed by a measurement made before the alternative (a costly news backfill) was built.
+
+---
+
+## Statistical and Python functions used
+
+Plain-language index of the actual functions behind the numbers above — for pointing at real code, not for re-deriving the math from scratch.
+
+### RSI (`_rsi`, Wilder-style smoothing via `pandas.Series.ewm`)
+
+14-day RSI is built from `pandas.Series.diff()` for day-over-day gains/losses, then `pandas.Series.ewm(alpha=1/14, adjust=False).mean()` — an exponentially-weighted moving average, not a simple rolling mean. This is the standard "Wilder smoothing" RSI is textbook-defined with; the window (14) is the standard default, not tuned.
+
+### z-score (`zscore`, `candidates/data_loading.py`)
+
+`(series - series.rolling(window).mean()) / series.rolling(window).std()`, using `pandas.Series.rolling()`. Turns a raw, non-stationary quantity (volume, funding rate, price range) into "how unusual is today relative to its own last N days." A 30-day window is used everywhere in this project for consistency across indicators. See [`range_zscore_30d`](#range_zscore_30d-replaces-raw-daily_range_pct-as-a-condition-term).
+
+### Sortino ratio (`sortino_ratio`, custom, not a library function)
+
+Mean return divided by downside semi-deviation (root-mean-square of `numpy.minimum(returns, 0)`), annualized by `sqrt(252)`. Reported as informational risk context only — see [`classify_status`'s gate](#acceptance-classify_statuss-gate). Semi-deviation is computed over the *full* sample rather than just the losing subset, because a losing subset sharing one repeated barrier value can otherwise collapse toward zero and blow the ratio up to a meaningless number.
+
+### The significance bootstrap (`_block_bootstrap_means`, custom — not `scipy.stats`)
+
+Not `scipy.stats.bootstrap` or a t-test: a hand-written moving-block resampler, because financial returns are fat-tailed and overlapping return windows are serially correlated, both of which break a t-test's independence assumption. Draws contiguous blocks (`numpy.random.Generator.choice` / `.integers`) of length ≈3× the holding horizon, 2,000 resamples, never crossing a fold or coin boundary. See [The significance test](#the-significance-test-one-sided-block-bootstrapped).
+
+### Forward returns (`pandas.Series.pct_change`)
+
+`df['close'].pct_change(n)` computes the simple n-bar return used as the raw building block almost everywhere: market-state indicators, the outcome `pattern_significance` measures, MFE/MAE. Simple returns, not log returns — at this project's horizons (1-21 days) the difference from compounding is negligible, and simple percentage moves are what MFE/MAE are naturally defined on.
+
+### Expanding-window walk-forward (`walk_forward`, custom)
+
+Each fold refits only on periods strictly before its own test period (an expanding window, grouped by calendar year via a `period` column) — never a fold that could see data from after the period it's grading. Custom rather than a general-purpose cross-validation splitter because fold boundaries here are defined by calendar year to match how this project already reports results, not by row count.
+
+---
+
+## Redundancy: temporal vs. cross-coin
+
+### Temporal vs. cross-coin redundancy are two different checks
+
+`episode_count` collapses firings that are close together in time **within one coin** — it deliberately does not collapse across coins. Seven coins firing on the same macro surprise are seven distinct price paths with seven distinct forward returns, not one measurement repeated: correlated (mean cross-coin correlation 0.54), but not the same observation. Cross-coin dependence is handled by a separate gate — [concentration](#concentration-checks-no-single-coin-or-year-above-60) — which asks whether the result is carried by one asset, not whether it fired on several.
+
+**Type.** Statistical rigor. Reading same-day, multi-coin firings as redundancy would penalize a condition for the one property — generality across assets — that most distinguishes a real market pattern from one asset's own history.
+
+---
+
+## The real result — 2017-08-26 to 2026-09-05, nine years, day by day
+
+159 conditions proposed, tested and tracked. 23,495 observational live tests opened. Zero funded positions, at any point.
 
     still `accepted` at the end          2
-    ever CONFIRMED at a checkpoint       2  (one of them still accepted today)
+    ever CONFIRMED at a checkpoint       2  (one still accepted today)
     parked, never testable in time      75
 
-**The one that cleared everything**, `hawkish_claims_surprise_then_volume_spike_capitulation`:
-a jobless-claims print more than 0.3 sd BELOW recent ones -- a strong labour
-reading -- followed within 7 days by a 30-day volume z-score above 1.0, held
-long for 3 days.
+**The one that cleared everything**, `hawkish_claims_surprise_then_volume_spike_capitulation` — a jobless-claims print more than 0.3 SD below recent ones, followed within 7 days by a 30-day volume z-score above 1.0, held long for 3 days:
 
-    p-value                    0.001    against a 0.100 threshold
-    historical occurrences     N = 896
-    MFE / MAE                  1.31     favourable above 1.0
-    coin concentration         26%      BNB, inside the 60% limit
-    year concentration         44%      2025, inside the 60% limit
-    confirmations postdating the hypothesis   183
-    Benjamini-Hochberg         survives, on a family of 101
+    p-value                                    0.001   (threshold 0.100)
+    historical occurrences                     N = 896
+    MFE / MAE                                  1.31    (favorable above 1.0)
+    coin concentration                         26%     (BNB, inside the 60% limit)
+    year concentration                         44%     (2025, inside the 60% limit)
+    confirmations postdating the hypothesis    183     (106 independent episodes)
+    Benjamini-Hochberg                         survives, on a family of 101
 
-**The grammar sweep predicted this could not happen, and the prediction was
-wrong for a stateable reason.** `forecast/grammar_sweep.py` returned 0 accepted
-of 672 and was described here as a strict upper bound on what the replay could
-find. It is not one. It enumerates a 672-point grid -- one threshold per event
-term, a handful per market-state term, `within_days` in {0, 3, 7}, `outcome`
-always `raw` -- while `relax_to_testable` produces intermediate thresholds the
-grid never contains, and 168 of those 672 use indicators now barred from
-proposals. The two spaces overlap; neither contains the other. The sweep's own
-docstring said "this measures the space, not the searcher" and that caveat was
-read as smaller than it is.
+**Two qualifications that belong beside the result.** Chance alone predicts about 10 significant results in a family this size at the raw threshold; 19 showed up, 8 survived BH, and of those, 2 also cleared direction, concentration and risk path. And CONFIRMED is not a permanent badge: `claims_surprise_then_funding_stretched_reversion` reached a checkpoint while `accepted` and is `rejected` today — the label is persistence, re-earned each time and losable.
 
-### Two qualifications that belong beside the result, not below it
-
-**Chance alone predicts about ten.** Of 101 conditions with a p-value, 19 sit
-under the raw 0.10 threshold where a family of pure nulls yields roughly 10.
-That is the entire case for running Benjamini-Hochberg as a family pass rather
-than reading each p-value alone. After it, 8 survive; of those, 2 also clear
-direction, concentration and risk path.
-
-**Independence, and the error I made reading it.** The 183 confirmations fall on
-59 distinct dates, and my first write-up of this result treated that as a
-problem -- collapsing them to 59 and concluding the candidate was BELOW its
-power threshold. That was wrong on this project's own terms, and the correction
-is worth recording because the two things being conflated are genuinely
-different.
-
-**Redundancy is checked twice here, by two tools, because evidence can be
-double-counted in two unrelated ways.**
-
-*Repetition in TIME* is what `episode_count` handles. `build_events` makes one
-row per triggered bar, so a condition true for several consecutive days produces
-several events whose forward windows overlap almost entirely -- day t and day
-t+1 share 20 of 21 days of outcome. That is one piece of evidence counted many
-times, and a `within_days` lookback makes it worse at scale (measured on one
-hypothesis: 8x the raw count for 1.7x the independent episodes). So
-`episode_count` walks **each coin separately** and collapses firings closer
-together than the spec's longest horizon.
-
-*Dependence across COINS* is a different question, and `episode_count` does not
-touch it -- deliberately. Seven coins firing on the same macro surprise are
-seven distinct price paths with seven distinct forward returns, not one
-measurement repeated: BTC's outcome that week is not ETH's. What they are is
-CORRELATED (mean cross-coin correlation 0.54, measured in
-`forecast/market_relative.py`), and correlation is handled by a different gate
-entirely: `MAX_GROUP_SHARE = 0.6`, the coin-concentration check, which asks
-whether the result is carried by one asset. For this candidate that answer is
-26% on BNB -- comfortably inside the limit, which is precisely the evidence that
-it is not one coin's quirk.
-
-Applying the temporal rule correctly, per coin, the 183 confirmations are **106
-independent episodes**, and 106 is ABOVE the 96 `required_n_for_power` asks for.
-The candidate is past its power threshold on the project's own measure. My
-earlier "below 96" was the product of applying a cross-coin collapse the code
-does not perform and should not.
-
-**Why the distinction is worth this much space.** Firing across seven assets is
-not a weakness to be discounted; it is the generality a single-coin result
-cannot claim, and the concentration gate exists to reward exactly that. Reading
-it as redundancy would penalise a condition for the one property that most
-distinguishes a market pattern from an artefact of one asset's history.
-
-**CONFIRMED is not validated, and the second confirmed candidate proves it.**
-`claims_surprise_then_funding_stretched_reversion` reached a checkpoint while
-accepted and is `rejected` today. The label is persistence, re-earned each time
-and losable -- not a badge.
-
-**Type.** Result, reported with its qualifications. One condition cleared every
-gate this system has, which is not the same claim as a demonstrated edge, and
-the difference is the reason for all the machinery around it.
+**Type.** Result, reported with its qualifications. One condition cleared every gate this system has, which is not the same claim as a demonstrated edge — the difference is the reason for all the machinery documented above.
