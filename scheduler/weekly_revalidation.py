@@ -138,16 +138,17 @@ def _run_weekly_revalidation(done: list[str] | None = None) -> None:
     changes = [(c, previous.get(c, "never run"), s) for c, s in current.items() if previous.get(c) != s]
     write_json(PREVIOUS_STATUS_PATH, current)
 
+    # Logged, never sent. A status change is ordinary weekly churn across a
+    # battery this size, and the monthly digest already carries the same picture
+    # in one bounded message -- see execution/live_testing.py::send_monthly_digest.
+    # The status diff is still COMPUTED and persisted, so nothing downstream
+    # loses the record; only the notification is withheld.
     if changes:
-        lines = ["Weekly re-validation -- status changes:"]
         for candidate, old, new in changes:
-            lines.append(f"  <b>{escape_html(candidate)}</b>: {old} -> {new}")
-        message = "\n".join(lines)
-        print(message)
-        _send(message)
+            print(f"  status change: {candidate}: {old} -> {new}")
     else:
         print("Weekly re-validation: no status changes.")
-    done.append("status diff notified")
+    done.append("status diff recorded")
 
     # Mirrors replay/engine.py's own horizon-change notice exactly -- run_all()
     # re-derives (and re-syncs to the file _open_live_test actually reads) every
@@ -155,10 +156,7 @@ def _run_weekly_revalidation(done: list[str] | None = None) -> None:
     # this surfaces it to a human only on the runs it actually changed.
     if "horizon_changed_to" in result.columns:
         for _, r in result[result["horizon_changed_to"].notna()].iterrows():
-            _send(f"<b>Horizon updated -- {escape_html(r['candidate'])}</b>\n\n"
-                  f"({escape_html(_trigger_description(r['candidate']))})\n\n"
-                  f"Now held for <b>{int(r['horizon_changed_to'])}d</b> going forward (empirically "
-                  f"re-derived from accumulated history, replacing the previous value).")
+            print(f"  horizon updated: {r['candidate']} -> {int(r['horizon_changed_to'])}d")
 
     if meta.get("failed_candidates"):
         failed_msg = (f"<b>{len(meta['failed_candidates'])} candidate(s) failed to process this run "

@@ -253,3 +253,65 @@ class TestTheRetiredWordStaysRetired:
         # why the word is banned -- a test failing on its own documentation.
         summary = judgment._all_candidates_status_summary()
         assert "validated" not in summary.lower(), summary[:400]
+
+
+class TestProductionSendsTheSameFourThings:
+    """Production carried the per-live-test stream long after the replay had
+    removed it, because production had never run with a populated dynamic
+    registry: an empty battery fires nothing, so 28 openings a day across 103
+    tracked candidates never showed up until the replay's state was migrated in.
+    Measured on that registry before the removal: ~56 messages a day, in bursts
+    of 28, which is the same failure the replay had already diagnosed.
+
+    What a human is meant to receive, and nothing else: a proposal to approve,
+    the monthly digest, a checkpoint ONLY when it confirms, and answers to their
+    own questions. Operational alerts (a crashed job) stay, since a silent
+    failure is the one thing this project treats as unacceptable."""
+
+    def test_opening_a_live_test_sends_nothing(self):
+        import execution.live_testing as L
+        src = inspect.getsource(L._scan_mechanical_triggers)
+        assert "_send(" not in src, "the per-open message is back in production"
+
+    def test_resolving_a_live_test_sends_nothing(self):
+        import execution.live_testing as L
+        src = inspect.getsource(L._check_live_tests)
+        assert "_send(" not in src, "the per-resolution message is back in production"
+        assert "Live test resolved" not in src
+
+    def test_a_checkpoint_that_did_not_confirm_is_recorded_but_not_sent(self):
+        """The withheld message must not cost the accounting: the checkpoint is
+        still marked, so the next one fires at the right count."""
+        import execution.live_testing as L
+        src = inspect.getsource(L.check_n50_milestones)
+        gate = src.index("if not cleared:")
+        send = src.index("_send(message")
+        assert gate < send, "a non-confirming checkpoint now reaches _send"
+        withheld = src[gate:send]
+        assert "mark_milestone_reported" in withheld, (
+            "the early return skips mark_milestone_reported -- the same checkpoint "
+            "would fire again on every later run")
+
+    def test_the_digest_is_bounded_by_construction(self):
+        import execution.live_testing as L
+        src = inspect.getsource(L.send_monthly_digest)
+        assert "MAX_DIGEST_ROWS" in src, "the digest lists every candidate again"
+        assert "rows.sort(reverse=True)" in src, "digest rows are no longer ranked by progress"
+
+    def test_the_digest_ranks_by_progress_never_by_outcome(self):
+        """Ranking by success rate puts the luckiest small sample on top -- on a
+        real run that meant n=6 rows at a 100% hit rate whose own status was
+        `rejected`."""
+        import execution.live_testing as L
+        src = inspect.getsource(L.send_monthly_digest)
+        ranked = src[src.index("rows.append("):src.index("rows.sort")]
+        assert "_effective_milestone_count" in ranked
+        assert "forward_return" not in ranked and "win" not in ranked
+
+    def test_the_weekly_run_no_longer_narrates_every_status_change(self):
+        import scheduler.weekly_revalidation as W
+        # The underscore one carries the body; run_weekly_revalidation wraps it.
+        src = inspect.getsource(W._run_weekly_revalidation)
+        assert "status changes:" not in src, "the weekly status-diff message is back"
+        assert "Horizon updated" not in src, "the per-horizon-change message is back"
+        assert "format_prune_digest" in src, "the keep/drop digest was removed -- it is a decision request, not a notification"

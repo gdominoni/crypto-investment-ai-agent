@@ -30,6 +30,7 @@ from candidates.run_battery import COINS
 from candidates import status_history as sh
 from execution import hyperopt_runner
 from execution import live_test_state as state
+from execution import signal_store
 from llm_pipeline.dynamic_candidates import registered_specs
 from llm_pipeline.novel_condition_tester import (
     ConditionSpec, clause_signal_hourly, condition_desc, is_testable, relax_to_testable,
@@ -39,10 +40,9 @@ from llm_pipeline.haiku_sonnet_pipeline import PROPOSAL_KEYBOARD_TEMPLATE
 from llm_pipeline.pending_tests import push_pending_test
 from telegram.bot import _send, escape_html, short_id as _short_id
 
+MAX_DIGEST_ROWS = 8  # bounded by construction -- see send_monthly_digest
 PLACEHOLDER_HORIZON_DAYS = 7  # neutral default (middle of HORIZONS_DAYS) -- see docs/case_study/methodology-decisions.md
 BACKDATE_LOOKBACK_DAYS = 14  # how far back a newly-discovered condition's own triggering occurrence may be backdated
-CONSECUTIVE_FAILURE_ALERT_THRESHOLD = 2  # see docs/case_study/methodology-decisions.md
-CONSECUTIVE_FAILURE_CONTEXT_WINDOW = 5
 
 
 def _normalize_coin(coin: str) -> str | None:
@@ -61,23 +61,6 @@ def _trigger_description(candidate: str) -> str:
             from llm_pipeline.novel_condition_tester import condition_desc
             return f"{condition_desc(spec)} → {spec.direction}"
     return "trigger definition not found -- treat this as missing information, do not guess at it"
-
-
-def _format_live_test_opened(date, direction: str, coin: str, candidate: str, horizon: int) -> str:
-    """Shared by both the static and dynamic branches of
-    _scan_mechanical_triggers below -- bold header isolated on its own
-    line, the (often long) trigger description on its own paragraph, the
-    held-for duration bolded, so the message scans at a glance instead of
-    reading as one dense run-on sentence.
-
-    "no TP/SL" used to be appended and was removed here and in
-    replay/engine.py together: no funded position is ever opened anywhere in
-    this project, so saying it of one test implies some other test might have
-    one."""
-    return (f"<b>{date}</b>\n\n"
-            f"<b>Live test opened -- {direction.upper()} {coin}</b>\n\n"
-            f"(candidate <b>{escape_html(candidate)}</b>: {escape_html(_trigger_description(candidate))})\n\n"
-            f"Held for <b>{horizon}d</b>.")
 
 
 def _open_live_test(candidate: str, coin: str, direction: str, decision_date: pd.Timestamp | None = None) -> dict:
@@ -149,53 +132,6 @@ def _market_return_over(entry_date, horizon: int, direction: str) -> float:
     return r if direction == "long" else -r
 
 
-def _check_consecutive_failures(candidate: str) -> None:
-    """Fires immediately after a live test resolves, only for a
-    CONFIRMED candidate (milestone_cleared -- see status_history.py),
-    only for those: a well-established candidate's own aggregate
-    significance test is, by design, resistant to a short losing streak
-    (verified directly: a strong candidate can absorb 20-30 consecutive
-    worst-case-magnitude failures before its p-value or MFE/MAE ratio
-    would ever move enough to flip status -- see
-    docs/case_study/methodology-decisions.md) -- which is exactly the
-    right behavior against ordinary noise, but means the aggregate alone
-    would be far too slow to surface a genuine regime change (a real
-    shift in market structure, a rule change, an arbitraged-away
-    inefficiency). This is a fast, purely informational early-warning a
-    human can act on long before the aggregate statistics ever would --
-    it never changes any candidate's status itself."""
-    if not sh.all_latest_statuses().get(candidate, {}).get("milestone_cleared"):
-        return
-    closed = sorted((t for t in state.load_trade_log() if t["candidate"] == candidate and t["status"] == "closed"),
-                     key=lambda t: t["close_date"])
-    streak = 0
-    for t in reversed(closed):
-        if t["forward_return"] >= 0:
-            break
-        streak += 1
-    if streak < CONSECUTIVE_FAILURE_ALERT_THRESHOLD:
-        return
-    window = closed[-max(streak, CONSECUTIVE_FAILURE_CONTEXT_WINDOW):]
-    mean_return = sum(t["forward_return"] for t in window) / len(window)
-    mean_mfe = sum(t["mfe"] for t in window) / len(window)
-    mean_mae = sum(t["mae"] for t in window) / len(window)
-    ratio = mean_mfe / mean_mae if mean_mae else float("nan")
-    lines = [
-        f"<b>Consecutive-failure alert -- {escape_html(candidate)}</b>\n",
-        f"The last <b>{streak}</b> live test(s) for this CONFIRMED candidate resolved negative in a row.\n",
-        f"Last {len(window)} occurrence(s) for context:",
-    ]
-    for t in window:
-        lines.append(f"  {t['close_date']}  {escape_html(t['coin'])}  return={t['forward_return']:+.2%}  "
-                      f"MFE={t['mfe']:+.2%}  MAE={t['mae']:+.2%}")
-    lines.append(f"\nOver these {len(window)}: mean return={mean_return:+.2%}, MFE/MAE={ratio:.2f} (favorable if > 1.0)")
-    lines.append(f"\nInformational only -- this does not change <b>{escape_html(candidate)}</b>'s status. The full "
-                 f"aggregate statistics (see /details <b>{escape_html(candidate)}</b>) are far more resistant to a short "
-                 f"streak by design; this exists specifically to surface a genuine losing run long before the "
-                 f"aggregate ever would.")
-    _send("\n".join(lines))
-
-
 def _check_live_tests() -> None:
     """Resolves any open live test whose horizon has fully elapsed as of
     today -- same forward-return/MFE/MAE measure pattern_significance
@@ -228,14 +164,13 @@ def _check_live_tests() -> None:
             # the one number that most needs qualifying in a rising market.
             "baseline_return": _market_return_over(trade["entry_date"], trade["horizon"], trade["direction"]),
         })
-        _send(f"<b>{today.date()}</b>\n\n"
-              f"<b>Live test resolved -- {trade['direction'].upper()} {trade['coin']}</b>\n\n"
-              f"(candidate <b>{escape_html(trade['candidate'])}</b>: {escape_html(_trigger_description(trade['candidate']))}, "
-              f"held {trade['horizon']}d, opened {trade['entry_date']})\n\n"
-              f"Forward return: <b>{outcome['forward_return']:+.2%}</b>\n"
-              f"Best point reached: {outcome['mfe']:+.2%}\n"
-              f"Worst point reached: {outcome['mae']:+.2%}")
-        _check_consecutive_failures(trade["candidate"])
+        # NOT notified individually, and no per-resolution alert: measured on
+        # this project's own registry, the open/resolve stream is ~56 messages a
+        # day in bursts of 28, which is the same failure the replay already
+        # diagnosed and fixed (95% of its traffic, and a rate limit that stalled
+        # a real run). The dated record survives in full in the trade log and is
+        # reachable through /details <name or id>; the periodic picture is
+        # send_monthly_digest() below.
 
 
 def _dynamic_trigger_hourly(spec: ConditionSpec, hourly: pd.DataFrame, daily: pd.DataFrame, funding,
@@ -315,9 +250,7 @@ def _scan_mechanical_triggers(hourly_full: dict, ohlc_full: dict, static_trigger
                     continue
                 if not recent_static[variant].any():
                     continue
-                execution = _open_live_test(variant, coin, direction)
-                if execution.get("opened"):
-                    _send(_format_live_test_opened(now.date(), direction, coin, variant, execution["horizon"]))
+                _open_live_test(variant, coin, direction)
 
         if not dynamic_specs:
             continue
@@ -328,9 +261,7 @@ def _scan_mechanical_triggers(hourly_full: dict, ohlc_full: dict, static_trigger
             trig = _dynamic_trigger_hourly(spec, hourly_to_date, ohlc_full[coin], funding, symbol=coin).loc[window_start:]
             if not trig.any():
                 continue
-            execution = _open_live_test(spec.label, coin, spec.direction)
-            if execution.get("opened"):
-                _send(_format_live_test_opened(now.date(), spec.direction, coin, spec.label, execution["horizon"]))
+            _open_live_test(spec.label, coin, spec.direction)
 
 
 def _resolved_live_test_counts() -> dict[str, int]:
@@ -408,6 +339,16 @@ def check_n50_milestones(status_summary: dict, client: Anthropic) -> None:
         status = info.get("status") or sh.all_latest_statuses().get(candidate, {}).get("status", "unknown")
         cleared = status == "accepted"
         is_static = candidate in CANDIDATE_DIRECTIONS
+        if not cleared:
+            # The checkpoint is still RECORDED for every candidate that reaches
+            # one -- `mark_milestone_reported` below runs either way, so the next
+            # one fires at the right count and nothing about the accounting
+            # changes. Only the message is withheld. A checkpoint that did not
+            # clear is the ordinary case (most candidates never clear one), so
+            # sending it turns the rarest and most meaningful message this
+            # system produces into one of many.
+            sh.mark_milestone_reported(candidate, n_reached, cleared)
+            continue
         trigger_desc = _trigger_description(candidate)
         # Mirrors replay/engine.py: the opinion here was formed from the numbers
         # already in this message, with nothing added and no verification behind
@@ -528,6 +469,98 @@ def _check_parked_proposals() -> None:
             f"({escape_html(condition_desc(spec))} → {spec.direction.upper()})"
         )
         _send(message, reply_markup=PROPOSAL_KEYBOARD_TEMPLATE(pending_id))
+
+
+def send_monthly_digest(since: pd.Timestamp) -> None:
+    """The one periodic message about live testing, replacing the per-test
+    stream this module used to send on every open and every resolve.
+
+    Mirrors replay/engine.py::_send_monthly_digest, which replaced the same
+    stream there for the same measured reason: over a full replay that stream
+    was 15,500 of 16,363 messages, and Telegram answered the volume with a
+    rate limit long enough to stall a real run. Production fires roughly 28
+    live tests in a day across the tracked battery, so the same design applies
+    at a smaller scale -- ~56 messages a day, in bursts, is still a stream
+    nobody reads.
+
+    Bounded by construction: a fixed header plus at most MAX_DIGEST_ROWS rows
+    and a count for the rest, so it cannot grow into Telegram's 4,096-character
+    limit as the battery does."""
+    log = state.load_trade_log()
+    opened = [t for t in log if pd.Timestamp(t["entry_date"]) >= since]
+    closed = [t for t in log if t["status"] == "closed" and pd.Timestamp(t["close_date"]) >= since]
+    still_open = len(state.load_open_trades())
+    all_closed = [t for t in log if t["status"] == "closed"]
+
+    def _mean(xs):
+        return (sum(xs) / len(xs)) if xs else float("nan")
+
+    pos = sum(1 for t in closed if t["forward_return"] > 0)
+    all_pos = sum(1 for t in all_closed if t["forward_return"] > 0)
+
+    lines = [f"<b>{'━' * 3} MONTHLY DIGEST -- {pd.Timestamp.now().strftime('%B %Y')} {'━' * 3}</b>", ""]
+    lines.append(f"<b>Live tests</b>  {len(opened)} opened - {len(closed)} resolved - {still_open} still open")
+    if closed:
+        mfe, mae = _mean([t["mfe"] for t in closed]), _mean([abs(t["mae"]) for t in closed])
+        ratio = f"{mfe / mae:.2f}" if mae else "n/a"
+        lines.append(f"<b>This month</b>  {pos}/{len(closed)} positive ({pos / len(closed):.0%}) - "
+                      f"mean {_mean([t['forward_return'] for t in closed]):+.2%} - MFE/MAE {ratio}")
+    if all_closed:
+        lines.append(f"<b>All time</b>  {len(all_closed)} resolved - {all_pos / len(all_closed):.0%} positive - "
+                      f"mean {_mean([t['forward_return'] for t in all_closed]):+.2%}")
+
+    # Ranked by how far along the confirmation count each trigger is, NEVER by
+    # how well it has done: ordering by success rate puts the luckiest small
+    # sample on top -- measured on a real run, that meant candidates at n=6 with
+    # a 100% hit rate whose own backtest status was `rejected`.
+    by_candidate: dict[str, list] = {}
+    for t in all_closed:
+        by_candidate.setdefault(t["candidate"], []).append(t["forward_return"])
+    priors = state.load_confirmation_priors()
+    statuses = sh.all_latest_statuses()
+    battery = signal_store.load_battery_state() or {}
+    summary = {k: v for k, v in (battery.get("summary") or {}).items()}
+    rows = []
+    for name, rets in by_candidate.items():
+        if statuses.get(name, {}).get("dropped"):
+            continue
+        rows.append((_effective_milestone_count(name, priors.get(name), len(rets)), name, rets))
+    rows.sort(reverse=True)
+    if rows:
+        lines.append("")
+        lines.append("<b>Confirmation progress</b> (none of these is a result -- the denominator is the point)")
+        powered = 0
+        for n, name, rets in rows[:MAX_DIGEST_ROWS]:
+            need = _required_n_for(name, summary)
+            if need == need and n >= need:
+                need_txt = f" -- <b>powered</b> (needed {need:.0f})"
+                powered += 1
+            elif need == need:
+                need_txt = f" of {need:.0f} needed for power"
+            else:
+                need_txt = ""
+            wins = sum(1 for r in rets if r > 0)
+            status = statuses.get(name, {}).get("status", "?")
+            lines.append(f"  <b>{escape_html(name[:34])}</b> <code>{_short_id(name)}</code>  "
+                          f"confirmed {n}{need_txt}  -  trend {wins / len(rets):.0%}  -  {status}")
+        if len(rows) > MAX_DIGEST_ROWS:
+            lines.append(f"  <i>... and {len(rows) - MAX_DIGEST_ROWS} more -- /summary for all of them</i>")
+        if powered:
+            lines.append(f"  <i>{powered} of the rows above are past their power threshold: for those, "
+                          f"'no effect found' is a measurement, not a missing answer.</i>")
+
+    active = [k for k, v in statuses.items() if not v.get("dropped")]
+    confirmed = [k for k, v in statuses.items() if v.get("milestone_cleared")]
+    reached = [k for k, v in statuses.items() if v.get("milestone_reported")]
+    lines.append("")
+    lines.append(f"<b>Battery</b>  {len(statuses)} tracked - {len(active)} active - "
+                  f"{len(reached)} reached a checkpoint - {len(confirmed)} currently CONFIRMED - "
+                  f"{len(state.load_parked_proposals())} parked")
+    lines.append("")
+    lines.append("<i>Individual live tests are not sent one by one. Every figure above comes from the full "
+                  "trade log -- /summary for the table, /details &lt;name or id&gt; for one trigger with its "
+                  "last dated occurrences.</i>")
+    _send("\n".join(lines))
 
 
 def run_once() -> None:

@@ -70,3 +70,41 @@ class TestTriggerDefinitionsMatchTheCode:
         src = inspect.getsource(D.compute_triggers)
         for name in ("C1_FUNDING_Z", "C2_RANGE_MULT", "C6_EFFICIENCY_RATIO", "C6_VOLUME_MULT"):
             assert name in src, f"{name} is defined but compute_triggers uses a literal instead"
+
+
+class TestTheBatteryStateStaysSerialisable:
+    """`live_state` gained a per-candidate `summary` so anything needing a
+    candidate's own numbers between battery runs -- `required_n_for_power`'s
+    `pattern_oos_sd`, which the monthly digest reads -- has somewhere to find
+    them. That carries whole rows into a file that is written with
+    `json.dumps`, and battery rows are full of numpy scalars.
+
+    A real weekly run died on `Object of type int32 is not JSON serializable`
+    after the battery had already finished and rewritten live state -- the
+    expensive work done, the notification stage lost. The failure alert fired
+    as designed, which is the only reason it was not silent."""
+
+    def test_numpy_scalars_survive_the_trip_to_json(self):
+        import json
+
+        import numpy as np
+
+        from candidates.run_battery import _jsonable
+
+        row = {"n": np.int32(538), "dominant_year": np.int32(2023),
+               "sortino": np.float64(1.25), "pattern_significant": np.bool_(True),
+               "max_coin_share": np.float64("nan"), "status": "accepted"}
+        with pytest.raises(TypeError):
+            json.dumps(row)  # the raw row is exactly what used to be written
+        out = json.loads(json.dumps({k: _jsonable(v) for k, v in row.items()}))
+        assert out["n"] == 538 and out["dominant_year"] == 2023
+        assert out["pattern_significant"] is True
+
+    def test_nan_becomes_null_not_the_bare_NaN_python_emits(self):
+        """`json.dumps(float('nan'))` yields `NaN`, which is not valid JSON:
+        Python reads it back, anything else does not."""
+        import json
+
+        from candidates.run_battery import _jsonable
+
+        assert json.dumps(_jsonable(float("nan"))) == "null"

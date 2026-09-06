@@ -28,6 +28,7 @@ import json
 import os
 import time
 import traceback
+import pandas as pd
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -35,7 +36,7 @@ from anthropic import Anthropic
 from dotenv import load_dotenv
 
 from candidates.atomic_json import write_json
-from execution.live_testing import _check_parked_proposals, run_once as run_live_testing
+from execution.live_testing import _check_parked_proposals, run_once as run_live_testing, send_monthly_digest
 from llm_pipeline.haiku_sonnet_pipeline import run_compression_scan
 from scheduler.weekly_revalidation import run_weekly_revalidation
 from telegram.bot import _dispatch_update, _get_updates, _send
@@ -45,6 +46,7 @@ STATE_PATH = Path(__file__).resolve().parent / "live_daemon_state.json"
 HOURLY_INTERVAL = timedelta(hours=1)
 DAILY_INTERVAL = timedelta(days=1)
 WEEKLY_INTERVAL = timedelta(days=7)
+MONTHLY_INTERVAL = timedelta(days=30)
 POLL_TIMEOUT = 25  # seconds -- how long each Telegram long-poll waits for a new update
 POLL_FAILURE_BACKOFF = 10  # seconds -- avoid hammering Telegram's API during a real outage
 
@@ -88,6 +90,9 @@ def run_forever() -> None:
     last_hourly = datetime.fromisoformat(state["last_hourly"]) if "last_hourly" in state else now - HOURLY_INTERVAL
     last_daily = datetime.fromisoformat(state["last_daily"]) if "last_daily" in state else now - DAILY_INTERVAL
     last_weekly = datetime.fromisoformat(state["last_weekly"]) if "last_weekly" in state else now - WEEKLY_INTERVAL
+    # Not backdated on a first run, unlike the others: the digest reports a
+    # PERIOD, and firing one immediately would report a period that never ran.
+    last_monthly = datetime.fromisoformat(state["last_monthly"]) if "last_monthly" in state else now
 
     offset = None
     print("Live daemon started -- Telegram bot, hourly scans, daily parked-proposal re-check, and weekly "
@@ -131,6 +136,12 @@ def run_forever() -> None:
             _run_isolated("parked-proposal re-check", _check_parked_proposals)
             last_daily = now
             state["last_daily"] = now.isoformat()
+            _save_state(state)
+
+        if now - last_monthly >= MONTHLY_INTERVAL:
+            _run_isolated("monthly digest", lambda: send_monthly_digest(pd.Timestamp(last_monthly).tz_localize(None)))
+            last_monthly = now
+            state["last_monthly"] = now.isoformat()
             _save_state(state)
 
         if now - last_weekly >= WEEKLY_INTERVAL:

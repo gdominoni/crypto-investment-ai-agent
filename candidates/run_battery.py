@@ -61,6 +61,24 @@ def _concentration_for(pattern: dict, oos: pd.DataFrame) -> tuple[dict, dict]:
     return concentration_check(oos, "group"), concentration_check(oos, "period")
 
 
+def _jsonable(v):
+    """One battery row value, in a form `json.dumps` accepts.
+
+    numpy scalars are not JSON-serialisable and the rows are full of them:
+    `dominant_year` comes off a groupby index as an int32, several stats are
+    numpy floats, `pattern_significant` is a numpy bool. This never mattered
+    while `live_state` held only the accepted candidates' explicitly-converted
+    anchors -- the summary carries whole rows, so it does. Caught by a real
+    weekly run crashing on "Object of type int32 is not JSON serializable",
+    not by a test; the failure alert fired exactly as designed.
+
+    NaN becomes null rather than the bare `NaN` Python's json emits, which is
+    not valid JSON and which any other reader of this file would choke on."""
+    if hasattr(v, "item"):  # numpy scalar -> its Python equivalent
+        v = v.item()
+    return None if isinstance(v, float) and v != v else v
+
+
 def run_all() -> tuple[pd.DataFrame, dict, dict]:
     """Returns (status_table, live_state, meta). `live_state` is what the
     execution engine actually reads at trade time -- per (candidate,
@@ -264,6 +282,16 @@ def run_all() -> tuple[pd.DataFrame, dict, dict]:
     # manufacture several "significant" candidates with no real effect behind
     # them. Demotion-only -- BH can never promote (see methodology.py).
     rows = apply_fdr_demotion(rows, live_state)
+    # Per-candidate stats kept alongside the accepted-only `candidates` block,
+    # mirroring replay/state.py's own `battery_status.json`, which has carried a
+    # `summary` all along. Production stored only the accepted candidates'
+    # anchors, so anything needing a candidate's own numbers between battery runs
+    # -- `required_n_for_power`'s `pattern_oos_sd`, above all -- had nowhere to
+    # read them and silently fell back to "not computable".
+    live_state["summary"] = {
+        r["candidate"]: {k: _jsonable(v) for k, v in r.items() if k != "candidate"}
+        for r in rows
+    }
     for r in rows:
         if r.get("fdr_demoted"):
             record_status(r["candidate"], r["status"])

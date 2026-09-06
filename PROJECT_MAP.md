@@ -87,8 +87,14 @@ Pricing: Sonnet 5 $2 / $10 per million tokens (input/output), Haiku 4.5 $1 / $5.
 - Every Sonnet call uses `max_tokens=4000` (a real, measured failure mode below 3000 — see methodology-decisions.md).
 
 **Part 2 — running live, ongoing (Anthropic API only, excludes hosting):**
-- Escalation call: ~1,400 tokens/call (~$0.01/call), grows slowly (name-only lists, not full detail).
-- Estimated **$5-10/month** in moderate activity, likely under $20/month even in a volatile month.
+
+Production has exactly two call sites: the compression escalation (automatic) and free-text Q&A (only when a human asks). Everything else — the hourly mechanical scan, the weekly battery, the daily parked re-check, the monthly digest, the keep/drop digest — is local computation and costs nothing.
+
+- **Compression escalation**: measured 6,421 input + ~1,438 output tokens → **~$0.027/call**. Fires only on a confirmed exit from a volatility-compression episode, and that frequency is measured across the full real history rather than assumed: **217 episodes over 9 years across 7 coins = 24/year, one every ~15 days** (yearly range 14-36). That is **~$0.05/month, ~$0.65/year**.
+- **Q&A**: ~4,898 input tokens → **~$0.017/question**, entirely user-driven. Ten questions a month is ~$0.17; two hundred is ~$3.40.
+- **Realistic total: well under $1/month** unless the chat is used heavily. The automatic half of the system is effectively free; the variable cost is how much a human talks to it.
+- The per-call input grew ~4x (from the ~1,400 tokens the replay measured) when the replay's 153 discovered candidates were migrated in: `build_context_summary`'s already-tested name list is deliberately uncapped, because it is what stops Sonnet re-proposing a condition already answered. Worth watching, not worth capping at this cost.
+- Prompt caching is inert here and that is fine: the system block is cacheable (2,588 tokens, 5-minute TTL), which pays for itself across a replay's hundreds of calls per hour, while calls ~15 days apart never meet a live cache and pay a 1.25x write instead. Real, and immaterial — about $0.03/year.
 
 **Part 3 — server/hosting (kept off the live host):**
 - The live host only needs the hourly mechanical scan, the hourly compression scan, and the Telegram bot loop — all cheap, no meaningful CPU/memory.

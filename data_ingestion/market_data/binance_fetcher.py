@@ -174,7 +174,17 @@ def update_all(coins: list[str] | None = None) -> dict[str, dict[str, int | None
     each coin's OHLCV and funding fetch is isolated so a single network
     blip or a bad response for e.g. coin #3 of 7 doesn't silently skip
     coins #4-7 for the whole week. `None` in the report (rather than 0)
-    marks "failed", distinct from 0 meaning "fetched fine, nothing new"."""
+    marks "failed", distinct from 0 meaning "fetched fine, nothing new".
+
+    BOTH timeframes, and the hourly one is not optional. This refreshed only
+    the daily series (`update_ohlcv`'s default) while
+    `execution/live_testing.py::_scan_mechanical_triggers` reads the HOURLY
+    frame and looks at the last 24 hours of it. Nothing anywhere refreshed
+    that file, so in production the scan's window was always empty and no live
+    test could ever open -- the entire mechanical arm silently inert, with no
+    error, a healthy-looking daemon and a digest reporting "0 opened". Caught
+    by running a real hourly cycle rather than by reading the code: the
+    replay never hit it, having walked history that was already on disk."""
     report = {}
     for symbol in (coins or COINS):
         try:
@@ -183,14 +193,21 @@ def update_all(coins: list[str] | None = None) -> dict[str, dict[str, int | None
             print(f"OHLCV fetch failed for {symbol}, skipping: {e}")
             ohlcv_added = None
         try:
+            hourly_added = update_ohlcv(symbol, timeframe="1h")
+        except Exception as e:
+            print(f"hourly OHLCV fetch failed for {symbol}, skipping: {e}")
+            hourly_added = None
+        try:
             funding_added = update_funding(symbol)
         except Exception as e:
             print(f"funding fetch failed for {symbol}, skipping: {e}")
             funding_added = None
-        report[symbol] = {"ohlcv_added": ohlcv_added, "funding_added": funding_added}
+        report[symbol] = {"ohlcv_added": ohlcv_added, "hourly_added": hourly_added,
+                          "funding_added": funding_added}
         ohlcv_msg = f"+{ohlcv_added} daily candle(s)" if ohlcv_added is not None else "OHLCV FAILED"
+        hourly_msg = f"+{hourly_added} hourly" if hourly_added is not None else "hourly FAILED"
         funding_msg = f"+{funding_added} funding entry(ies)" if funding_added is not None else "funding FAILED"
-        print(f"{symbol}: {ohlcv_msg}, {funding_msg}")
+        print(f"{symbol}: {ohlcv_msg}, {hourly_msg}, {funding_msg}")
     return report
 
 
