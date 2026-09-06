@@ -315,3 +315,55 @@ class TestProductionSendsTheSameFourThings:
         assert "status changes:" not in src, "the weekly status-diff message is back"
         assert "Horizon updated" not in src, "the per-horizon-change message is back"
         assert "format_prune_digest" in src, "the keep/drop digest was removed -- it is a decision request, not a notification"
+
+
+class TestTheLocalTaskReminderStaysQuiet:
+    """The hyperopt cross-check is the one job deliberately kept off the live
+    host, so a human has to run it on their own machine. A reminder on a fixed
+    schedule would be exactly the noise this system removed everywhere else,
+    so it reports the real gap or says nothing at all."""
+
+    def _patch(self, monkeypatch, accepted, results):
+        import execution.hyperopt_runner as H
+        import execution.signal_store as S
+        monkeypatch.setattr(S, "load_battery_state", lambda: {"candidates": {c: {} for c in accepted}})
+        monkeypatch.setattr(H, "load_results", lambda: results)
+
+    def test_silent_when_every_accepted_candidate_has_a_fresh_result(self, monkeypatch):
+        from datetime import datetime, timezone
+
+        from execution.hyperopt_runner import pending_work_reminder
+
+        fresh = datetime.now(timezone.utc).isoformat()
+        self._patch(monkeypatch, ["a", "b"],
+                    {"a": {"status": "ok", "at": fresh}, "b": {"status": "ok", "at": fresh}})
+        assert pending_work_reminder() is None
+
+    def test_silent_when_nothing_is_accepted_yet(self, monkeypatch):
+        from execution.hyperopt_runner import pending_work_reminder
+
+        self._patch(monkeypatch, [], {})
+        assert pending_work_reminder() is None
+
+    def test_it_names_the_candidates_and_gives_a_pasteable_command(self, monkeypatch):
+        from datetime import datetime, timedelta, timezone
+
+        import execution.hyperopt_runner as H
+        from execution.hyperopt_runner import STALE_AFTER_DAYS, pending_work_reminder
+
+        old = (datetime.now(timezone.utc) - timedelta(days=STALE_AFTER_DAYS + 1)).isoformat()
+        self._patch(monkeypatch, ["needs_one", "gone_stale"],
+                    {"gone_stale": {"status": "ok", "at": old}})
+        msg = pending_work_reminder()
+        assert msg is not None
+        assert "needs_one" in msg and "gone_stale" in msg, "a candidate needing work is not named"
+        assert "python3 -m execution.hyperopt_runner needs_one gone_stale" in msg, (
+            "the command is not pasteable as-is")
+        assert "hyperopt_results.json" in msg, "the one file that has to move is not named"
+
+    def test_a_failed_attempt_counts_as_work_to_redo(self, monkeypatch):
+        from execution.hyperopt_runner import pending_work_reminder
+
+        self._patch(monkeypatch, ["broke"], {"broke": {"status": "failed", "reason": "no data"}})
+        msg = pending_work_reminder()
+        assert msg is not None and "broke" in msg

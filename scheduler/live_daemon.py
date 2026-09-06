@@ -36,6 +36,7 @@ from anthropic import Anthropic
 from dotenv import load_dotenv
 
 from candidates.atomic_json import write_json
+from execution.hyperopt_runner import pending_work_reminder
 from execution.live_testing import _check_parked_proposals, run_once as run_live_testing, send_monthly_digest
 from llm_pipeline.haiku_sonnet_pipeline import run_compression_scan
 from scheduler.weekly_revalidation import run_weekly_revalidation
@@ -78,6 +79,13 @@ def _run_isolated(name: str, fn, alert_on_failure: bool = True) -> None:
                 _send(f"<b>Live daemon: {name} failed.</b>\n\n{type(e).__name__}: {e}\n\nWill retry on its normal schedule.")
             except Exception:
                 pass  # a failed alert must not crash the daemon either
+
+
+def _remind_about_local_work() -> None:
+    """Silent when there is nothing to run -- see pending_work_reminder."""
+    message = pending_work_reminder()
+    if message:
+        _send(message)
 
 
 def run_forever() -> None:
@@ -140,6 +148,11 @@ def run_forever() -> None:
 
         if now - last_monthly >= MONTHLY_INTERVAL:
             _run_isolated("monthly digest", lambda: send_monthly_digest(pd.Timestamp(last_monthly).tz_localize(None)))
+            # The one job that needs the human's own machine, and it only asks
+            # when there is actually something to run -- a reminder that fires
+            # on a schedule regardless is the kind of message this system
+            # removed everywhere else. See pending_work_reminder's docstring.
+            _run_isolated("local-task reminder", _remind_about_local_work)
             last_monthly = now
             state["last_monthly"] = now.isoformat()
             _save_state(state)

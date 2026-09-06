@@ -175,6 +175,82 @@ def run_all(candidates: list[str] | None = None, timerange: str = "20180101-", e
     return results
 
 
+# A hyperopt result computed long ago was computed on materially less data, and
+# every candidate's own history keeps growing. 90 days is a deliberate compromise
+# rather than a measured optimum: this cross-check never gates anything (see
+# methodology-decisions.md), so the cost of a stale figure is a slightly dated
+# reference number, not a wrong verdict.
+STALE_AFTER_DAYS = 90
+
+
+def pending_work_reminder() -> str | None:
+    """What the human has to run on their OWN machine, or None when nothing
+    does -- and returning None is the point.
+
+    This cross-check is the one recurring task deliberately kept off the live
+    host: it is the only real compute cost in the project (minutes per
+    candidate against a battery refresh measured in seconds), and its output is
+    never time-sensitive, so paying an always-on host for a bursty, optional
+    job would be the wrong trade (see PROJECT_MAP.md's Cost Optimization Part
+    3). Nothing else in this system needs a human's machine.
+
+    A reminder that fires on a schedule regardless of whether there is work is
+    the kind of message this project removed everywhere else, so this one
+    reports the actual gap -- which accepted candidates have no cross-check at
+    all, which have one older than STALE_AFTER_DAYS -- and names them in a
+    command that can be pasted as-is."""
+    from datetime import datetime, timezone
+
+    from execution.signal_store import load_battery_state
+
+    accepted = list(((load_battery_state() or {}).get("candidates") or {}).keys())
+    if not accepted:
+        return None
+
+    results = load_results()
+    now = datetime.now(timezone.utc)
+    missing, stale, failed = [], [], []
+    for name in accepted:
+        r = results.get(name)
+        if not isinstance(r, dict) or r.get("status") == "failed":
+            (failed if isinstance(r, dict) else missing).append(name)
+            continue
+        try:
+            age = (now - datetime.fromisoformat(r["at"])).days
+        except (KeyError, TypeError, ValueError):
+            missing.append(name)
+            continue
+        if age > STALE_AFTER_DAYS:
+            stale.append((name, age))
+
+    if not (missing or stale or failed):
+        return None
+
+    lines = ["<b>Local task: Freqtrade hyperopt cross-check</b>", ""]
+    lines.append(f"{len(accepted)} candidate(s) are currently accepted. Of those:")
+    if missing:
+        lines.append(f"  • <b>{len(missing)}</b> have no cross-check at all")
+    if stale:
+        oldest = max(a for _, a in stale)
+        lines.append(f"  • <b>{len(stale)}</b> have one older than {STALE_AFTER_DAYS} days (oldest: {oldest})")
+    if failed:
+        lines.append(f"  • <b>{len(failed)}</b> failed on their last attempt")
+    todo = [n for n in missing + failed] + [n for n, _ in stale]
+    lines += [
+        "",
+        "<b>On your own machine</b>, from the project root:",
+        "",
+        f"<code>python3 -m execution.hyperopt_runner {' '.join(todo)}</code>",
+        "",
+        "Then copy <code>execution/hyperopt_results.json</code> to wherever this bot runs. "
+        "That one file is the only thing that has to move.",
+        "",
+        "<i>Purely informational: it never gates a verdict, so there is no hurry and nothing "
+        "breaks while it is out of date. /help has the full option reference.</i>",
+    ]
+    return "\n".join(lines)
+
+
 def format_result(candidate: str, short: bool = False) -> str:
     """Never raises, for any shape of stored record.
 
