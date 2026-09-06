@@ -113,112 +113,205 @@ The static baseline (a fixed set of rule-based triggers, tested once under full 
 
 Two interaction modes, kept structurally apart: **free-text conversation never generates a financial number itself** — every figure a message cites comes from a real computation, never invented by the model. **Structured commands and buttons never touch the language model at all** — a fixed set of valid answers is always presented as buttons, never left to free-text guessing.
 
-The messages below are illustrative — real message formats, example figures, not a claim about the current battery's exact state, which `/summary` always reports fresh.
+Every message below is a real render from the actual code — either built from a genuine historical episode run through the live pipeline, or, where noted, the literal output the system sent after the full replay finished. None of it is mocked up. `/summary` and `/replay_summary` always report the current battery fresh, which will differ from any specific numbers quoted here as the system keeps running.
 
 ### A pair of ideas, proposed and approved
 
-Bitcoin's volatility has just come out of an unusually quiet stretch. Sonnet is shown what happened during that quiet spell — the real macro releases, dated and graded as a surprise, not just "something came out" — and proposes up to two different, specific ideas at once, sharing one approval:
+Bitcoin's volatility has just come out of a 12-day quiet stretch. Sonnet is shown what happened during that squeeze — the real macro releases, dated and graded as a surprise, not just "something came out" — and proposes up to two different, specific ideas at once, sharing one approval. This is a real render of the actual message format, built from a real historical episode (BTC, March–April 2022):
 
 ```
-🤖 Agent: COMPRESSION RESOLVED: BTCUSDT
+🤖 Agent: EVENT ALERT: VOLATILITY COMPRESSION RESOLVED
+          Asset: BTCUSDT
+          Period: 2022-03-30 to 2022-04-11 (12 Days Coiling)
 
-          Quiet since: 2024-02-01 (12 days, volatility 1.7 sd below
-          this coin's own normal)
-          Broke out: 2024-02-13 (-3.10% that day)
+          --- SQUEEZE METRICS ---
+          • Start Volatility: 1.65 SD below normal
+          • Mid-Squeeze Drift: -16.01%
+          • Exit Bar Move (2022-04-11): -6.23%
+          • Post-Squeeze State: Neutral (14-day RSI: 35.37 |
+            30-day volume z-score: 1.37)
 
-          Assessment: Two ideas worth testing from this squeeze —
-          jobless claims worsened twice during it, and the market
-          was already stretched two different ways.
+          --- MACRO CONTEXT DURING SQUEEZE ---
+            2022-03-31 Initial Jobless Claims: 202k, change vs
+            prior +14k, surprise +0.6 sd
+            2022-04-07 Initial Jobless Claims: 166k, change vs
+            prior -5,000, surprise -1.4 sd
 
-          This needs your input.
+          --- ASSESSMENT ---
+          Jobless claims improved twice during the squeeze (a
+          hawkish signal), and the market was already stretched
+          two different ways going into the breakout.
+          Sonnet generated 2 testable hypotheses.
 
-          1. "weak_claims_then_oversold"
+          PROPOSAL 1: hawkish_claims_then_oversold_short
+          Status: PROPOSED (Awaiting Human Gating)
 
-          (jobless-claims surprise worse than expected, within the
-          last 7 days, AND 14-day RSI below 30) → long
+          --- CONDITION & PARAMETERS ---
+          • Logic: jobless-claims surprise at most -1.0 (within
+            the last 7 days) AND 14-day RSI at most 40 → SHORT
 
-          2. "weak_claims_then_volume_dryup"
+          PROPOSAL 2: hawkish_claims_then_volume_spike_short
+          Status: PROPOSED (Awaiting Human Gating)
 
-          (jobless-claims surprise worse than expected, within the
-          last 7 days, AND 30-day volume z-score below -1.0) → long
+          --- CONDITION & PARAMETERS ---
+          • Logic: jobless-claims surprise at most -1.0 (within
+            the last 7 days) AND 30-day volume z-score at least
+            1.0 → SHORT
 
-          Test It runs a real walk-forward backtest of each condition
-          before they are tracked as live tests (no real money is
-          ever placed). Don't Test It dismisses them.
-
-          [ Test It ]  [ Don't Test It ]
+          --- ACTION REQUIRED (HUMAN-IN-THE-LOOP) ---
+          [ Test It ] → Runs the full walk-forward backtest on
+          history up to this date, registers both conditions,
+          and tracks them forward as observational live tests.
+          No capital, ever.
+          [ Don't Test It ] → Dismisses them untested. Nothing
+          is recorded, so the same idea can surface again later.
 
 You:     [taps "Test It"]
 
-🤖 Agent: Historical backtest -- weak_claims_then_oversold
+🤖 Agent: HISTORICAL BACKTEST REPORT
+          Candidate: hawkish_claims_then_oversold_short  eb5a
+          Status: WATCH -- real signal, fails a robustness check
 
-          (jobless-claims surprise worse than expected, within the
-          last 7 days, AND 14-day RSI below 30 → long)
+          --- CONDITION & PARAMETERS ---
+          • Logic: jobless-claims surprise at most -1.0 (within
+            7 days) AND 14-day RSI at most 40 → short
 
-          Pattern signal: excess return +2.10% vs. this coin's own
-          baseline over the same period, p=0.031, N=134 occurrences
-          across 41 separate episodes.
-          Risk profile: MFE/MAE ratio=2.05 (favorable -- the typical
-          run in your favor exceeds the typical run against you).
+          --- STATISTICAL VERDICT ---
+          • Pattern Significance: NOT SIGNIFICANT (p = 0.516 |
+            Target: p < 0.100)
+          • Sample Size: N = 65 (Control Sample: N = 509)
+          • Excess Return vs incremental: -0.05%
+            ⚠️ WARNING: Effect runs OPPOSITE to trade direction.
 
-          Verdict: ACCEPTED
+          --- RISK PROFILE (RAW PATH) ---
+          • MFE / MAE Ratio: 0.45 (adverse excursion dominates)
+          • Raw Sortino Ratio: -2.17 (No fees / No TP/SL)
 
-          This is a historical screening result, not a live track
-          record -- the real test is ongoing: added to the battery
-          now, re-tested every week.
+          --- HISTORICAL TP/SL REFERENCE (INFORMATIONAL) ---
+          • Trades: N = 65 | Win Rate: 43.8% | Sortino: -3.54
+          Does not affect the verdict above -- this project
+          accepts on pattern significance, not on a barrier
+          structure's P&L.
+
+          ---
+          STATUS DEFINITION [WATCH]
+          A real pattern signal that fails a robustness check.
+          It trades zero real capital while accumulating new
+          occurrences toward the sample a null result would
+          need to be informative. Re-evaluated automatically
+          every 7 simulated days.
 ```
+
+This is the honest outcome for most proposals, and it is a better illustration than a cherry-picked accepted one: a real hypothesis, real numbers, real reason for the verdict — including the wrong-direction warning, which is exactly the check that once let four of six static candidates be called "significant" while doing this. The 4-character id (`eb5a`) is what a reader types into `/replay_details` to pull this candidate up again later.
 
 Two ideas rather than one deeper combination is a deliberate design choice, not generosity: each added condition divides how often it has actually happened by roughly eight, so a single three-part idea is usually untestable where two separate two-part ideas both are — and if only one survives, that's a finding a single combined idea would have hidden. If the two ideas turn out to fire on nearly the same days, the second is dropped automatically before it ever reaches a human, since it would just be one idea counted twice.
 
-### A live test, opened and resolved
+### What replaced one message per live test
 
-Once tracked, a candidate's own trigger opens and resolves a live occurrence with no human or model involved — mechanical, hourly detection, no TP/SL:
+Earlier versions of this system sent a Telegram message every time a tracked candidate's trigger opened a live test, and another when it resolved. Over the full nine-year replay that was **15,500 of 16,363 messages — 95% of all traffic** — and Telegram answered the volume with a rate limit long enough to stall the run outright. The mechanical fix (queue and retry) was the smaller half of the problem: 7,800 notifications are not a history anyone reads. Both per-test messages were removed. The dated record survives in full in the trade log and is reachable through `/replay_details <name or id>`, which prints a candidate's last occurrences with their outcomes on demand.
 
-```
-🤖 Agent: 2024-03-04
-
-          Live test opened -- LONG BTCUSDT
-
-          (candidate weak_claims_then_oversold: jobless-claims surprise
-          worse than expected AND RSI below 30)
-
-          Held for 7d, no TP/SL.
-```
+What replaced them is a bounded monthly digest and, separately, a message every time a candidate crosses a confirmation checkpoint. Both below are real renders from the completed replay's actual final state — nothing invented, no placeholder numbers:
 
 ```
-🤖 Agent: 2024-03-11
+🤖 Agent: ━━━ MONTHLY DIGEST -- July 2026 ━━━
 
-          Live test resolved -- LONG BTCUSDT
+          Live tests  389 opened - 463 resolved - 44 still open
+          This month  243/463 positive (52%) - mean -0.02% -
+          MFE/MAE 0.88
+          All time  23451 resolved - 50% positive - mean -0.48%
+          Events assessed this month: 2
 
-          (candidate weak_claims_then_oversold, held 7d, opened
-          2024-03-04)
+          Confirmation progress (none of these is a result --
+          the denominator is the point)
+            c2_short  b02d  confirmed 1459 -- powered (needed
+            417)  -  trend 51%  -  watch
+            strong_labor_print_then_volume_blo  9300  confirmed
+            1103 -- powered (needed 672)  -  trend 49%  -  watch
+            jobless_claims_beat_volume_surge_l  72f4  confirmed
+            1030 -- powered (needed 554)  -  trend 52%  -  rejected
+            ... and 93 more -- /replay_summary for all of them
+            5 of the rows above are past their power threshold:
+            for those, 'no effect found' is a measurement, not
+            a missing answer.
 
-          Forward return: +3.10%
-          Best point reached: +4.20%
-          Worst point reached: -1.80%
+          Battery  159 tracked - 103 active - 126 reached a
+          checkpoint - 2 currently CONFIRMED - 75 parked
 
-          Confirmation record -- weak_claims_then_oversold
-          Occurrence 23 of 307 (needed for a 5% effect at 80% power
-          over 7d)
-          Trend materialised: 61% of 23 resolved
-          Mean best point +3.40%, mean worst -2.10% -- MFE/MAE 1.62
-          TP/SL: pending hyperopt cross-check.
+          Individual live tests are no longer sent one by one.
+          Every figure above comes from the full trade log --
+          /replay_summary for the table, /replay_details <name
+          or id> for one trigger with its last dated occurrences.
 ```
 
-That second number in "Occurrence 23 of 307" is deliberate, not an oversight: at this project's horizons, proving an effect with real statistical confidence needs occurrences in the hundreds, and no realistic tracking window reaches that. So the system never claims proof — only that a pattern has kept happening and still holds up on the larger sample. That's why the word here is **confirmed**, not "validated": persistence, honestly labeled as persistence.
+Rows are ranked by how far a candidate is toward its confirmation count, **never by how well it has done** — ranking by success rate would put the luckiest small sample on top, and on a real run that meant a candidate at n=6 with a 100% hit rate whose own backtest status was `rejected`.
+
+```
+🤖 Agent: 2026-08-24
+
+          STATUS UPDATE: ACCEPTED
+          Candidate: hawkish_claims_surprise_then_volume_
+          spike_capitulation  44fb
+          (jobless-claims surprise at most -0.3 (within 7 days)
+          AND 30-day volume z-score at least 1.0 → long)
+
+          --- VERDICT & POWER ---
+          • Pattern Significance: SIGNIFICANT (p = 0.001 |
+            Target: p < 0.100)
+          • Power Progress: 180 / 96 occurrences (SAMPLE
+            SUFFICIENT -- a null here is a measurement)
+
+          --- PERFORMANCE & EXCURSION ---
+          • Trend Realized: 58.5%
+          • Market-Adjusted Excess: +0.56% per occurrence vs
+            universe baseline (56% positive after adjustment)
+          • MFE / MAE: +8.90% / -7.12% (Ratio: 1.25)
+
+          ---
+          Next Checkpoint: 200 occurrences (re-evaluated fresh
+          each time, never a permanent verdict)
+          CONFIRMED at this checkpoint. Confirmed, not validated:
+          persistence on an enlarged sample, not proof -- a
+          conclusive test needs the occurrence count shown above.
+```
+
+`hawkish_claims_surprise_then_volume_spike_capitulation` (`44fb`) is the one candidate this project's full replay produced that cleared every gate it has — see the result summary near the top of this README for the full statistical picture, including the multiplicity control it was checked against. That second number, "Power Progress: 180 / 96", is deliberate, not an oversight: at this project's horizons, proving an effect with real statistical confidence needs occurrences in the hundreds, and most tracked candidates never get there. So the system never claims proof — only, once the sample is large enough, that a pattern has kept happening and still holds up. That's why the word here is **CONFIRMED**, not "validated": persistence, honestly labeled as persistence, re-earned fresh at every checkpoint rather than awarded once.
 
 **A confirmed candidate's own aggregate is, by design, resistant to a short losing streak — a separate, fast alert covers the gap that creates.** A well-established candidate can absorb 20-30 consecutive worst-case losses before its own significance test would ever flip status — correct behavior against noise, but too slow to flag a genuine regime change on its own. So immediately after any live test resolves, if a confirmed candidate's last 2+ resolved live tests came back negative in a row, it fires a purely informational alert — never a status change, long before the aggregate statistics would say anything.
 
 ### Natural-language conversation
 
-```
-You:     How is the market going today?
+This is a real answer, sent by the actual system after the replay finished — not a mocked-up illustration:
 
-🤖 Agent: BTC +1.8% (24h), ETH +2.1%, broad risk-on tone. No macro
-          releases in the last 10 days. Nothing currently accepted;
-          5 on watch for concentration or risk-path reasons, 1
-          rejected on significance. No live tests open.
 ```
+You:     Tell me the confirmed candidates up to now
+
+🤖 Agent: As of 2026-09-05, two candidates in the battery have
+          hit a "confirmed" checkpoint (meaning the pattern kept
+          occurring after it was flagged and still passed its
+          checks when it reached 20 such occurrences -- that's
+          a persistence check, not proof, since a real
+          demonstration needs occurrences in the hundreds):
+
+          - hawkish_claims_surprise_then_volume_spike_
+          capitulation (44fb) -- currently accepted (its trigger
+          is live-testing automatically) and confirmed at its
+          checkpoint. This is the one case where both labels
+          currently apply together.
+
+          - claims_surprise_then_funding_stretched_reversion
+          (37fa) -- was confirmed at its checkpoint, but its
+          current status is rejected (no statistically
+          significant edge found against the coin's own baseline
+          going forward). This shows why the two words aren't
+          interchangeable: it persisted long enough to earn
+          "confirmed" once, but that isn't a permanent badge,
+          and it has since failed the significance test.
+
+          No other candidate in the list carries a "CONFIRMED"
+          marker as of this date.
+```
+
+Every candidate the model names carries its 4-character id in parentheses — what a reader types into `/replay_details` for the full picture — and it never writes "validated": that word is banned both in the prompt and, more to the point, in the data the model is actually shown, after an earlier version of this project caught the state summary itself handing the model the retired word and watched it repeat what it was given.
 
 ### Structured commands — no LLM involved
 
