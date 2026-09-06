@@ -144,7 +144,7 @@ flowchart TD
 
 ### `accepted` vs `CONFIRMED` — two different claims, never interchangeable
 
-`accepted` = the historical backtest cleared every statistical gate (see [Acceptance: `classify_status`'s gate](#acceptance-classify_statuss-gate)). `CONFIRMED` = additionally still `accepted` after a live checkpoint of real, out-of-sample occurrences (see [The CONFIRMED checkpoint](#the-confirmed-checkpoint-milestone_n--20)). A candidate can hold one without the other. "Validated" is never used for either — see [Why "confirmed", not "validated"](#why-confirmed-not-validated).
+`accepted` = the historical backtest cleared every statistical gate (see [Acceptance: `classify_status`'s gate](#classify_statuss-gate-significance-not-pl)). `CONFIRMED` = additionally still `accepted` after a live checkpoint of real, out-of-sample occurrences (see [The CONFIRMED checkpoint](#the-confirmed-checkpoint-milestone_n-20)). A candidate can hold one without the other. "Validated" is never used for either — see [Why "confirmed", not "validated"](#why-confirmed-not-validated).
 
 **Type.** Definitional.
 
@@ -170,7 +170,7 @@ Only a 20-40% move is detectable at n=20 — a result that size would be a bug t
 
 ### `min_report_events = 20` — the sample-size floor for acceptance
 
-`classify_status` requires more than 20 out-of-sample events before ruling `accepted`/`watch`/`rejected` at all — below it, the verdict is `insufficient_data`. Set low enough that sample size itself isn't the bottleneck ahead of the gate that actually answers "does a pattern exist" (statistical significance); if nothing clears the bar even here, that's a real finding, not something to engineer around. Mirrors [`MILESTONE_N`](#the-confirmed-checkpoint-milestone_n--20) by design.
+`classify_status` requires more than 20 out-of-sample events before ruling `accepted`/`watch`/`rejected` at all — below it, the verdict is `insufficient_data`. Set low enough that sample size itself isn't the bottleneck ahead of the gate that actually answers "does a pattern exist" (statistical significance); if nothing clears the bar even here, that's a real finding, not something to engineer around. Mirrors [`MILESTONE_N`](#the-confirmed-checkpoint-milestone_n-20) by design.
 
 **Type.** Compromise (yield vs. rigor).
 
@@ -186,7 +186,7 @@ A candidate is `accepted` if `pattern_significance` finds a statistically signif
 
 ### The significance test: one-sided, block-bootstrapped
 
-`pattern_significance` compares a condition's mean forward return, at its own walk-forward-selected horizon, against the same coin's own returns over the *same calendar stretch* — never the whole multi-year history, which would compare a volatile year to a calm baseline. The test is one-sided (only "works in the direction actually traded" counts), via a moving-block bootstrap rather than a t-test, because financial returns are fat-tailed and overlapping windows are serially correlated — both break a t-test's assumptions. See [The bootstrap itself](#the-significance-bootstrap-_block_bootstrap_means).
+`pattern_significance` compares a condition's mean forward return, at its own walk-forward-selected horizon, against the same coin's own returns over the *same calendar stretch* — never the whole multi-year history, which would compare a volatile year to a calm baseline. The test is one-sided (only "works in the direction actually traded" counts), via a moving-block bootstrap rather than a t-test, because financial returns are fat-tailed and overlapping windows are serially correlated — both break a t-test's assumptions. See [The bootstrap itself](#the-significance-bootstrap-_block_bootstrap_means-custom-not-scipystats).
 
 **Type.** Statistical rigor.
 
@@ -427,7 +427,7 @@ Plain-language index of the actual functions behind the numbers above — for po
 
 ### Sortino ratio (`sortino_ratio`, custom, not a library function)
 
-Mean return divided by downside semi-deviation (root-mean-square of `numpy.minimum(returns, 0)`), annualized by `sqrt(252)`. Reported as informational risk context only — see [`classify_status`'s gate](#acceptance-classify_statuss-gate). Semi-deviation is computed over the *full* sample rather than just the losing subset, because a losing subset sharing one repeated barrier value can otherwise collapse toward zero and blow the ratio up to a meaningless number.
+Mean return divided by downside semi-deviation (root-mean-square of `numpy.minimum(returns, 0)`), annualized by `sqrt(252)`. Reported as informational risk context only — see [`classify_status`'s gate](#classify_statuss-gate-significance-not-pl). Semi-deviation is computed over the *full* sample rather than just the losing subset, because a losing subset sharing one repeated barrier value can otherwise collapse toward zero and blow the ratio up to a meaningless number.
 
 ### The significance bootstrap (`_block_bootstrap_means`, custom — not `scipy.stats`)
 
