@@ -19,14 +19,16 @@ That split is what keeps the host small. `freqtrade` and `scipy` are in `require
 
 ### Sizing
 
+Measured, not estimated. The heaviest thing the host ever does is the weekly battery — it loads daily *and* hourly history for all 7 coins and scores every tracked condition — so that run was profiled directly: **159 candidates, peak RSS 140 MB, about 20 minutes.**
+
 | Resource | Needed | Why |
 |---|---|---|
-| RAM | **1 GB** comfortably, 512 MB is tight | Peak is the weekly battery, which loads daily + hourly history for 7 coins and scores every tracked condition. Everything else idles far below it. |
-| Disk | **5 GB** | Repo and its data are well under 1 GB; the rest is headroom for the venv, the journal, and years of slow market-data growth. |
-| CPU | 1 shared vCPU | The daemon sleeps most of the hour. The weekly battery is the only sustained burn, and it is minutes, once a week. |
+| RAM | **1 GB** | The measured peak is 140 MB, most of it the Python + pandas baseline rather than the data. 512 MB genuinely works; 1 GB costs a euro or two more and removes the question. |
+| Disk | **5 GB** | Repo, data and state are ~1 GB together. The rest is headroom for the venv, the journal, and years of slow market-data growth. |
+| CPU | 1 shared vCPU | The daemon sleeps through most of every hour. The weekly battery is the only sustained burn — ~20 min on a laptop, so budget up to an hour on a small shared vCPU. Once a week, and nothing waits on it. |
 | Bandwidth | Negligible | Incremental Binance fetches and Telegram long-polls. |
 
-Any provider's smallest tier meets this. The daemon is not latency-sensitive and holds no exchange connection, so the region only matters for your own SSH comfort.
+Any provider's smallest tier meets this comfortably. The daemon is not latency-sensitive and holds no exchange connection, so the region only matters for your own SSH comfort.
 
 > **On cost:** the server is the *predictable* expense; the Anthropic API is the variable one. See `PROJECT_MAP.md`'s Cost Optimization for measured per-call figures — calls happen only during compression episodes, so quiet weeks cost nothing.
 
