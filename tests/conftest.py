@@ -75,8 +75,13 @@ def _fail_if_a_test_touches_real_state():
     because this fixture used to watch only `replay/state/`. Production has
     no single state directory the way the replay does (`execution/`,
     `candidates/dynamic_candidates.json`, `candidates/status_history.json`,
-    `llm_pipeline/pending_test.json` are all real, dated records), so each is
-    named explicitly below rather than assumed to share one folder.
+    `llm_pipeline/pending_test.json`, `scheduler/previous_status.json` are all
+    real, dated records), so each is named explicitly below rather than assumed
+    to share one folder. `previous_status.json` earns its place for a subtler
+    reason than the others: it is the BASELINE the weekly keep-or-drop review
+    diffs against, so a test overwriting it would not corrupt anything visible
+    -- it would make the next real weekly cycle report status changes that
+    never happened, or miss ones that did.
 
     SKIPPED while a replay is actually running. The check is an mtime diff, so
     it cannot tell a test's write from the replay's own -- and a replay writes
@@ -96,6 +101,7 @@ def _fail_if_a_test_touches_real_state():
         root / "candidates" / "dynamic_candidates.json",
         root / "candidates" / "status_history.json",
         root / "llm_pipeline" / "pending_test.json",
+        root / "scheduler" / "previous_status.json",
     ]
 
     def snapshot():

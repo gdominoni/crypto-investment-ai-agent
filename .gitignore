@@ -46,5 +46,6 @@ execution/live_tests.json
 execution/live_battery_state.json
 execution/confirmation_priors.json
 execution/parked_proposals.json
+scheduler/previous_status.json
 compression_escalated.json
 migration_backup/
