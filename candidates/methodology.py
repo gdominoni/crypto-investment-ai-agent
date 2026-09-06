@@ -1396,7 +1396,7 @@ def format_candidate_details(candidate: str, row: dict, definition: str | None =
     direction = row.get("direction")
     lines.append(f"Status: {_escape_html(STATUS_PLAIN.get(status, status))}" + (f"  (direction: {direction})" if direction else ""))
     if horizon is not None:
-        lines.append(f"Held for: {horizon}d (empirically-derived -- the last walk-forward fold's best-performing horizon; re-checked every week, see the README's Phase 3)")
+        lines.append(f"Held for: {horizon}d (empirically-derived -- the last walk-forward fold's best-performing horizon, re-checked every week)")
     # Gated on CURRENT status being 'accepted' -- milestone_reported/milestone_cleared
     # can persist from a PAST checkpoint reached while this candidate used to be
     # accepted, before later degrading to watch/rejected. Showing "VALIDATED"/"NOT
@@ -1479,7 +1479,7 @@ def format_candidate_details(candidate: str, row: dict, definition: str | None =
         expectancy_bit = f", total expectancy={expectancy:+.1%}" if expectancy is not None else ""
         tpsl_bit = f"TP={tp_mult:.2f}x/SL={sl_mult:.2f}x (of the anchors), " if tp_mult is not None and sl_mult is not None else ""
         lines.append(f"• Reference TP/SL backtest: {tpsl_bit}win rate={win_rate:.1%}, Sortino={sortino:.2f}{expectancy_bit}"
-                      f"  (informational only, doesn't gate status -- see README's Phase 2)")
+                      f"  (informational only, doesn't gate status)")
 
     if status in ("watch", "rejected"):
         lines.append("")

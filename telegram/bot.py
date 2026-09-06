@@ -1018,7 +1018,7 @@ def _dispatch_update(update: dict, client: Anthropic) -> None:
 
 def run_bot() -> None:
     """Long-polls Telegram for updates and dispatches them -- the live
-    process behind every conversation in the README's Phase 4 mockups.
+    process behind every conversation shown in the README's Telegram examples.
     Runs until interrupted; each update is processed and acknowledged
     (via the returned offset) before the next poll, so a crash mid-batch
     re-delivers rather than silently drops a message. `_get_updates()`

@@ -376,6 +376,10 @@ You:     /replay_details 44fb
             2026-08-24  BTCUSDT  +8.17%  (best +9.5%, worst -3.4%)
             2026-08-24  ETHUSDT  +6.68%  (best +8.9%, worst -1.2%)
             2026-08-24  BNBUSDT  +7.56%  (best +10.9%, worst -3.4%)
+            2026-08-24  XRPUSDT  +16.84%  (best +34.1%, worst -8.7%)
+            2026-08-24  DOGEUSDT  +11.99%  (best +25.3%, worst -3.2%)
+            2026-08-24  ADAUSDT  +11.31%  (best +29.8%, worst -4.9%)
+            2026-08-24  LTCUSDT  +8.05%  (best +16.0%, worst -5.2%)
             2026-08-02  LTCUSDT  -1.67%  (best +1.0%, worst -4.0%)
 ```
 
