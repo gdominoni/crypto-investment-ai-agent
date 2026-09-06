@@ -443,6 +443,16 @@ Each fold refits only on periods strictly before its own test period (an expandi
 
 ---
 
+## Multiplicity control has to reach the rows it is meant to correct
+
+**What it is.** `apply_fdr_demotion` builds its family from the battery rows that carry a p-value, so every row `classify_status` could act on must actually carry one. Both loops in `candidates/run_battery.py` — static and dynamic — write `pattern_significant`, `pattern_p_value`, `pattern_oos_sd`, `pattern_excess_return` and `pattern_mfe_mae_ratio` into the row, exactly as `replay/battery.py` does in both of its own.
+
+**Why it needs stating.** The dynamic loop used to compute `pattern` (it needed the horizon) and then not carry those five fields. Benjamini-Hochberg therefore saw a family of 3 — the static candidates — while every LLM-proposed candidate was excluded from it: multiplicity control silently inert for precisely the many-hypotheses family it exists to control. Invisible until production had a populated dynamic registry for the first time, because an empty registry has no rows to leave out. Measured the day it did: **11 accepted before the fix, 2 after**, the second figure matching the replay's own final verdicts candidate for candidate. No individual verdict was ever wrong — `test_novel_condition` runs `pattern_significance` internally and `classify_status` gates on it there — but the family pass, the checkpoint message's significance and power lines, and `prune_recommendation`'s keep/drop advice all read these fields and got nothing.
+
+**Type.** Statistical bug fix. The lesson generalises past this instance: a correction that runs over a family is only as good as the family it can see, and a row that silently fails to join one costs nothing at the time it is written.
+
+---
+
 ## The universe baseline is keyed on the date, not on a row position
 
 **What it is.** `_market_return_over` (`replay/engine.py`, mirrored in `execution/live_testing.py`) computes what simply holding all seven coins did over the same window as one live test — the denominator behind the "Market-Adjusted Excess" line. It looks each coin up **by date** (`index.searchsorted`), because the coins list at different times and are not row-aligned: position 2000 is 2023-02-16 on BTC and 2024-12-25 on DOGE.

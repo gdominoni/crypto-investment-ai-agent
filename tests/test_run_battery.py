@@ -11,6 +11,7 @@ import pytest
 import candidates.run_battery as rb
 import candidates.status_history as sh
 import execution.live_test_state as lts
+import llm_pipeline.dynamic_candidates as dc
 
 
 @pytest.fixture(autouse=True)
@@ -21,6 +22,13 @@ def _isolated_status_history(tmp_path, monkeypatch):
     # (see docs/case_study/methodology-decisions.md) -- without this, a real
     # integration test silently overwrites production's own execution/horizons.json.
     monkeypatch.setattr(lts, "HORIZONS_PATH", tmp_path / "horizons.json")
+    # And the dynamic registry, so this test measures the static battery's own
+    # failure isolation rather than however many conditions happen to be
+    # registered on the machine running it. Left unisolated it silently became a
+    # different test on a developer box than in CI: after the replay's registry
+    # was migrated into production it scored 100+ real candidates and took
+    # minutes, while CI (where the registry file does not exist) still ran six.
+    monkeypatch.setattr(dc, "REGISTRY_PATH", tmp_path / "dynamic_candidates.json")
 
 
 def test_one_broken_candidate_does_not_cost_the_others_their_result(monkeypatch):

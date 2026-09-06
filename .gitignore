@@ -35,3 +35,16 @@ llm_usage.json
 forecast/sentiment_power.json
 replay_run_*.log
 telegram/outbox.json
+
+# Production runtime state -- same rule replay/state/ already follows: these are
+# real, dated records the daemon rewrites continuously, not durable artefacts of
+# the repo. Migrated onto a host by copying them across (see
+# scripts/migrate_replay_state_to_production.py and HOW_TO_RUN.md), never via git.
+candidates/dynamic_candidates.json
+candidates/status_history.json
+execution/live_tests.json
+execution/live_battery_state.json
+execution/confirmation_priors.json
+execution/parked_proposals.json
+compression_escalated.json
+migration_backup/

@@ -226,6 +226,24 @@ def run_all() -> tuple[pd.DataFrame, dict, dict]:
                 "dominant_coin": coin_conc.get("dominant_group"), "max_coin_share": coin_conc.get("max_group_share"),
                 "dominant_year": year_conc.get("dominant_group"), "max_year_share": year_conc.get("max_group_share"),
                 "n_shock_excluded": result.get("n_shock_excluded", 0),  # 0 by construction when the spec's own indicator IS shock_zscore -- see novel_condition_tester.py
+                # The same five the static loop above carries, for the same
+                # reasons. Omitting them here was a real bug, invisible until
+                # production had a populated dynamic registry for the first time:
+                # `apply_fdr_demotion` builds its family from the rows that carry
+                # a p-value, so with these missing EVERY dynamic candidate was
+                # silently excluded from Benjamini-Hochberg -- multiplicity
+                # control inert for exactly the many-hypotheses family it exists
+                # to control. Measured on the migrated registry, that was the
+                # whole difference between 2 accepted (the replay, whose
+                # replay/battery.py does carry them) and 11. No candidate's own
+                # verdict was ever affected -- test_novel_condition runs
+                # pattern_significance internally and classify_status gates on it
+                # there -- but the family pass, the checkpoint message's
+                # significance and power lines, and prune_recommendation's
+                # keep/drop advice all read these and got nothing.
+                "pattern_significant": pattern.get("significant"), "pattern_p_value": pattern.get("p_value"),
+                "pattern_oos_sd": pattern.get("oos_sd"),
+                "pattern_excess_return": pattern.get("excess_return"), "pattern_mfe_mae_ratio": pattern.get("mfe_mae_ratio"),
             }
             if horizon_changed_to is not None:
                 row["horizon_changed_to"] = horizon_changed_to
