@@ -90,6 +90,38 @@ def _remind_about_local_work() -> None:
         _send(message)
 
 
+def _heartbeat() -> None:
+    """Pings an external dead-man's switch, if one is configured.
+
+    Everything else in this project reports its own failures, and that works
+    because something is still alive to do the reporting. This is the one
+    failure that breaks the pattern: a daemon cannot tell you it has stopped,
+    and the host dying takes the messenger with the message. Silence then looks
+    exactly like a quiet week, which is the normal, healthy state here -- so a
+    human would not notice for a long time.
+
+    Only an OUTSIDE observer can catch that, and it has to work by expecting
+    something rather than watching for something: a service that alerts when a
+    ping does NOT arrive. Set HEARTBEAT_URL to a check URL from any dead-man's
+    switch service (healthchecks.io and similar have free tiers) and this pings
+    it after every completed hourly cycle; configure that check to alert if it
+    goes quiet for a few hours.
+
+    Unset, this does nothing at all -- the whole system works without it, and
+    it stays opt-in rather than making a third-party account a requirement.
+
+    Deliberately NOT wired to a Telegram alert on failure: a transient network
+    error here is not worth a message, and a real outage is precisely what the
+    external service is already going to tell you about.
+    """
+    url = os.environ.get("HEARTBEAT_URL")
+    if not url:
+        return
+    import requests
+
+    requests.get(url, timeout=10)
+
+
 def run_forever() -> None:
     load_dotenv()
     token = os.environ["TELEGRAM_BOT_TOKEN"]
@@ -146,6 +178,11 @@ def run_forever() -> None:
             # measured not to fix that. See llm_pipeline/haiku_sonnet_pipeline.py's
             # module docstring and docs/case_study/methodology-decisions.md.
             _run_isolated("compression scan", lambda: run_compression_scan(refresh=False))
+            # Last, and only after the real work: the point is to signal that a
+            # full cycle completed, not merely that the process is running. A
+            # daemon looping without ever finishing a cycle would still be a
+            # dead system, and pinging earlier would report it as healthy.
+            _run_isolated("heartbeat", _heartbeat, alert_on_failure=False)
             last_hourly = now
             state["last_hourly"] = now.isoformat()
             _save_state(state)

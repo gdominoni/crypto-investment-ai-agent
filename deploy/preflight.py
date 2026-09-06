@@ -82,6 +82,17 @@ def _env() -> None:
           "all set" if not missing else f"MISSING: {', '.join(missing)}")
 
 
+def _heartbeat() -> None:
+    """Optional, so never a failure -- but reported loudly either way, because
+    it is the one thing here that guards against a failure the daemon cannot
+    report itself. It is also the easiest step to skip and never think about
+    again, which is precisely why it gets its own line."""
+    url = os.environ.get("HEARTBEAT_URL")
+    check("Dead-man's switch", True,
+          f"configured -> {url.split('//')[-1][:40]}" if url else
+          "NOT SET -- nothing will tell you if this host dies (see deploy/README.md step 3)")
+
+
 def _telegram() -> None:
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     if not token:
@@ -191,6 +202,7 @@ def main() -> int:
     _python_version()
     _imports()
     _env()
+    _heartbeat()
     _telegram()
     _market_data()
     _production_state()

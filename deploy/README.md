@@ -34,6 +34,25 @@ Any provider's smallest tier meets this comfortably. The daemon is not latency-s
 
 ---
 
+## 0. If you are using Oracle Cloud, read this first
+
+Oracle's Always Free tier is genuinely free and generously sized, but it has one policy that lands directly on a system shaped like this one.
+
+**Oracle reclaims idle Always Free instances.** An instance counts as idle if, over a rolling 7-day window, CPU utilisation at the 95th percentile is under 20%, network utilisation is under 20%, and — on Ampere A1 shapes — memory utilisation is under 20%. This daemon sleeps between hourly scans and burns real CPU for about twenty minutes a week. It is exactly the profile that policy is written to catch.
+
+**The fix is to upgrade the account to Pay As You Go.** Always Free allowances remain free after upgrading — you are charged only for usage beyond them — and instances are no longer subject to idle reclamation. It requires a payment method on file. Set a budget alert at a low threshold if that makes you more comfortable; nothing this project runs touches a paid resource.
+
+Whatever you decide, **configure the heartbeat in step 3**. Reclamation is not the only way a host can die, and this daemon cannot tell you it has stopped — see that step for why silence is the one failure it cannot report.
+
+Two smaller things:
+
+- **Shape.** `VM.Standard.A1.Flex` (Ampere, ARM) is the better free shape by a wide margin — 4 OCPU and 24 GB against the AMD micro's single core and 1 GB. ARM is fine here: pandas, numpy and pyarrow all ship `aarch64` wheels, and everything else is pure Python. Ask for a small slice (1 OCPU, 6 GB is already luxurious against a 140 MB peak). If you hit **"Out of host capacity"**, that is a well-known A1 shortage in busy regions, not a mistake on your part — try another availability domain, another region, or retry later.
+- **Networking.** Nothing needs to reach this host from outside except your own SSH. The daemon only makes outbound connections (Telegram, Binance, Anthropic), so you can leave the default security list alone and skip opening any port.
+
+The default login user on Oracle's Ubuntu images is `ubuntu`, not `root`. Prefix the commands in step 1 with `sudo`.
+
+---
+
 ## 1. Create the box
 
 Any provider, smallest tier, **Ubuntu 24.04 LTS**. Add your SSH key during creation rather than using a root password.
@@ -79,6 +98,18 @@ ANTHROPIC_API_KEY=sk-ant-...
 TELEGRAM_BOT_TOKEN=...
 TELEGRAM_CHAT_ID=...
 ```
+
+Then one optional fourth line, which is the only thing that can tell you the host has died:
+
+```
+HEARTBEAT_URL=https://hc-ping.com/<your-check-uuid>
+```
+
+Everything else in this system reports its own failures, and that works because something is still alive to do the reporting. The host dying is the one case that breaks — it takes the messenger along with the message. The resulting silence is indistinguishable from a quiet week, which here is the normal, healthy state, so you would not notice for a long time.
+
+Only an outside observer can catch that, and it has to work by *expecting* a signal rather than watching for one. Create a check on any dead-man's-switch service ([healthchecks.io](https://healthchecks.io) has a free tier; several others do too), paste its ping URL here, and set it to alert you if it goes quiet for a few hours. The daemon pings it after each completed hourly cycle — after the real work, so it vouches for a cycle that actually finished rather than merely for a process that is running.
+
+Leave the line out and nothing happens: the system runs exactly the same, with no third-party account required. On Oracle Cloud in particular, do not leave it out.
 
 ```bash
 chmod 600 .env
@@ -162,6 +193,8 @@ journalctl -u crypto-agent -f      # follow the log; Ctrl+C stops following, not
 
 **Restarting is safe.** Last-run timestamps persist in `scheduler/live_daemon_state.json`, so a restart does not re-fire jobs that already ran, and does not lose the schedule.
 
-**You do not need to watch it.** Every scheduled job is isolated: one failing sends a Telegram alert naming it and is retried on its next normal cycle, without taking the daemon down. If the *process* dies, systemd restarts it after 30 seconds — and gives up after 5 failures in 10 minutes, because a daemon crash-looping on a bad config will not fix itself by trying harder. Silence from the bot means nothing is wrong; that is the design.
+**You do not need to watch it.** Every scheduled job is isolated: one failing sends a Telegram alert naming it and is retried on its next normal cycle, without taking the daemon down. If the *process* dies, systemd restarts it after 30 seconds — and gives up after 5 failures in 10 minutes, because a daemon crash-looping on a bad config will not fix itself by trying harder.
+
+**Silence from the bot means nothing is wrong — with one exception.** Quiet is the normal, healthy state here: the message set was deliberately trimmed to the few things worth interrupting you for. The exception is that a dead *host* is also silent, and looks identical. That is the entire job of the `HEARTBEAT_URL` from step 3, and the reason to bother setting it up: it converts an absence, which humans do not notice, into an alert, which they do.
 
 **Once a month** it may ask you to run the hyperopt cross-check on your own machine, with the command already filled in. That is the only thing it ever needs a human for.

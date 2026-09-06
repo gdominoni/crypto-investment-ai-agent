@@ -147,3 +147,80 @@ def test_the_systemd_unit_restarts_and_logs():
         "indistinguishable from a hung daemon")
     assert "-m scheduler.live_daemon" in unit
     assert "WantedBy=multi-user.target" in unit, "the service would not start on boot"
+
+
+class TestTheDeadMansSwitch:
+    """Every other failure in this project reports itself, which works because
+    something is still alive to do the reporting. The host dying is the one
+    case that breaks: it takes the messenger with the message, and the
+    resulting silence is indistinguishable from a quiet week -- the normal,
+    healthy state here. Only an outside observer expecting a ping can catch
+    that.
+
+    This matters more than it would elsewhere because of where this runs:
+    Oracle Cloud reclaims Always Free instances idle over a 7-day window
+    (CPU p95 < 20%), and a daemon that sleeps between hourly scans is exactly
+    that shape."""
+
+    def test_it_does_nothing_at_all_when_unconfigured(self, monkeypatch):
+        """It must stay opt-in: no third-party account should be a
+        requirement for running this system."""
+        import scheduler.live_daemon as D
+
+        monkeypatch.delenv("HEARTBEAT_URL", raising=False)
+
+        def explode(*a, **k):
+            raise AssertionError("an unconfigured heartbeat made a network call")
+
+        import requests
+        monkeypatch.setattr(requests, "get", explode)
+        D._heartbeat()  # must simply return
+
+    def test_it_pings_the_configured_url(self, monkeypatch):
+        import requests
+
+        import scheduler.live_daemon as D
+
+        called = []
+        monkeypatch.setenv("HEARTBEAT_URL", "https://example.invalid/ping/abc")
+        monkeypatch.setattr(requests, "get", lambda url, **kw: called.append((url, kw)))
+        D._heartbeat()
+        assert called and called[0][0] == "https://example.invalid/ping/abc"
+        assert called[0][1].get("timeout"), "a hung ping would stall the hourly cycle"
+
+    def test_it_pings_only_after_the_cycle_it_vouches_for(self):
+        """Pinging before the work would report a daemon that loops without
+        ever completing a cycle as healthy."""
+        import ast
+        import inspect
+        import textwrap
+
+        import scheduler.live_daemon as D
+
+        tree = ast.parse(textwrap.dedent(inspect.getsource(D.run_forever)))
+        names = [n.args[0].value for n in ast.walk(tree)
+                 if isinstance(n, ast.Call) and getattr(n.func, "id", None) == "_run_isolated"
+                 and n.args and isinstance(n.args[0], ast.Constant)]
+        assert "heartbeat" in names, "the heartbeat is no longer scheduled"
+        for job in ("market data refresh", "mechanical trigger scan", "compression scan"):
+            assert names.index("heartbeat") > names.index(job), (
+                f"the heartbeat fires before '{job}' -- it would vouch for work that has not run")
+
+    def test_a_failed_ping_never_becomes_a_telegram_alert(self):
+        """A transient network blip is not worth a message, and a real outage
+        is exactly what the external service is already about to report."""
+        import ast
+        import inspect
+        import textwrap
+
+        import scheduler.live_daemon as D
+
+        tree = ast.parse(textwrap.dedent(inspect.getsource(D.run_forever)))
+        for node in ast.walk(tree):
+            if (isinstance(node, ast.Call) and getattr(node.func, "id", None) == "_run_isolated"
+                    and node.args and getattr(node.args[0], "value", None) == "heartbeat"):
+                kwargs = {k.arg: getattr(k.value, "value", None) for k in node.keywords}
+                assert kwargs.get("alert_on_failure") is False, (
+                    "a failed heartbeat ping would now send a Telegram alert")
+                return
+        raise AssertionError("no heartbeat job found")
