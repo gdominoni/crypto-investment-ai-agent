@@ -145,6 +145,11 @@ def test_run_compression_scan_reaches_telegram_end_to_end(monkeypatch, tmp_path)
     monkeypatch.setenv("TELEGRAM_CHAT_ID", "test-chat")
     monkeypatch.setattr(H, "load_dotenv", lambda *a, **k: None)
     monkeypatch.setattr(H, "Anthropic", lambda **kw: object())
+    # This test is about send_telegram being reached end-to-end, not about
+    # whether this specific synthetic condition has enough real historical
+    # occurrences -- is_testable()/relax_to_testable() are covered by their
+    # own tests in test_novel_condition_tester.py.
+    monkeypatch.setattr(H, "is_testable", lambda spec, coins: None)
 
     monkeypatch.setattr(pending_tests, "PENDING_TESTS_PATH", tmp_path / "pending_test.json")
     monkeypatch.setattr(fetcher, "update_all", lambda coins: None)

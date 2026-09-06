@@ -10,12 +10,17 @@ import pytest
 
 import candidates.run_battery as rb
 import candidates.status_history as sh
+import execution.live_test_state as lts
 
 
 @pytest.fixture(autouse=True)
 def _isolated_status_history(tmp_path, monkeypatch):
     monkeypatch.setattr(sh, "HISTORY_PATH", tmp_path / "status_history.json")
     monkeypatch.setattr(sh, "SHUTDOWN_FLAG_PATH", tmp_path / "SHUTDOWN")
+    # run_all() re-derives and re-saves every candidate's horizon on every run
+    # (see docs/case_study/methodology-decisions.md) -- without this, a real
+    # integration test silently overwrites production's own execution/horizons.json.
+    monkeypatch.setattr(lts, "HORIZONS_PATH", tmp_path / "horizons.json")
 
 
 def test_one_broken_candidate_does_not_cost_the_others_their_result(monkeypatch):

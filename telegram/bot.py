@@ -593,13 +593,13 @@ def handle_propose_callback(callback_data: str) -> str:
     pending = pop_pending_test_by_id(pending_id)
     if pending is None:
         return "This proposal already expired or was already answered."
-    specs, coins, live_coin, signal_class = pending
+    specs, coins, live_coin, signal_class, proposed_at = pending
     # One button covers the whole proposal SET -- see push_pending_test. Each
     # condition is still tested on its own; splitting one idea into two
     # measurable halves only helps if both halves get tested.
     return "\n\n".join(
         handle_test_it_confirmation(sp, coins, approved_by="telegram_user",
-                                     live_coin=live_coin, signal_class=signal_class)
+                                     live_coin=live_coin, signal_class=signal_class, proposed_at=proposed_at)
         for sp in specs)
 
 
@@ -614,7 +614,8 @@ def handle_replay_propose_callback(callback_data: str) -> str:
 
 
 def handle_test_it_confirmation(pending_spec: ConditionSpec, coins: list[str], approved_by: str,
-                                 live_coin: str | None = None, signal_class: str = "manual") -> str:
+                                 live_coin: str | None = None, signal_class: str = "manual",
+                                 proposed_at: str | None = None) -> str:
     """Fired when a human presses the "Test It" button (never a free-text
     reply -- see handle_propose_callback's own docstring for why) -- this
     calls Phase 1's own methodology engine directly (test_novel_condition -> the same
@@ -634,7 +635,15 @@ def handle_test_it_confirmation(pending_spec: ConditionSpec, coins: list[str], a
     regardless of outcome, the result is recorded in the dynamic-
     candidate registry (llm_pipeline/dynamic_candidates.py) so it's
     re-tested weekly alongside the static battery from now on, and so a
-    rejected condition isn't silently re-proposed later."""
+    rejected condition isn't silently re-proposed later.
+
+    `proposed_at` (from the pending-test queue entry, None for a fresh
+    proposal tested the same day) is when this hypothesis was actually
+    written down -- used below to compute how many of its occurrences
+    already postdate it, the same accounting replay/engine.py's
+    `_resolve_one_proposal` does, so a candidate promoted out of the
+    parked-proposals queue doesn't start its CONFIRMED checkpoint from
+    zero despite years of prospective evidence already behind it."""
     condition_str = f"{condition_desc(pending_spec)} → {pending_spec.direction}"
     result = test_novel_condition(pending_spec, coins)
     status = result["status"]
@@ -651,6 +660,10 @@ def handle_test_it_confirmation(pending_spec: ConditionSpec, coins: list[str], a
     # observed case: Sonnet correctly said "not listed... so I can't state its
     # status" for a candidate that WAS already live-testing).
     record_status(pending_spec.label, status)
+    from candidates.methodology import prospective_split
+    from execution import live_test_state as _live_test_state
+    _prior = prospective_split(pending_spec, coins, proposed_at or datetime.now(timezone.utc).date()).get("n_after", 0)
+    _live_test_state.save_confirmation_prior(pending_spec.label, _prior)
     pattern = result.get("pattern_significance") or {}
     lines = [
         f"<b>Historical backtest -- {escape_html(pending_spec.label)}</b>",

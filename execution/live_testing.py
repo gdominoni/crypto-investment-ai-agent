@@ -25,14 +25,19 @@ from anthropic import Anthropic
 
 from candidates.data_loading import load_daily, load_funding, load_hourly
 from candidates.definitions import CANDIDATE_DIRECTIONS, TRIGGER_DESCRIPTIONS, compute_triggers
-from candidates.methodology import path_outcome, prune_recommendation
+from candidates.methodology import SIGNIFICANCE_ALPHA, path_outcome, prune_recommendation, required_n_for_power
 from candidates.run_battery import COINS
 from candidates import status_history as sh
 from execution import hyperopt_runner
 from execution import live_test_state as state
 from llm_pipeline.dynamic_candidates import registered_specs
-from llm_pipeline.novel_condition_tester import ConditionSpec, clause_signal_hourly
-from telegram.bot import _send, escape_html
+from llm_pipeline.novel_condition_tester import (
+    ConditionSpec, clause_signal_hourly, condition_desc, is_testable, relax_to_testable,
+    spec_from_dict, spec_to_dict,
+)
+from llm_pipeline.haiku_sonnet_pipeline import PROPOSAL_KEYBOARD_TEMPLATE
+from llm_pipeline.pending_tests import push_pending_test
+from telegram.bot import _send, escape_html, short_id as _short_id
 
 PLACEHOLDER_HORIZON_DAYS = 7  # neutral default (middle of HORIZONS_DAYS) -- see docs/case_study/methodology-decisions.md
 BACKDATE_LOOKBACK_DAYS = 14  # how far back a newly-discovered condition's own triggering occurrence may be backdated
@@ -110,7 +115,7 @@ def _open_live_test(candidate: str, coin: str, direction: str, decision_date: pd
 
 def _check_consecutive_failures(candidate: str) -> None:
     """Fires immediately after a live test resolves, only for a
-    VALIDATED candidate (milestone_cleared -- see status_history.py),
+    CONFIRMED candidate (milestone_cleared -- see status_history.py),
     only for those: a well-established candidate's own aggregate
     significance test is, by design, resistant to a short losing streak
     (verified directly: a strong candidate can absorb 20-30 consecutive
@@ -141,7 +146,7 @@ def _check_consecutive_failures(candidate: str) -> None:
     ratio = mean_mfe / mean_mae if mean_mae else float("nan")
     lines = [
         f"<b>Consecutive-failure alert -- {escape_html(candidate)}</b>\n",
-        f"The last <b>{streak}</b> live test(s) for this VALIDATED candidate resolved negative in a row.\n",
+        f"The last <b>{streak}</b> live test(s) for this CONFIRMED candidate resolved negative in a row.\n",
         f"Last {len(window)} occurrence(s) for context:",
     ]
     for t in window:
@@ -301,43 +306,58 @@ PRUNE_KEYBOARD_TEMPLATE = lambda candidate: {
 }
 
 
-def _effective_milestone_count(candidate: str, backtest_n: int | None, live_n: int) -> int:
-    """What counts toward a validation checkpoint differs by how the
-    candidate was found. Static candidates (C1/C2/C6) were derived by
-    directly mining this project's own historical data (a prior,
-    dedicated research phase -- see docs/case_study/methodology-decisions.md)
-    -- a direct look-then-test risk, so only genuinely prospective
-    evidence (real resolved live tests) counts toward validating them,
-    unchanged from before. Dynamic (Sonnet-proposed) candidates carry
-    only a much weaker, diffuse version of that risk (Sonnet never sees
-    this project's own backtest results before proposing -- only a
-    live snapshot plus whatever general market-pattern knowledge its
-    training absorbed), so they use a rolling window of the most recent
-    50 occurrences, backtest and live mixed, chronologically -- since
-    every live occurrence is by definition more recent than every
-    backtest one, this is equivalent to filling the window with live
-    occurrences first and topping up with the most recent backtest ones
-    only while live_n hasn't reached 50 yet. Once a dynamic candidate
-    accumulates 50 real live tests on its own, backtest contributes
-    nothing further -- this collapses to the exact same live-only rule
-    the static candidates always use."""
-    if candidate in CANDIDATE_DIRECTIONS or live_n >= sh.MILESTONE_N:
+def _effective_milestone_count(candidate: str, prior_confirmations: int | None, live_n: int) -> int:
+    """How many occurrences count toward CONFIRMING this candidate.
+
+    An occurrence counts when it happened AFTER the hypothesis was written
+    down -- the same rule replay/engine.py's own version of this function
+    uses. `prior_confirmations` is that count, computed once at registration
+    (`telegram/bot.py::handle_test_it_confirmation`, via
+    `candidates.methodology.prospective_split`) and stored in
+    `execution/live_test_state.py::load_confirmation_priors()`. It is
+    nonzero only for a candidate promoted out of the parked-proposals queue
+    (see `_check_parked_proposals` below) -- a freshly-tested proposal has
+    nothing that could have postdated it yet, so it starts at zero, same as
+    a static candidate.
+
+    Static candidates (C1/C2/C6) count live occurrences only: they were
+    mined from this project's own history, so none of their historical
+    occurrences postdates the hypothesis -- this rule gives them the same
+    zero their special case always gave.
+
+    This REPLACES an earlier version that topped a dynamic candidate up
+    with its FULL backtest count regardless of when it was written --
+    letting a candidate with 120 historical occurrences reach its
+    checkpoint on day one with zero live evidence, which is wrong for the
+    same reason an occurrence from 2019 cannot confirm a hypothesis
+    written in 2023 (see docs/case_study/methodology-decisions.md)."""
+    if candidate in CANDIDATE_DIRECTIONS:
         return live_n
-    return min(backtest_n or 0, sh.MILESTONE_N - live_n) + live_n
+    return int(prior_confirmations or 0) + live_n
+
+
+def _required_n_for(candidate: str, status_summary: dict) -> float:
+    """How many occurrences this candidate needs before a null from it would
+    mean anything, derived from its own realised volatility. NaN when that
+    is not computable yet, in which case the message prints the achieved
+    count alone rather than inventing a denominator."""
+    sd = status_summary.get(candidate, {}).get("pattern_oos_sd")
+    return required_n_for_power(sd) if isinstance(sd, (int, float)) else float("nan")
 
 
 def check_n50_milestones(status_summary: dict, client: Anthropic) -> None:
     """Mirrors replay/engine.py::_check_n50_milestones exactly -- NOT
     one-time, fires again every time a candidate crosses a NEW multiple
-    of 50 in its own _effective_milestone_count (50, 100, 150, ...),
-    each time re-asking the human whether to keep testing or drop it,
-    real data instead of simulated. `status_summary` is the caller's
+    of sh.MILESTONE_N (20) in its own _effective_milestone_count, each
+    time re-asking the human whether to keep testing or drop it, real
+    data instead of simulated. `status_summary` is the caller's
     freshly-computed battery result (e.g. weekly_revalidation.py's
     `result` DataFrame keyed by candidate) -- not re-derived here."""
     today_str = str(pd.Timestamp.now().date())
     live_counts = _resolved_live_test_counts()
-    counts = {c: _effective_milestone_count(c, status_summary.get(c, {}).get("n"), live_counts.get(c, 0))
-              for c in set(live_counts) | set(status_summary)}
+    priors = state.load_confirmation_priors()
+    counts = {c: _effective_milestone_count(c, priors.get(c), live_counts.get(c, 0))
+              for c in set(live_counts) | set(status_summary) | set(priors)}
     for candidate in sh.candidates_due_for_milestone(counts):
         n_reached = (counts.get(candidate, 0) // sh.MILESTONE_N) * sh.MILESTONE_N
         live_n = live_counts.get(candidate, 0)
@@ -345,15 +365,6 @@ def check_n50_milestones(status_summary: dict, client: Anthropic) -> None:
         status = info.get("status") or sh.all_latest_statuses().get(candidate, {}).get("status", "unknown")
         cleared = status == "accepted"
         is_static = candidate in CANDIDATE_DIRECTIONS
-        if info.get("n") is not None:
-            n, sig, p = info["n"], info.get("pattern_significant"), info.get("pattern_p_value")
-            criteria = [f"backtest N={n} ({'meets' if n > 50 else 'below'} the minimum of {sh.MILESTONE_N})"]
-            if sig is not None:
-                criteria.append(f"pattern significance: {'significant' if sig else 'not significant'}" +
-                                 (f" (p={p:.3f})" if p is not None else ""))
-            criteria_str = "; ".join(criteria)
-        else:
-            criteria_str = "no current backtest data"
         trigger_desc = _trigger_description(candidate)
         # Mirrors replay/engine.py: the opinion here was formed from the numbers
         # already in this message, with nothing added and no verification behind
@@ -361,26 +372,119 @@ def check_n50_milestones(status_summary: dict, client: Anthropic) -> None:
         # can use what the opinion could not -- whether there was POWER to detect
         # an effect, which is what separates "no" from "we could not tell".
         _verdict, advice = prune_recommendation(info)
-        count_basis = (f"{live_n} real live occurrence(s) so far" if is_static else
-                       f"{n_reached} recent occurrence(s) so far ({live_n} real live, the rest backtest -- "
-                       f"static candidates count real live occurrences only; this one is Sonnet-proposed, so "
-                       f"backtest tops up the count only until it has 50 real live occurrences of its own)")
+        # "The trend happened" and "the trend happened BECAUSE of this condition"
+        # are different claims -- the checkpoint carries the rate net of what
+        # simply holding the market did.
+        _closed = [t for t in state.load_trade_log()
+                   if t["candidate"] == candidate and t["status"] == "closed"]
+        _adj = [t["forward_return"] - t["baseline_return"] for t in _closed
+                if isinstance(t.get("baseline_return"), (int, float))
+                and t["baseline_return"] == t["baseline_return"]]
+        raw_w = (sum(1 for t in _closed if t["forward_return"] > 0) / len(_closed)) if _closed else float("nan")
+        adj_w = (sum(1 for r in _adj if r > 0) / len(_adj)) if _adj else float("nan")
+
+        need = _required_n_for(candidate, status_summary)
+        p_val = info.get("pattern_p_value")
+        sig = info.get("pattern_significant")
+        if p_val is None:
+            sig_line = "Pattern Significance: NOT TESTED (no result on this sample yet)"
+        else:
+            verdict_word = "SIGNIFICANT" if sig else "NOT SIGNIFICANT"
+            sig_line = (f"Pattern Significance: <b>{verdict_word}</b> "
+                        f"(p = {p_val:.3f} | Target: p &lt; {SIGNIFICANCE_ALPHA:.3f})")
+        if need == need:
+            powered = n_reached >= need
+            verdict = ("SAMPLE SUFFICIENT -- a null here is a measurement" if powered
+                        else "Incomplete Sample for 80% Power")
+            power_line = f"Power Progress: {n_reached:,} / {need:,.0f} occurrences ({verdict})"
+        else:
+            power_line = f"Power Progress: {n_reached:,} occurrences (required sample not yet computable)"
+
+        mfe_mae_line = "MFE / MAE: not enough resolved occurrences yet"
+        trend_line = f"Trend Realized: {raw_w:.1%}" if _closed else "Trend Realized: no resolved occurrences yet"
+        lift_line = ""
+        if _closed:
+            _mfe = sum(t["mfe"] for t in _closed) / len(_closed)
+            _mae = abs(sum(abs(t["mae"]) for t in _closed) / len(_closed))
+            ratio = f" (Ratio: {_mfe / _mae:.2f})" if _mae else ""
+            mfe_mae_line = f"MFE / MAE: {_mfe:+.2%} / {-_mae:+.2%}{ratio}"
+        if _adj:
+            lift_line = (f"\n• Market-Adjusted Excess: {sum(_adj) / len(_adj):+.2%} per occurrence "
+                         f"vs universe baseline ({adj_w:.0%} positive after adjustment)")
+
         message = (
             f"<b>{today_str}</b>\n\n"
-            f"<b>Checkpoint at {n_reached} occurrences -- {escape_html(candidate)}</b>\n\n"
-            f"({escape_html(trigger_desc)})\n\n"
-            f"<b>{'VALIDATED' if cleared else 'NOT validated'}</b> -- {'cleared' if cleared else 'did not clear'} the "
-            f"acceptance bar as of this checkpoint ({count_basis}).\n"
-            f"{escape_html(criteria_str)}. (No single coin or period may carry more than 60% of the positive "
-            f"return either, for either check to pass.)\n\n"
-            f"Current status: <b>{escape_html(status)}</b>\n"
-            f"Re-evaluated fresh at every {sh.MILESTONE_N}-occurrence checkpoint, not a permanent verdict -- re-checked "
-            f"again at {n_reached + sh.MILESTONE_N} either way, unless dropped below.\n\n"
-            f"{escape_html(hyperopt_runner.format_result(candidate))}\n\n"
+            f"<b>STATUS UPDATE: {escape_html(status.upper())}</b>\n"
+            f"Candidate: <b>{escape_html(candidate)}</b> <code>{_short_id(candidate)}</code>\n"
+            f"<i>({escape_html(trigger_desc)})</i>\n\n"
+            f"<b>--- VERDICT &amp; POWER ---</b>\n"
+            f"• {sig_line}\n"
+            f"• {power_line}\n\n"
+            f"<b>--- PERFORMANCE &amp; EXCURSION ---</b>\n"
+            f"• {trend_line}{lift_line}\n"
+            f"• {mfe_mae_line}\n\n"
+            f"<b>--- EXECUTION (HYPEROPT) ---</b>\n"
+            f"• {escape_html(hyperopt_runner.format_result(candidate, short=True))}\n\n"
+            f"<b>---</b>\n"
+            f"Next Checkpoint: {n_reached + sh.MILESTONE_N:,} occurrences "
+            f"(re-evaluated fresh each time, never a permanent verdict)\n"
+            f"<b>{'CONFIRMED' if cleared else 'NOT confirmed'}</b> at this checkpoint. "
+            f"<i>Confirmed, not validated: persistence on an enlarged sample, not proof -- "
+            f"a conclusive test needs the occurrence count shown above.</i>\n"
             f"Assessment: {escape_html(advice)}"
         )
         _send(message, reply_markup=PRUNE_KEYBOARD_TEMPLATE(candidate))
         sh.mark_milestone_reported(candidate, n_reached, cleared)
+
+
+def _check_parked_proposals() -> None:
+    """Re-checks every parked proposal (see
+    `llm_pipeline/haiku_sonnet_pipeline.py::run_compression_scan`, where a
+    too-rare proposal that couldn't even be rescued by
+    `relax_to_testable` is parked here rather than discarded) and
+    promotes any that have become testable back to the human for
+    approval, carrying the proposal's ORIGINAL `proposed_at` date forward
+    so a later CONFIRMED checkpoint counts only occurrences that postdate
+    the actual hypothesis, not its promotion.
+
+    Intended to run once a day (see scheduler/live_daemon.py's daily
+    cadence) -- unlike replay/engine.py's own version, this does NOT
+    stagger the queue across several days. Staggering exists there
+    because a compressed nine-year replay accumulates up to ~100 parked
+    proposals and `is_testable()` costs ~146ms each -- unstaggered, ~9
+    hours of wall-clock per simulated day. Production accumulates parked
+    proposals at real-world speed, so even a few dozen entries cost only
+    seconds once a day; the complexity that problem justified doesn't
+    apply here.
+
+    Also unlike the replay (a single pending slot, so only the oldest
+    testable proposal is promoted per check), every proposal that becomes
+    testable today is promoted: production's pending-test queue already
+    supports several proposals awaiting a human answer at once (each with
+    its own id and its own buttons -- see llm_pipeline/pending_tests.py),
+    so there is no slot to protect."""
+    parked = state.load_parked_proposals()
+    for entry in sorted(parked, key=lambda e: e.get("proposed_at", "")):
+        try:
+            spec = spec_from_dict(entry["spec"])
+        except ValueError:
+            state.unpark_proposal(entry["spec"].get("label", ""))
+            continue
+        if is_testable(spec, COINS) is not None:
+            continue
+        state.unpark_proposal(spec.label)
+        proposed_at = entry.get("proposed_at")
+        pending_id = push_pending_test(spec, COINS, live_coin=None, signal_class="promoted_from_parking",
+                                        proposed_at=proposed_at)
+        message = (
+            f"<b>{str(pd.Timestamp.now().date())}</b>\n\n"
+            f"<b>A parked hypothesis now has enough history to test</b>\n\n"
+            f"Proposed {proposed_at}, parked because it had not occurred often enough to measure. "
+            f"It has now.\n\n"
+            f"<b>{escape_html(spec.label)}</b>\n"
+            f"({escape_html(condition_desc(spec))} → {spec.direction.upper()})"
+        )
+        _send(message, reply_markup=PROPOSAL_KEYBOARD_TEMPLATE(pending_id))
 
 
 def run_once() -> None:

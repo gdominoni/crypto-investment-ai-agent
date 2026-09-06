@@ -60,12 +60,23 @@ def isolated_replay_state(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def _fail_if_a_test_touches_real_replay_state():
-    """Backstop: fail loudly if any test writes into the real state directory.
+def _fail_if_a_test_touches_real_state():
+    """Backstop: fail loudly if any test writes into real replay OR
+    production state.
 
     The isolation fixture above is opt-in, and an opt-in guard protects only the
     tests that remember to ask for it. This one runs everywhere and turns a
     silent corruption of live state into a failing test naming the file.
+
+    Watches production's own state too, not just the replay's -- added after
+    a real incident: a compression-scan test exercised the (unmocked)
+    is_testable()/park_proposal() path for real and silently wrote a stray
+    entry into the actual `execution/parked_proposals.json`, undetected
+    because this fixture used to watch only `replay/state/`. Production has
+    no single state directory the way the replay does (`execution/`,
+    `candidates/dynamic_candidates.json`, `candidates/status_history.json`,
+    `llm_pipeline/pending_test.json` are all real, dated records), so each is
+    named explicitly below rather than assumed to share one folder.
 
     SKIPPED while a replay is actually running. The check is an mtime diff, so
     it cannot tell a test's write from the replay's own -- and a replay writes
@@ -75,16 +86,25 @@ def _fail_if_a_test_touches_real_replay_state():
     assertion, which is the only thing it must never do. Detected via the lock
     file the orchestrator holds for the duration of a run."""
     root = Path(__file__).resolve().parent.parent
-    real_dir = root / "replay" / "state"
-    if _a_replay_is_running(real_dir / "replay.lock"):
+    replay_dir = root / "replay" / "state"
+    if _a_replay_is_running(replay_dir / "replay.lock"):
         yield
         return
 
+    execution_dir = root / "execution"
+    production_files = [
+        root / "candidates" / "dynamic_candidates.json",
+        root / "candidates" / "status_history.json",
+        root / "llm_pipeline" / "pending_test.json",
+    ]
+
     def snapshot():
-        # The Telegram outbox is watched alongside the state directory: it holds
-        # undelivered evidence from a real run, and a test that drained or
-        # overwrote it would destroy exactly what it exists to protect.
-        files = list(real_dir.glob("*")) if real_dir.exists() else []
+        # The Telegram outbox is watched alongside the state directories: it
+        # holds undelivered evidence from a real run, and a test that drained
+        # or overwrote it would destroy exactly what it exists to protect.
+        files = list(replay_dir.glob("*")) if replay_dir.exists() else []
+        files += list(execution_dir.glob("*.json")) if execution_dir.exists() else []
+        files += [p for p in production_files if p.exists()]
         outbox = root / "telegram" / "outbox.json"
         if outbox.exists():
             files.append(outbox)
@@ -95,9 +115,12 @@ def _fail_if_a_test_touches_real_replay_state():
     after = snapshot()
     touched = [p.name for p in set(before) | set(after) if before.get(p) != after.get(p)]
     assert not touched, (
-        f"test wrote into the REAL replay state: {sorted(touched)}. "
-        f"Use the `isolated_replay_state` fixture -- patching STATE_DIR alone is "
-        f"not enough, the per-file path constants are computed at import."
+        f"test wrote into REAL replay or production state: {sorted(touched)}. "
+        f"Replay: use the `isolated_replay_state` fixture -- patching STATE_DIR "
+        f"alone is not enough, the per-file path constants are computed at "
+        f"import. Production: monkeypatch the specific path constant in "
+        f"execution/live_test_state.py, candidates/status_history.py, "
+        f"candidates/dynamic_candidates.py, or llm_pipeline/pending_tests.py."
     )
 
 

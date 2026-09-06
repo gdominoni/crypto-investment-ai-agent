@@ -35,7 +35,7 @@ from anthropic import Anthropic
 from dotenv import load_dotenv
 
 from candidates.atomic_json import write_json
-from execution.live_testing import run_once as run_live_testing
+from execution.live_testing import _check_parked_proposals, run_once as run_live_testing
 from llm_pipeline.haiku_sonnet_pipeline import run_compression_scan
 from scheduler.weekly_revalidation import run_weekly_revalidation
 from telegram.bot import _dispatch_update, _get_updates, _send
@@ -43,6 +43,7 @@ from telegram.bot import _dispatch_update, _get_updates, _send
 STATE_PATH = Path(__file__).resolve().parent / "live_daemon_state.json"
 
 HOURLY_INTERVAL = timedelta(hours=1)
+DAILY_INTERVAL = timedelta(days=1)
 WEEKLY_INTERVAL = timedelta(days=7)
 POLL_TIMEOUT = 25  # seconds -- how long each Telegram long-poll waits for a new update
 POLL_FAILURE_BACKOFF = 10  # seconds -- avoid hammering Telegram's API during a real outage
@@ -85,11 +86,14 @@ def run_forever() -> None:
     state = _load_state()
     now = datetime.now(timezone.utc)
     last_hourly = datetime.fromisoformat(state["last_hourly"]) if "last_hourly" in state else now - HOURLY_INTERVAL
+    last_daily = datetime.fromisoformat(state["last_daily"]) if "last_daily" in state else now - DAILY_INTERVAL
     last_weekly = datetime.fromisoformat(state["last_weekly"]) if "last_weekly" in state else now - WEEKLY_INTERVAL
 
     offset = None
-    print("Live daemon started -- Telegram bot, hourly scans, and weekly re-validation all running in this one process.")
-    _send("<b>Live daemon started.</b> Hourly scans and weekly re-validation are now running automatically.")
+    print("Live daemon started -- Telegram bot, hourly scans, daily parked-proposal re-check, and weekly "
+          "re-validation all running in this one process.")
+    _send("<b>Live daemon started.</b> Hourly scans, the daily parked-proposal re-check, and weekly "
+          "re-validation are now running automatically.")
 
     while True:
         try:
@@ -118,6 +122,15 @@ def run_forever() -> None:
             _run_isolated("compression scan", run_compression_scan)
             last_hourly = now
             state["last_hourly"] = now.isoformat()
+            _save_state(state)
+
+        if now - last_daily >= DAILY_INTERVAL:
+            # Cheap: even a few dozen parked proposals cost seconds, not the
+            # hours a compressed nine-year replay would spend unstaggered --
+            # see _check_parked_proposals's own docstring.
+            _run_isolated("parked-proposal re-check", _check_parked_proposals)
+            last_daily = now
+            state["last_daily"] = now.isoformat()
             _save_state(state)
 
         if now - last_weekly >= WEEKLY_INTERVAL:

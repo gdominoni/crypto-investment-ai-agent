@@ -61,7 +61,7 @@ def _drop_expired(queue: list[dict]) -> list[dict]:
 
 
 def push_pending_test(specs, coins: list[str], live_coin: str | None, signal_class: str,
-                       expires_hours: float = 48.0) -> str:
+                       expires_hours: float = 48.0, proposed_at: str | None = None) -> str:
     """Queue a proposal SET for one human decision. Returns the entry's id, so
     the caller can embed it in that message's own Test It / Don't Test It buttons.
 
@@ -69,7 +69,14 @@ def push_pending_test(specs, coins: list[str], live_coin: str | None, signal_cla
     whole set deliberately: a call now returns up to two hypotheses that are two
     halves of one idea, and splitting an idea into measurable halves only helps
     if both halves are actually tested. Asking twice would let a human approve
-    one and forget the other."""
+    one and forget the other.
+
+    `proposed_at` (a date string) is when the hypothesis was FIRST proposed --
+    defaults to today for a fresh proposal, but a proposal promoted out of
+    `execution/live_test_state.py`'s parked-proposals queue passes its real,
+    original date through here so a later CONFIRMED checkpoint only counts
+    occurrences that postdate the actual hypothesis, not its promotion (see
+    docs/case_study/methodology-decisions.md)."""
     if isinstance(specs, ConditionSpec):
         specs = [specs]
     queue = _drop_expired(_load_queue())
@@ -84,6 +91,7 @@ def push_pending_test(specs, coins: list[str], live_coin: str | None, signal_cla
         # KeyError. Same reason the replay's own state accepts both shapes.
         "specs": serialised, "spec": serialised[0],
         "coins": coins, "live_coin": live_coin, "signal_class": signal_class,
+        "proposed_at": proposed_at or datetime.now(timezone.utc).date().isoformat(),
         "expires_at": (datetime.now(timezone.utc) + timedelta(hours=expires_hours)).isoformat(),
     })
     _save_queue(queue)
@@ -94,18 +102,22 @@ def _specs_from_entry(data: dict) -> list[ConditionSpec]:
     return [spec_from_dict(d) for d in (data.get("specs") or [data["spec"]])]
 
 
-def pop_pending_test_by_id(pending_id: str) -> "tuple[list[ConditionSpec], list[str], str | None, str] | None":
+def pop_pending_test_by_id(pending_id: str) -> "tuple[list[ConditionSpec], list[str], str | None, str, str | None] | None":
     """Removes and returns the one entry matching `pending_id` -- called
     when the human presses "Test It". None if it already expired or was
     already answered (e.g. a double-tap on the same button).
 
-    Returns a LIST of specs: one approval covers the whole proposal set."""
+    Returns a LIST of specs: one approval covers the whole proposal set.
+    The trailing `proposed_at` is None for an entry queued before this
+    field existed -- callers must treat that the same as "proposed today"
+    (zero prior confirmations), never assume a date that isn't there."""
     queue = _drop_expired(_load_queue())
     for i, data in enumerate(queue):
         if data["id"] == pending_id:
             data = queue.pop(i)
             _save_queue(queue)
-            return _specs_from_entry(data), data["coins"], data.get("live_coin"), data["signal_class"]
+            return (_specs_from_entry(data), data["coins"], data.get("live_coin"), data["signal_class"],
+                    data.get("proposed_at"))
     _save_queue(queue)
     return None
 

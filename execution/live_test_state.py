@@ -18,6 +18,8 @@ from candidates.atomic_json import write_json
 STATE_DIR = Path(__file__).resolve().parent
 TRADE_LOG_PATH = STATE_DIR / "live_tests.json"
 HORIZONS_PATH = STATE_DIR / "horizons.json"
+PARKED_PROPOSALS_PATH = STATE_DIR / "parked_proposals.json"
+CONFIRMATION_PRIORS_PATH = STATE_DIR / "confirmation_priors.json"
 
 
 def _read(path: Path, default):
@@ -65,3 +67,41 @@ def load_horizons() -> dict:
 
 def save_horizons(horizons: dict) -> None:
     _write(HORIZONS_PATH, horizons)
+
+
+def load_parked_proposals() -> list[dict]:
+    """Proposals that were on-thesis and well-formed but did not yet have
+    enough history behind them to be tested -- mirrors replay/state.py's
+    own version exactly. Discarding these instead of parking them would
+    throw away a real hypothesis over a threshold choice rather than
+    over anything wrong with the idea (see docs/case_study/
+    methodology-decisions.md)."""
+    return _read(PARKED_PROPOSALS_PATH, [])
+
+
+def park_proposal(entry: dict) -> None:
+    """Idempotent on label: a condition re-proposed later must not queue twice."""
+    parked = load_parked_proposals()
+    if any(p["spec"].get("label") == entry["spec"].get("label") for p in parked):
+        return
+    parked.append(entry)
+    _write(PARKED_PROPOSALS_PATH, parked)
+
+
+def unpark_proposal(label: str) -> None:
+    parked = [p for p in load_parked_proposals() if p["spec"].get("label") != label]
+    _write(PARKED_PROPOSALS_PATH, parked)
+
+
+def load_confirmation_priors() -> dict:
+    """Per candidate: how many occurrences already postdated its hypothesis
+    at the moment it was registered. Nonzero only for a proposal that sat
+    parked -- see _effective_milestone_count. Mirrors replay/state.py's
+    own version exactly."""
+    return _read(CONFIRMATION_PRIORS_PATH, {})
+
+
+def save_confirmation_prior(candidate: str, n: int) -> None:
+    priors = load_confirmation_priors()
+    priors[candidate] = int(n)
+    _write(CONFIRMATION_PRIORS_PATH, priors)

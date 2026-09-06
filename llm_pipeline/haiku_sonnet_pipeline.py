@@ -45,6 +45,7 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import datetime, timezone
 
 import requests
 from anthropic import Anthropic
@@ -54,8 +55,8 @@ from llm_pipeline.context_builder import build_context_summary, build_technical_
 from llm_pipeline.novel_condition_tester import (
     INDICATOR_PLAIN_NAMES, MIN_HISTORICAL_OCCURRENCES, OPERATOR_PLAIN, ConditionSpec,
     build_indicator_leadup, build_indicator_snapshot, clause_from_dict,
-    filter_redundant_proposals, proposable_indicators, proposals_from_assessment,
-    spec_from_proposal, spec_to_dict,
+    filter_redundant_proposals, is_testable, proposable_indicators, proposals_from_assessment,
+    relax_to_testable, spec_from_proposal, spec_to_dict,
 )
 from llm_pipeline.pending_tests import push_pending_test
 from llm_pipeline import usage as _usage
@@ -420,6 +421,30 @@ def run_compression_scan(coins: list[str] | None = None) -> None:
                 if spec is None:
                     print(f"Proposal rejected, not queued ({episode['symbol']}): {err}")
                     continue
+                # Rarity, measured rather than approximated -- same check
+                # replay/engine.py's `_prepare_proposal` runs before ever
+                # showing a proposal to a human. Without this, a too-rare
+                # condition reached a human, was approved, and then came back
+                # `insufficient_data` from `test_novel_condition` with nothing
+                # stored anywhere -- silently discarded forever rather than
+                # parked for when its history catches up (see
+                # docs/case_study/methodology-decisions.md).
+                why_not = is_testable(spec, scan_coins)
+                if why_not is not None:
+                    relaxed = relax_to_testable(spec, scan_coins)
+                    if relaxed is None:
+                        from execution import live_test_state
+                        live_test_state.park_proposal({
+                            "spec": spec_to_dict(spec),
+                            "proposed_at": datetime.now(timezone.utc).date().isoformat(),
+                            "reason": why_not,
+                        })
+                        print(f"Proposal '{spec.label}' PARKED, not discarded ({episode['symbol']}): "
+                              f"{why_not}. Re-checked daily as history accumulates.")
+                        continue
+                    spec, relax_note = relaxed
+                    print(f"Proposal '{spec.label}' relaxed to the nearest testable version "
+                          f"({episode['symbol']}): {relax_note}")
                 specs.append(spec)
             # Two proposals that fire on the same days are one hypothesis wearing
             # two hats and would spend twice the alpha budget for one piece of
