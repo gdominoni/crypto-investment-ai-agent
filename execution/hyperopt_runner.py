@@ -242,8 +242,12 @@ def pending_work_reminder() -> str | None:
         "",
         f"<code>python3 -m execution.hyperopt_runner {' '.join(todo)}</code>",
         "",
-        "Then copy <code>execution/hyperopt_results.json</code> to wherever this bot runs. "
-        "That one file is the only thing that has to move.",
+        "It writes <code>execution/hyperopt_results.json</code>, which is tracked in git "
+        "(unlike this system's runtime state) -- so it travels the ordinary way:",
+        "",
+        "<code>git add execution/hyperopt_results.json &amp;&amp; git commit -m 'hyperopt cross-check' &amp;&amp; git push</code>",
+        "",
+        "then <code>git pull</code> on the host. That one file is the only thing that has to move.",
         "",
         "<i>Purely informational: it never gates a verdict, so there is no hurry and nothing "
         "breaks while it is out of date. /help has the full option reference.</i>",

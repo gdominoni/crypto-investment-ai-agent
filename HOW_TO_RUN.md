@@ -132,7 +132,7 @@ python3 -m data_ingestion.market_data.binance_fetcher
 
 ## Step 8 — Run it
 
-There are two parts. **Part 2 is the actual project** — Part 1 is optional and you can skip straight to Part 2 if you'd rather start from a clean slate and just watch it run forward from today.
+There are three parts. **Part 2 is the actual project** — Part 1 is optional and you can skip straight to Part 2 if you'd rather start from a clean slate and just watch it run forward from today. Part 3 is the one job that stays on your own computer, and it tells you when it needs running.
 
 ### Part 1 (optional) — Historical replay: backfill years of results in minutes
 
@@ -153,6 +153,28 @@ python3 -m scheduler.live_daemon
 ```
 
 **Check it worked:** within a few seconds you should receive a Telegram message from your bot saying *"Live daemon started."* From here on, open your bot's chat and send `/help` to see every available command (including `/summary`, a plain-language snapshot of every pattern currently being tracked). Leave this terminal window open (or run it in the background, e.g. inside `tmux`/`screen`, or via `nohup python3 -m scheduler.live_daemon &`) — it needs to keep running to keep scanning and to answer you on Telegram. Stop it any time with `Ctrl+C`; restarting it later picks up exactly where it left off (it remembers when each job last ran).
+
+### Part 3 — The hyperopt cross-check: the one thing you run yourself
+
+Everything in Part 2 runs unattended. This is the single exception, and it stays on your own computer for a reason: it needs a full Freqtrade install and it is the only genuinely heavy computation in the project (minutes, against a weekly candidate battery measured in seconds). It is also purely informational — an independent second opinion on TP/SL levels from a third-party optimizer, which never gates a verdict and never touches live execution. Nothing breaks while it is out of date.
+
+**When to run it: when the bot asks you to.** You do not need to remember, and there is no schedule to keep. Once a month the daemon checks whether any accepted pattern has no cross-check, has one older than 90 days, or had one fail — and messages you only if so. No work, no message. When it does message you, it names the patterns and hands you the exact command, so you can paste it as-is:
+
+```bash
+python3 -m execution.hyperopt_runner <the names it gave you>
+```
+
+Run with no names at all and it does every tracked pattern, which takes considerably longer and is rarely what you want.
+
+**Check it worked:** it prints one summary line per pattern (`TP mult=…, SL mult=… -> N=…, win_rate=…, Sortino=…`). Measured on a 2026 MacBook: about a minute per pattern at the default 50 epochs, so the two-pattern run the bot typically asks for finishes in a few minutes. A pattern that fails or has too little history is recorded as `failed` with its reason rather than skipped silently, and the bot will ask again next month.
+
+**Then send the result back.** Unlike this system's runtime state, `execution/hyperopt_results.json` is tracked in git, so it travels the ordinary way:
+
+```bash
+git add execution/hyperopt_results.json && git commit -m "hyperopt cross-check" && git push
+```
+
+and `git pull` on the host. That one file is the only thing that has to move.
 
 ---
 

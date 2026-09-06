@@ -11,5 +11,31 @@
     "expectancy": 7.14956039512987,
     "epochs_run": 50,
     "timerange": "20180101-"
+  },
+  "hawkish_jobless_claims_surprise_then_volume_dryup_reversal": {
+    "status": "ok",
+    "at": "2026-09-06T14:51:35.836265+00:00",
+    "tp_mult": 0.76,
+    "sl_mult": 1.685,
+    "n": 21,
+    "winrate": 0.6666666666666666,
+    "sortino": 0.10369663553962395,
+    "profit_total": 0.11083828601999998,
+    "expectancy": 5.278013620000003,
+    "epochs_run": 50,
+    "timerange": "20180101-"
+  },
+  "hawkish_claims_surprise_then_volume_spike_capitulation": {
+    "status": "ok",
+    "at": "2026-09-06T14:52:11.673015+00:00",
+    "tp_mult": 0.715,
+    "sl_mult": 1.651,
+    "n": 176,
+    "winrate": 0.6477272727272727,
+    "sortino": 0.833160570107112,
+    "profit_total": 0.80813654292,
+    "expectancy": 4.591684902954543,
+    "epochs_run": 50,
+    "timerange": "20180101-"
   }
 }
