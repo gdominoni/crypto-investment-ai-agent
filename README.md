@@ -270,8 +270,8 @@ Rows are ranked by how far a candidate is toward its confirmation count, **never
 
           --- PERFORMANCE & EXCURSION ---
           • Trend Realized: 58.5%
-          • Market-Adjusted Excess: +0.56% per occurrence vs
-            universe baseline (56% positive after adjustment)
+          • Market-Adjusted Excess: -0.10% per occurrence vs
+            universe baseline (45% positive after adjustment)
           • MFE / MAE: +8.90% / -7.12% (Ratio: 1.25)
 
           --- EXECUTION (HYPEROPT) ---
@@ -287,6 +287,8 @@ Rows are ranked by how far a candidate is toward its confirmation count, **never
 ```
 
 `hawkish_claims_surprise_then_volume_spike_capitulation` (`44fb`) is the one candidate this project's full replay produced that cleared every gate it has — see the result summary near the top of this README for the full statistical picture, including the multiplicity control it was checked against. That second number, "Power Progress: 180 / 96", is deliberate, not an oversight: at this project's horizons, proving an effect with real statistical confidence needs occurrences in the hundreds, and most tracked candidates never get there. So the system never claims proof — only, once the sample is large enough, that a pattern has kept happening and still holds up. That's why the word here is **CONFIRMED**, not "validated": persistence, honestly labeled as persistence, re-earned fresh at every checkpoint rather than awarded once.
+
+**And the market-adjusted line in that message is the one worth reading twice.** The condition's raw trend rate is 58.5%, but net of what simply holding the whole coin universe did over the same windows, the excess is **-0.10% per occurrence**. It clears every gate this system has — significance against its own period-matched baseline, risk path, concentration, multiplicity — while adding essentially nothing over the market across the specific windows it fired in. Both facts are real, they are measuring different things, and reporting only the first one is exactly the failure this project is built to catch.
 
 **A confirmed candidate's own aggregate is, by design, resistant to a short losing streak — a separate, fast alert covers the gap that creates.** A well-established candidate can absorb 20-30 consecutive worst-case losses before its own significance test would ever flip status — correct behavior against noise, but too slow to flag a genuine regime change on its own. So immediately after any live test resolves, if a confirmed candidate's last 2+ resolved live tests came back negative in a row, it fires a purely informational alert — never a status change, long before the aggregate statistics would say anything.
 

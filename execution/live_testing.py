@@ -113,28 +113,34 @@ def _open_live_test(candidate: str, coin: str, direction: str, decision_date: pd
             "candidate": candidate, "entry_date": entry_date, "horizon": horizon}
 
 
-def _market_return_over(entry_loc: int, horizon: int, direction: str) -> float:
+def _market_return_over(entry_date, horizon: int, direction: str) -> float:
     """Equal-weighted forward return of the whole coin universe over the same
-    window as one live test, signed by that test's direction. Ported verbatim
-    from replay/engine.py so production's stored `baseline_return` means the
-    same quantity the replay's does -- the two must stay comparable.
+    window as one live test, signed by that test's direction. Kept identical to
+    replay/engine.py's version so production's stored `baseline_return` means
+    the same quantity the replay's does -- the two must stay comparable.
 
     The comparison a raw win rate cannot make. "The trend happened" and "the
     trend happened because of this condition" are different claims, and across
     2017-2026 a long-only rule is right most of the time for reasons that have
-    nothing to do with any macro release."""
+    nothing to do with any macro release.
+
+    Keyed on the DATE, never on a positional index: the coins list at different
+    times, so the same integer position is a different day on each of them --
+    see replay/engine.py's own note for the measured effect that had."""
     import numpy as np
 
+    entry_date = pd.Timestamp(entry_date)
     rets = []
     for coin in COINS:
         try:
             ohlc = load_daily(coin)
         except Exception:
             continue
-        if entry_loc + horizon >= len(ohlc):
+        loc = int(ohlc.index.searchsorted(entry_date))
+        if loc >= len(ohlc) or loc + horizon >= len(ohlc):
             continue
-        entry = float(ohlc["open"].iloc[entry_loc])
-        exit_ = float(ohlc["close"].iloc[entry_loc + horizon])
+        entry = float(ohlc["open"].iloc[loc])
+        exit_ = float(ohlc["close"].iloc[loc + horizon])
         if entry > 0:
             rets.append(exit_ / entry - 1.0)
     if not rets:
@@ -220,7 +226,7 @@ def _check_live_tests() -> None:
             # market-adjusted line has no denominator and silently disappears,
             # leaving the raw "Trend Realized" figure standing alone, which is
             # the one number that most needs qualifying in a rising market.
-            "baseline_return": _market_return_over(trade["entry_loc"], trade["horizon"], trade["direction"]),
+            "baseline_return": _market_return_over(trade["entry_date"], trade["horizon"], trade["direction"]),
         })
         _send(f"<b>{today.date()}</b>\n\n"
               f"<b>Live test resolved -- {trade['direction'].upper()} {trade['coin']}</b>\n\n"

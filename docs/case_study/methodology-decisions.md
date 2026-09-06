@@ -443,6 +443,16 @@ Each fold refits only on periods strictly before its own test period (an expandi
 
 ---
 
+## The universe baseline is keyed on the date, not on a row position
+
+**What it is.** `_market_return_over` (`replay/engine.py`, mirrored in `execution/live_testing.py`) computes what simply holding all seven coins did over the same window as one live test — the denominator behind the "Market-Adjusted Excess" line. It looks each coin up **by date** (`index.searchsorted`), because the coins list at different times and are not row-aligned: position 2000 is 2023-02-16 on BTC and 2024-12-25 on DOGE.
+
+**Why it is worth its own entry.** It used to index every coin by the trade's own integer position, so the "universe baseline" averaged windows years apart. Recomputed correctly over the completed replay's 183 confirmations of `44fb`, the reported figure moves from **+0.56% to -0.10%** per occurrence (56% → 45% positive) — a sign flip, mean absolute change 5.91% per occurrence, so the error was large noise that happened to land favorably. Nothing gated on it: [`pattern_significance`](#the-significance-test-one-sided-block-bootstrapped) computes its own period-matched baseline and never reads this field, so no verdict, p-value, or status moved — but a reported number did, and it was the one qualifying the raw trend rate.
+
+**Type.** Statistical bug fix, found by auditing production against the replay before going live. Every stored `baseline_return` in the replay's completed trade log (23,451 of them) was recomputed with the corrected function rather than left inconsistent with the code that now writes it.
+
+---
+
 ## Redundancy: temporal vs. cross-coin
 
 ### Temporal vs. cross-coin redundancy are two different checks
