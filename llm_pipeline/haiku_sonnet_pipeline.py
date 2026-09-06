@@ -327,6 +327,16 @@ def format_compression_message(episode: dict, assessment: dict) -> str:
             head = f"<b>{i}. \"{escape_html(spec['label'])}\"</b>" if plural else \
                    f"<b>Proposed test: \"{escape_html(spec['label'])}\"</b>"
             base += f"{head}\n\n({format_spec_clauses(spec)} → {escape_html(spec['direction'])})\n\n"
+            # The tested condition is not always the proposed one. When thresholds
+            # were loosened to reach a measurable sample, the human approving has
+            # to see that BEFORE pressing the button -- the clause line above
+            # shows the new numbers but not that they changed, and a silent
+            # substitution would make the approval meaningless. Same disclosure
+            # replay/judgment.py::format_telegram_message makes.
+            if spec.get("relaxed_from"):
+                base += (f"<b>Thresholds:</b> {escape_html(spec['relaxed_from'])}\n"
+                         f"<i>*Note: nearest testable version of the proposed hypothesis, "
+                         f"not the original one.</i>\n\n")
         # Bound outside the f-string rather than inlined. "it's" carries an
         # apostrophe, so inlining it needs a double quote nested inside a
         # double-quoted f-string -- legal only from Python 3.12 (PEP 701) and a
@@ -416,6 +426,7 @@ def run_compression_scan(coins: list[str] | None = None) -> None:
             assessment = sonnet_compression_response(episode, client)
             reply_markup = None
             specs = []
+            relaxed_notes: dict[str, str] = {}
             for raw in proposals_from_assessment(assessment):
                 spec, err = spec_from_proposal(raw)
                 if spec is None:
@@ -443,6 +454,12 @@ def run_compression_scan(coins: list[str] | None = None) -> None:
                               f"{why_not}. Re-checked daily as history accumulates.")
                         continue
                     spec, relax_note = relaxed
+                    # Recorded against the LABEL, not the spec: `spec_to_dict`
+                    # serialises ConditionSpec fields only, so the note would be
+                    # dropped on the way to the message otherwise -- and a
+                    # substitution the human cannot see is an approval of
+                    # something they were never shown.
+                    relaxed_notes[spec.label] = relax_note
                     print(f"Proposal '{spec.label}' relaxed to the nearest testable version "
                           f"({episode['symbol']}): {relax_note}")
                 specs.append(spec)
@@ -460,7 +477,10 @@ def run_compression_scan(coins: list[str] | None = None) -> None:
             elif assessment["recommended_action"] == "propose_novel_test":
                 mark_escalated(episode["symbol"], episode["b_date"])
                 continue
-            assessment["novel_condition_specs"] = [spec_to_dict(sp) for sp in specs]
+            assessment["novel_condition_specs"] = [
+                {**spec_to_dict(sp), **({"relaxed_from": relaxed_notes[sp.label]} if sp.label in relaxed_notes else {})}
+                for sp in specs
+            ]
             # Marked BEFORE the notification can fail: a send error must not leave
             # the episode un-ledgered and re-escalating every hour afterwards.
             mark_escalated(episode["symbol"], episode["b_date"])
