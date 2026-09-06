@@ -53,6 +53,10 @@ Static, rule-based indicators often fail to maintain an edge across changing mar
 
 **How this project checks its own instruments.** A system that reports "no pattern found" has an obvious failure mode: a detector that never fires looks identical to a detector that is broken. Before trusting any null result, this project plants a synthetic signal it already knows the answer to and confirms the pipeline finds it — and confirms a pure-noise arm stays silent.
 
+<p align="center">
+  <img src="docs/case_study/assets/in_short.svg" alt="In short: the five steps the system runs, and the same five steps again as a worked example" width="100%">
+</p>
+
 ### Key Results (2017–2026 Full Market Replay)
 
 The historical replay evaluated 9 years of market data day-by-day, enforcing strict point-in-time data isolation:
@@ -89,7 +93,7 @@ So the layer was removed rather than kept for the badge. The honest scope is mac
 <table>
 <tr>
 <td width="33%" align="center"><img src="docs/case_study/assets/telegram_novel_condition_proposal.png" alt="Sonnet proposing a novel condition, with Test It / Don't Test It buttons" width="280"><br><sub>Sonnet proposes a novel condition — human approves with a button, never free text</sub></td>
-<td width="33%" align="center"><img src="docs/case_study/assets/telegram_live_test_resolved.png" alt="A live test resolved, with real forward return, best and worst point reached" width="280"><br><sub>A live test resolves — real forward return, best/worst point reached, no TP/SL</sub></td>
+<td width="33%" align="center"><img src="docs/case_study/assets/telegram_live_test_resolved.png" alt="A confirmation checkpoint, with real forward return and power progress" width="280"><br><sub>A candidate crosses a confirmation checkpoint <i>(this screenshot predates the message-volume rework: individual live-test resolutions are no longer sent one by one, see "What replaced one message per live test" above — pending an updated screenshot)</i></sub></td>
 <td width="33%" align="center"><img src="docs/case_study/assets/telegram_prune_decision.png" alt="A keep-or-drop decision after 2+ years untested" width="280"><br><sub>2+ years untested — the human decides Keep or Drop <i>(now delivered as one periodic digest, computed offline)</i></sub></td>
 </tr>
 <tr>
@@ -315,65 +319,87 @@ Every candidate the model names carries its 4-character id in parentheses — wh
 
 ### Structured commands — no LLM involved
 
-`/summary`, `/details`, and `/help` never touch the language model — a command recomputes the real battery fresh (or, for `/help`, prints a static reference) and renders it directly.
+`/summary`, `/details`, and `/help` never touch the language model — a command recomputes the real battery fresh (or, for `/help`, prints a static reference) and renders it directly. Both examples below are real output from the completed replay's `/replay_summary` and `/replay_details` (the production equivalents, `/summary`/`/details`, work identically against live state):
 
 ```
-You:     /summary
+You:     /replay_summary
 
 🤖 Agent: Still under test
 
-          Watch (4)
+          Accepted (2)
+          cleared the statistical bar, its trigger opens live
+          tests automatically
+            hawkish_claims_surprise_then_volume_spike_
+            capitulation -- N=896, p=0.001, MFE/MAE=1.31
+            hawkish_jobless_claims_surprise_then_volume_dryup_
+            reversal -- N=310, p=0.000, MFE/MAE=1.49
+
+          Watch (71)
           a real pattern signal, but fails a robustness check
           (concentration or an unfavorable risk profile), or too
           little data for the risk check yet
-            weak_claims_then_oversold -- N=134, p=0.031, MFE/MAE=1.62
-            c1_long (control) -- N=325, p=0.010, MFE/MAE=0.74
+            c2_short -- N=202, p=0.869, MFE/MAE=0.57
+              Why: a pattern, but 72% of it comes from a single
+              year (2026) -- too concentrated to trust as general
+            c6_short -- N=167, p=0.815, MFE/MAE=1.18
+              Why: a pattern, but 80% of it comes from a single
+              year (2026) -- too concentrated to trust as general
             ...
 
-You:     /details weak_claims_then_oversold
+You:     /replay_details 44fb
 
-🤖 Agent: weak_claims_then_oversold
-          What triggers it: jobless-claims surprise worse than
-          expected within the last 7 days, AND 14-day RSI below 30.
-          Status: watch -- a real pattern signal, but fails a
-          robustness check (direction: long)
-          Held for: 7d (empirically-derived, re-checked weekly)
+🤖 Agent: hawkish_claims_surprise_then_volume_spike_capitulation
+          44fb
+          What triggers it: jobless-claims surprise at most -0.3
+          (within the last 7 days) AND 30-day volume z-score at
+          least 1.0, long
+          Status: accepted -- cleared the statistical bar, its
+          trigger opens live tests automatically
+          Held for: 3d (empirically-derived, re-checked weekly)
+          CONFIRMED -- cleared the acceptance bar at its
+          180-occurrence checkpoint (re-checked fresh again at
+          200, not a permanent badge)
 
-          • Historical occurrences (N): 134, across 41 independent
-            episodes
-          • Statistical significance: significant (p=0.031), excess
-            return vs. this coin's own baseline: +2.10%
-          • Risk path (mean favorable / mean adverse excursion): 1.62
-            (favorable if > 1.0)
-          • Coin concentration: 38% from a single coin -- inside the
-            60% limit
-          • Year concentration: 64% from a single year -- flagged
-            above 60%
+          • Historical occurrences (N): 896
+          • Statistical significance: significant (p=0.001)
+          • Risk path (mean favorable / mean adverse excursion):
+            1.31 (favorable if > 1.0)
+          • Coin concentration: 26% from a single coin (BNBUSDT)
+            -- within the 60% limit
+          • Year concentration: 44% from a single year (2025) --
+            within the 60% limit
+          • Reference TP/SL backtest: TP=1.50x/SL=0.60x, win
+            rate=28.9%, Sortino=11.58 (informational only,
+            doesn't gate status)
 
-          Why not accepted: a statistically significant pattern, but
-          too much of it comes from one year to trust as general.
+          Last 8 occurrences (most recent first)
+            2026-08-24  BTCUSDT  +8.17%  (best +9.5%, worst -3.4%)
+            2026-08-24  ETHUSDT  +6.68%  (best +8.9%, worst -1.2%)
+            2026-08-24  BNBUSDT  +7.56%  (best +10.9%, worst -3.4%)
+            2026-08-02  LTCUSDT  -1.67%  (best +1.0%, worst -4.0%)
 ```
 
-`/summary` is deliberately terse — a status line answers "what's the verdict" but not "what does 'elevated concentration' actually mean in numbers." `/details <name>` exists for exactly that: the trigger's own exact numeric definition, plus every number behind its current classification, one candidate at a time.
+`/summary` is deliberately terse — a status line answers "what's the verdict" but not "what does 'too concentrated' actually mean in numbers." `/details <name or id>` exists for exactly that: the trigger's own exact numeric definition, every number behind its current classification, and its most recent dated occurrences — either the full name or the 4-character id resolves it.
 
 ---
 
 ## Repository Structure & Build Plan
 
 ```
-crypto-sentiment-trading-agent/
+crypto-investment-ai-agent/
 ├── candidates/                  # Statistical methodology + battery: methodology.py, definitions.py, run_battery.py
 ├── execution/                   # Live test engine (live_testing.py), local-only hyperopt cross-check (hyperopt_runner.py)
 ├── llm_pipeline/                # Sonnet judgment on compression exits, live context builder, novel-condition tester, compression_detector.py
 ├── telegram/                    # Both interaction modes -- free text and structured commands
 ├── scheduler/                   # live_daemon.py (the one command that runs everything), weekly_revalidation.py
-├── data_ingestion/               # market_data/binance_fetcher.py (keeps data/ current, from-scratch backfill capable)
+├── data_ingestion/               # market_data/binance_fetcher.py (keeps data/ current); news_sentiment/ is unused -- kept as the starting point for a future sentiment backfill, see "Scope" above
 ├── data/                        # Historical + periodically-refreshed market/macro data
 ├── replay/                      # Historical walk-forward simulation used to validate the system and build an initial live-test track record before going live -- see PROJECT_MAP.md
 ├── forecast/                    # Offline experiments that test the SYSTEM rather than the market: does the pipeline detect a signal known to be there, which gate is too tight, would better news data help. No API calls -- see PROJECT_MAP.md
 ├── docs/case_study/             # methodology-decisions.md, this project's build log
+├── scripts/                     # check_py311.sh + hooks/pre-push -- catches 3.11-incompatible syntax before it reaches CI
 ├── .github/workflows/           # tests.yml -- the tests below run automatically on every push
-└── tests/                       # candidates/methodology.py, status_history.py, novel_condition_tester.py, run_battery.py
+└── tests/                       # 253 tests: statistical methodology, the replay's checkpoint/parking/confirmation lifecycle, Telegram message formatting, and cross-version Python compatibility
 ```
 
 **Running this live is one command:** `python3 -m scheduler.live_daemon`. This project is built to be operated as an agent, not maintained as infrastructure — one process owns the Telegram bot, the hourly scans, and the weekly re-validation, so there's no separate cron job to configure or forget. It picks up right where it left off after a restart.

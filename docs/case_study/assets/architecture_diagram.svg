@@ -90,8 +90,8 @@
   <rect x="865" y="118" width="260" height="98" rx="10" fill="#eaf6ee" stroke="#166534" stroke-width="1.5"/>
   <text x="995" y="140" text-anchor="middle" font-size="13" font-weight="600" fill="#0f3d22">Live Test Engine</text>
   <text x="995" y="158" text-anchor="middle" font-size="11" fill="#215c37">Mechanical, hourly, no LLM involved</text>
-  <text x="995" y="175" text-anchor="middle" font-size="11" fill="#215c37">Opens/resolves the instant an accepted</text>
-  <text x="995" y="192" text-anchor="middle" font-size="11" fill="#215c37">trigger fires — no TP/SL, no funded position</text>
+  <text x="995" y="175" text-anchor="middle" font-size="11" fill="#215c37">Opens/resolves for ANY tracked candidate</text>
+  <text x="995" y="192" text-anchor="middle" font-size="11" fill="#215c37">(any status but dropped) — no TP/SL, no funding</text>
 
   <rect x="865" y="232" width="260" height="66" rx="10" fill="#fbf3d9" stroke="#92720a" stroke-width="1.5"/>
   <text x="995" y="254" text-anchor="middle" font-size="12" font-weight="600" fill="#4d3b05">Consecutive-Failure Alert</text>
