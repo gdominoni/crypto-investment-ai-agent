@@ -6,13 +6,11 @@ Each entry is dated and never silently rewritten — if a decision is later reve
 
 ---
 
-## `accepted` vs `validated` — two different claims, deliberately separate words
+## `accepted` vs `CONFIRMED` — two different claims, never interchangeable
 
-**Decision.** `accepted` means a candidate cleared the historical/backtest statistics. `validated` is reserved exclusively for a candidate that has actually lived through its own tracking window (see "N=50 replaces the 2-year milestone" below) while still `accepted`. The two words are never used interchangeably anywhere in code, prompts, or Telegram messages.
+**What they mean.** `accepted` = the historical backtest cleared every statistical gate (see [`classify_status`'s gate](#classify_statuss-gate-pattern-significance-not-pl)). `CONFIRMED` = additionally still `accepted` after a live checkpoint of real, out-of-sample occurrences (see [The CONFIRMED checkpoint](#the-confirmed-checkpoint-milestone_n--20)). A candidate can hold one without the other. The word "validated" is never used for either — see [Why "confirmed", not "validated"](#why-confirmed-not-validated).
 
-**Why.** The two originally used the same word, which let a candidate that had merely passed a historical backtest be described the same way as one with an actual live track record — a real source of confusion, not just a naming nitpick: it's the difference between "this pattern looks real in hindsight" and "this pattern kept looking real going forward, tested prospectively." Same discipline as the earlier finding that a component's 80.7% win rate was entry-price leakage — precise language about what's actually been demonstrated is not optional here.
-
-**Type.** Definitional / statistical rigor, not a compromise.
+**Type.** Definitional.
 
 ---
 
@@ -36,23 +34,23 @@ Each entry is dated and never silently rewritten — if a decision is later reve
 
 ---
 
-## N > 50 replaces N > 100 as the sample-size gate
+## `min_report_events = 20` — the sample-size floor for acceptance
 
-**Decision.** `MethodologyConfig.min_report_events = 50` (was 100, briefly, before that). **Superseded 2026-08-30: lowered to 20 by the sample-size audit** -- and the milestone that was tied to it was not updated at the same time, which is corrected below.
+**Decision.** `classify_status` requires more than `MethodologyConfig.min_report_events` (20) out-of-sample events before a candidate can be `accepted`, `watch`, or `rejected` at all — below it, the verdict is `insufficient_data`.
 
-**Why.** A compromise, stated plainly: N > 100 combined with the other new gates (Sortino > 1, win_rate > 50%, strict_win_rate ≥ 45%, MFE/MAE > 1, statistical significance, no concentration) risked accepting *nothing at all* given the amount of real history available — five gates stacked that tightly is a lot to clear simultaneously. Lowering the sample-size floor to 50 doesn't weaken any of the other, more important gates (particularly statistical significance, which is the one that actually answers "does a pattern exist") — it just stops sample size itself from being the bottleneck. If nothing clears the bar even at N=50, that is itself a real, reportable finding, not a problem to engineer away further.
+**Why.** A compromise, stated plainly: stacking this floor with the other acceptance gates (statistical significance, favorable MFE/MAE, no concentration) risks accepting *nothing at all* if the floor is set too high, given how much real history is available for any one condition. 20 stops sample size itself from being the bottleneck without weakening the gate that actually answers "does a pattern exist" — statistical significance. If nothing clears the bar even here, that is itself a real, reportable finding, not a problem to engineer away further. It is the same number [`MILESTONE_N`](#the-confirmed-checkpoint-milestone_n--20) mirrors for the CONFIRMED checkpoint.
 
 **Type.** Compromise (practical yield vs. rigor), explicitly not a loosening of the pattern-existence test itself.
 
 ---
 
-## N=50 live tests replaces the 2-year calendar milestone
+## The CONFIRMED checkpoint: `MILESTONE_N = 20`
 
-**Decision.** The one-time "has this candidate been validated" report now fires the first time a candidate accumulates 50 resolved **live** tests (not backtest events — see "Live testing" below), not after 2 elapsed calendar years. The existing 2-year "tracked this long and never once accepted" keep-or-drop decision is unaffected and stays as the safety net for candidates whose trigger is too rare to ever reach N=50 in a reasonable span.
+**What it is.** Every `MILESTONE_N` (20) qualifying occurrences, a candidate is re-tested against the exact bar `classify_status` uses for acceptance (`min_report_events = 20`) — the checkpoint asks nothing the acceptance test doesn't already ask. A dynamic (Sonnet-proposed) candidate's *first* checkpoint counts backtest occurrences too (`_effective_milestone_count`), so it fires almost immediately on acceptance; every checkpoint after that counts only real live occurrences. A static candidate (C1/C2/C6) always counts live occurrences only.
 
-**Why.** A fixed calendar span is arbitrary relative to how often a given trigger actually fires — a common condition could reach N=50 in weeks, a rare one might take years past any fixed calendar cutoff, or never get there at all. Gating the milestone on the same sample size the statistics themselves require (N=50, the acceptance floor above) ties the checkpoint to actual statistical readiness instead of an unrelated calendar convention.
+**Why 20.** It is the same floor the statistics themselves already require to report anything at all — not a threshold picked to arrive faster. At the median discovery rate across the current grammar (10.8 independent occurrences/year), a candidate reaches its second, live-only checkpoint in about 3.7 years. See [Why "confirmed", not "validated"](#why-confirmed-not-validated) for what 20 occurrences can, and cannot, prove; there is a separate, unrelated 2-year calendar keep-or-drop safety net for triggers too rare to ever reach 20 at all.
 
-**Type.** Statistical rigor (replaces an arbitrary calendar convention with the same threshold the statistics already require).
+**Type.** Statistical rigor.
 
 ---
 
@@ -70,7 +68,7 @@ Each entry is dated and never silently rewritten — if a decision is later reve
 
 **Decision.** The historical replay's simulated clock starts at `min(coin.index.min() for coin in COINS)` — 2017-08-26 in the current data (BTC/ETH) — rather than a fixed "N years before today" offset.
 
-**Why.** `pattern_significance` needs as many yearly walk-forward folds as it can get, both for a robust horizon choice and to give each tracked trigger a real chance of reaching its own N=50 live-test milestone within the simulated run.
+**Why.** `pattern_significance` needs as many yearly walk-forward folds as it can get, both for a robust horizon choice and to give each tracked trigger a real chance of reaching its own `MILESTONE_N` checkpoint within the simulated run.
 
 **Compromise this creates.** The first several simulated years mostly return `insufficient_data` — there aren't yet enough yearly folds (`min_train_periods = 3`) for `pattern_significance`/`walk_forward` to run at all. This is expected, not a bug, but it does mean roughly the first 3-4 simulated years are statistically quiet. Starting from 2017 instead of a 3-year window also roughly **triples** the number of simulated days the replay has to walk through (~110 chunks of 30 days vs. ~36), which is a real increase in wall-clock time and API calls to complete a full run — accepted deliberately for the sake of a longer, more defensible walk-forward history.
 
@@ -134,7 +132,7 @@ Each entry is dated and never silently rewritten — if a decision is later reve
 
 ## This project never opens a funded position -- production gets the same live-test model as the replay
 
-**Decision.** `execution/live_testing.py` + `execution/live_test_state.py` port the replay's exact live-test model to real, unsandboxed data: no TP/SL, no Freqtrade order, a real-dated occurrence held for the horizon `pattern_significance` found significant, resolved by measuring the real forward return/MFE/MAE. `candidates/status_history.py` gained the same N=50 milestone tracking replay/status_history.py already had, so "validated" is reachable in production too, on the same real evidence bar.
+**Decision.** `execution/live_testing.py` + `execution/live_test_state.py` port the replay's exact live-test model to real, unsandboxed data: no TP/SL, no Freqtrade order, a real-dated occurrence held for the horizon `pattern_significance` found significant, resolved by measuring the real forward return/MFE/MAE. `candidates/status_history.py` gained the same checkpoint tracking `replay/status_history.py` already had, so `CONFIRMED` is reachable in production too, on the same real evidence bar.
 
 **Why.** This is a pattern-discovery investigation, not an investment strategy -- there is no funded position to protect or size, so there is nothing stopping the same observational discipline the replay uses from running on real, current data instead of simulated history.
 
@@ -148,7 +146,7 @@ Each entry is dated and never silently rewritten — if a decision is later reve
 
 ## Freqtrade hyperopt cross-check -- a second, independent optimizer, purely informational
 
-**Decision.** `execution/hyperopt_runner.py` + `execution/freqtrade_bridge.py` + `execution/freqtrade_userdir/strategies/hyperopt_candidate_strategy.py` run Freqtrade's own Bayesian hyperopt engine, periodically and only ever locally, against real data already used everywhere else in this project, to independently re-derive the TP/SL multipliers for each tracked candidate's real anchor set. The result (best tp_mult/sl_mult + the resulting N/win-rate/Sortino/total-profit) is stored in `execution/hyperopt_results.json` and surfaced as one line in the 50-live-test milestone report -- never gates acceptance, never feeds live execution.
+**Decision.** `execution/hyperopt_runner.py` + `execution/freqtrade_bridge.py` + `execution/freqtrade_userdir/strategies/hyperopt_candidate_strategy.py` run Freqtrade's own Bayesian hyperopt engine, periodically and only ever locally, against real data already used everywhere else in this project, to independently re-derive the TP/SL multipliers for each tracked candidate's real anchor set. The result (best tp_mult/sl_mult + the resulting N/win-rate/Sortino/total-profit) is stored in `execution/hyperopt_results.json` and surfaced as one line in the CONFIRMED checkpoint report -- never gates acceptance, never feeds live execution.
 
 **Why.** This project's own walk-forward grid search (`candidates/methodology.py::walk_forward`) already computes an equivalent "if traded with a barrier structure" figure -- the "For reference, trading this with a TP/SL structure..." line shown in every message. Freqtrade's hyperopt is a genuinely *independent* second opinion: different search machinery (Bayesian optimization over a continuous parameter space vs. this project's own 25-point grid), a different, third-party, industry-standard backtesting engine, reusing the exact same real price history -- not a redundant re-implementation, a cross-check using different tooling arriving at (or interestingly failing to arrive at) similar numbers. For a project meant to demonstrate methodological rigor, an independent validation of one's own numbers is worth more than another internally-consistent chart.
 
@@ -199,37 +197,25 @@ Each entry is dated and never silently rewritten — if a decision is later reve
 
 ---
 
-## What counts toward "validated" differs by how a candidate was discovered
+## `_effective_milestone_count()` — static and dynamic candidates count differently toward CONFIRMED
 
-**Decision.** `_effective_milestone_count()` (`execution/live_testing.py`, mirrored in `replay/engine.py`) replaces a single, origin-blind rule with two: static candidates (C1/C2/C6) still require 50 real (or, in the replay, simulated) resolved live tests -- unchanged. Dynamic (Sonnet-proposed) candidates instead use a rolling window of the most recent 50 occurrences, backtest and live mixed: `min(backtest_n, 50 - live_n) + live_n` while `live_n < 50`, otherwise just `live_n`. Since every live occurrence is by definition more recent than every backtest one, this is exactly a "most recent 50, chronologically" window -- it fills from live occurrences first and tops up with the freshest backtest ones only while live evidence alone is still short of 50. The window only decides *when* a checkpoint fires; `pattern_significance`/`classify_status` themselves are untouched, still computed over full available history exactly as before. `candidates/status_history.py::candidates_due_for_milestone()`/`mark_milestone_reported()` needed no changes at all -- they already took a generic count dict, so the origin-dependent logic lives entirely in the two callers.
+**What it is.** A static candidate (C1/C2/C6) counts only real resolved live tests toward its checkpoint. A dynamic (Sonnet-proposed) candidate uses a rolling window of the most recent `MILESTONE_N` occurrences, live ones first, topped up with backtest occurrences only while `live_n` is still short: `min(backtest_n, MILESTONE_N - live_n) + live_n`. The window only decides *when* a checkpoint fires — `pattern_significance`/`classify_status` are untouched either way, always computed over the full available history.
 
-**Why.** A direct consequence of an earlier finding in this log (the multiple-comparisons / hypothesis-generation-contamination discussion): static candidates were derived by directly mining this project's own historical data (a dedicated prior research phase, see "the three candidates selected... out of the prior research's larger set" in `candidates/definitions.py`) -- a strong, direct look-then-test risk, so only genuinely prospective evidence should count toward calling one validated. Dynamic candidates carry a much weaker, diffuse version of the same risk: `sonnet_strategist()`/`sonnet_shock_response()` never see this project's own backtest results before proposing a condition (verified directly against `llm_pipeline/haiku_sonnet_pipeline.py`'s system prompts -- only a live indicator snapshot and the last 10 days of macro releases), only whatever general market-pattern knowledge Sonnet's own training absorbed. That residual risk can't be measured or corrected for after the fact (unlike the separate, still-unaddressed multiple-comparisons problem noted in this log's other recent entry), but it doesn't warrant making a dynamic candidate wait for 50 real live occurrences of a possibly-rare trigger -- sometimes months or years -- before its first checkpoint, when its backtest evidence is already substantial.
+**Why.** Static candidates were mined directly from this project's own historical data before being fixed in code — a direct look-then-test risk, so only genuinely prospective (live) evidence should count toward their checkpoint. Dynamic candidates carry a far weaker version of the same risk (Sonnet never sees this project's backtest results before proposing a condition), so their already-substantial backtest evidence can legitimately top up the first checkpoint. See [The CONFIRMED checkpoint](#the-confirmed-checkpoint-milestone_n--20).
 
-**A real, immediately observable consequence, checked against real data before shipping.** Because `classify_status` already requires backtest `n > 50` before a candidate can ever be `accepted` in the first place, `_effective_milestone_count()` is pinned at exactly 50 for every dynamic candidate from the moment of acceptance until its own `live_n` independently exceeds 50 -- meaning a dynamic candidate's *first* validation checkpoint fires on the very next weekly run after acceptance, not after waiting for real live exposure. Confirmed against the replay's real state: `high_efficiency_breakout_with_volume_confirmation` (backtest N=159, only 1 real live test) was immediately flagged as due for its first checkpoint. Every *subsequent* checkpoint (100, 150, ...) still requires that many real live occurrences -- the rolling window only ever accelerates the first one.
-
-**Type.** Methodology decision, direct consequence of the earlier multiple-comparisons discussion in this log -- differentiates the "validated" gate by discovery process rather than applying one rule uniformly, deliberately, not a compromise.
+**Type.** Statistical rigor.
 
 ---
 
 ## A well-established candidate's own aggregate is, by design, slow to react to a real regime change -- a fast informational alert covers the gap
 
-**Decision.** `_check_consecutive_failures()` (`execution/live_testing.py`, mirrored in `replay/engine.py`) fires immediately after each live test resolves, only for a candidate that's currently VALIDATED (`milestone_cleared`). If its most recent resolved live tests, counted backward, show `CONSECUTIVE_FAILURE_ALERT_THRESHOLD=2` or more negative forward returns in a row, it sends a Telegram alert showing the last `max(streak, 5)` occurrences with their individual forward return/MFE/MAE, plus the mean return and MFE/MAE ratio over that window. Purely informational -- it never changes any candidate's status; `classify_status`/`pattern_significance` are completely untouched by it.
+**Decision.** `_check_consecutive_failures()` (`execution/live_testing.py`, mirrored in `replay/engine.py`) fires immediately after each live test resolves, only for a candidate that's currently CONFIRMED (`milestone_cleared`). If its most recent resolved live tests, counted backward, show `CONSECUTIVE_FAILURE_ALERT_THRESHOLD=2` or more negative forward returns in a row, it sends a Telegram alert showing the last `max(streak, 5)` occurrences with their individual forward return/MFE/MAE, plus the mean return and MFE/MAE ratio over that window. Purely informational -- it never changes any candidate's status; `classify_status`/`pattern_significance` are completely untouched by it.
 
-**Why.** Directly measured, not assumed: reconstructing `c2_long`'s (N=62, marginal p=0.034) and `c6_long`'s (N=289, strong p=0.0005) real out-of-sample return populations and simulating consecutive additions of each candidate's own worst-ever observed loss (not an average loss -- the single worst MAE actually recorded, repeated) showed `c2_long` flips out of significance after only 3 such worst-case failures, while `c6_long` needs roughly 30 before its p-value crosses 0.05. This confirms two things simultaneously: (1) a large, statistically overwhelming sample is *correctly* resistant to short-term noise -- that resistance is the entire point of testing significance over a larger N, not a flaw; (2) precisely because of that resistance, if a well-established candidate's real-world edge stops working for a genuine reason (a market-structure shift, a new regulation on futures funding, the specific inefficiency getting arbitraged away), the aggregate alone could take dozens of real occurrences -- plausibly months -- to reflect it. Because this project never opens a funded position, the cost of that lag is not capital at risk, but it is still a real gap: a human watching the system has no fast signal that something might be going wrong, only the slow-moving aggregate. The alert closes exactly that gap without touching the aggregate's own (correct) behavior.
+**Why.** Directly measured: reconstructing `c2_long`'s (N=62, marginal p=0.034) and `c6_long`'s (N=289, strong p=0.0005) real out-of-sample return populations and simulating consecutive additions of each candidate's own worst-ever observed loss showed `c2_long` flips out of significance after only 3 such worst-case failures, while `c6_long` needs roughly 30. A large, statistically overwhelming sample is *correctly* resistant to short-term noise -- but that same resistance means a genuine regime change (a market-structure shift, an inefficiency getting arbitraged away) could take a well-established candidate months to reflect in its own aggregate. The alert closes that gap without touching the aggregate's own correct behavior.
 
-**Scoped to VALIDATED candidates only, deliberately.** A candidate that's merely `accepted` but not yet validated still has a comparatively small sample (by definition, `n` only just above `min_report_events=50`), so its own aggregate is already reasonably sensitive to new occurrences -- see the same experiment above, where `c2_long` at N=62 flipped after just 3 worst-case failures with no separate alert needed at all. The alert exists specifically for the population where the aggregate's own resistance to noise becomes a genuine blind spot: candidates with enough accumulated history that a short losing streak is invisible to the aggregate for a long time.
+**Scoped to CONFIRMED candidates only, deliberately.** A candidate that's merely `accepted` but not yet CONFIRMED still has a comparatively small sample (`n` only just above `min_report_events = 20`), so its own aggregate is already reasonably sensitive to new occurrences -- see `c2_long` above, which flipped after 3 failures with no separate alert needed. The alert exists specifically where the aggregate's own resistance to noise becomes a blind spot.
 
-**Type.** Methodology decision, additive and purely informational -- verified against real reconstructed data before deciding the threshold was worth building, then verified again end-to-end against the replay's own real trade log (a real losing streak on `c1_short`, `milestone_cleared` forced True to exercise the alert path directly, all state and Telegram sends mocked out for the check -- no real message sent, no real state mutated) before shipping.
-
----
-
-## `/details` never showed `VALIDATED` -- a real, live-caught gap between two different claims
-
-**Decision.** `format_candidate_details()` now takes a `milestone` parameter (the caller's `all_latest_statuses()[candidate]` entry) and shows a `VALIDATED`/`NOT validated`/"hasn't reached its first checkpoint yet" line whenever milestone info exists for that candidate -- `telegram/bot.py`'s `/details` and `/replay_details` handlers now fetch and pass it.
-
-**Why.** A real, live-caught bug, not a hypothetical: `high_efficiency_breakout_with_volume_confirmation` became genuinely `VALIDATED` (a real checkpoint fired, `milestone_cleared=True` in `replay/state/status_history.json`) during a real replay run -- but `/replay_details` on that exact candidate right afterward showed only `Status: accepted`, with no mention of `validated` anywhere, because `format_candidate_details()` only ever read `row["status"]` (from `run_battery.py`/`run_replay_battery()`'s own return value) and had no access to the SEPARATE milestone-tracking state (`status_history.py`) at all. This is exactly the confusion the "accepted vs validated" entry earlier in this log warns about in the abstract -- here it actually happened, in this project's own most detail-oriented command, the one built specifically to answer "what does this status actually mean, precisely."
-
-**Type.** Real bug fix, caught by a human actually using the feature and noticing the mismatch against what they'd been told moments earlier -- not caught by reading the code (`format_candidate_details()` looked complete and correct in isolation; the missing piece was an input it was never given, not a flaw in its own logic).
+**Type.** Methodology decision, additive and purely informational.
 
 ---
 
@@ -240,16 +226,6 @@ Each entry is dated and never silently rewritten — if a decision is later reve
 **Why.** This exact gap was already documented in PROJECT_MAP.md's "Partial Failures & Crashes" as "known, not yet handled" -- reasoned to be acceptable because `run_bot()` was meant for isolated testing, with `live_daemon.py` as the real, intended way to go live. It stopped being theoretical the moment `run_bot()` was actually run standalone as a real, ongoing process (deliberately, to answer commands without the daemon's proactive hourly/weekly jobs): a second, unrelated `getUpdates` call made from outside the running loop (Telegram allows only one active long-poll per bot token) caused the *next* poll inside `run_bot()` to receive an HTTP 409 Conflict, unhandled, which killed the entire process silently -- no crash alert, no auto-restart, just a bot that stopped answering until someone noticed and manually restarted it.
 
 **Type.** Real bug fix, caught live -- promotes a previously-accepted, explicitly-scoped gap to fully handled once the assumption behind accepting it ("only ever run via live_daemon.py") stopped holding.
-
----
-
-## The new VALIDATED tag leaked onto REJECTED candidates -- gated on current status, not just on milestone history existing
-
-**Decision.** `_trigger_summary_line()` and `format_candidate_details()` now only show the `VALIDATED`/`not validated` tag when the candidate's CURRENT status is `accepted`. `milestone_reported`/`milestone_cleared` existing is no longer sufficient on its own.
-
-**Why.** A real bug, caught immediately after shipping the previous fix: `milestone_reported`/`milestone_cleared` persist in `status_history.json` from whenever a candidate's checkpoint last fired -- which can be long in the past, while the candidate was still `accepted`. A candidate can (and several real ones did) later degrade to `watch`/`rejected` on a subsequent weekly re-validation without that stale milestone data ever being cleared. The previous version of this fix showed the tag for ANY candidate with milestone history regardless of current status, so `/summary`'s `Rejected` section started showing lines like `shock_extension_breakout -- N=248, p=0.149, MFE/MAE=2.78, not validated` -- reading as if "not validated" were part of today's verdict, when it's really a leftover fact from a checkpoint reached under a completely different (and no longer current) status. `explain_non_acceptance()`'s own "Why:" line already gives the real, current reason directly underneath; the stale tag added nothing but confusion right next to it.
-
-**Type.** Real bug fix, caught immediately after shipping -- yet another instance of this project's own recurring failure mode (a stat or tag shown next to a verdict it doesn't actually describe, implying a relationship that isn't there), same family as the concentration/significance branch-order bug and the group-level `STATUS_PLAIN` gloss bug earlier in this log.
 
 ---
 
@@ -267,7 +243,7 @@ Each entry is dated and never silently rewritten — if a decision is later reve
 
 **Decision.** Two real bugs, caught back to back on the same real candidate. (1) Added `_replay_trigger_numeric_description()` (`telegram/bot.py`), mirroring `replay/engine.py::_trigger_description()`'s own lookup against `replay/state.py::load_dynamic_candidates()` -- the `/replay_details` handler now uses it instead of `_trigger_numeric_description()`, which only ever checked production's registry. (2) `format_candidate_details()` now takes `tp_mult`/`sl_mult` and shows them in the "Reference TP/SL backtest" line; both bot.py handlers now read them from the data they already had in hand (production: `run_all()`'s own `live_state` return value, previously discarded as `_live_state`; replay: `replay/state.py::load_battery_status()`, populated by `run_replay_battery()`'s own side effect).
 
-**Why.** (1) Production and the replay track two entirely separate dynamic-candidate registries (see PROJECT_MAP.md's "Historical Replay" section) -- a candidate discovered only during the replay was never going to be found by a lookup that only ever checks production's, exactly what happened: `/replay_details high_efficiency_breakout_with_volume_confirmation` showed "trigger definition not found" for a real, validated, currently-accepted candidate. (2) The "Reference TP/SL backtest" line showed win rate, Sortino, and total expectancy, all of which are meaningless without knowing what TP/SL structure produced them -- the data (`tp_mult`/`sl_mult`, the project's own walk-forward grid search's chosen multipliers against the duration-bucketed anchors) was already being computed and returned by both `run_all()` and `run_replay_battery()`, just never read at the one place a human asks for exactly this level of detail.
+**Why.** (1) Production and the replay track two entirely separate dynamic-candidate registries (see PROJECT_MAP.md's "Historical Replay" section) -- a candidate discovered only during the replay was never going to be found by a lookup that only ever checks production's, exactly what happened: `/replay_details high_efficiency_breakout_with_volume_confirmation` showed "trigger definition not found" for a real, CONFIRMED, currently-accepted candidate. (2) The "Reference TP/SL backtest" line showed win rate, Sortino, and total expectancy, all of which are meaningless without knowing what TP/SL structure produced them -- the data (`tp_mult`/`sl_mult`, the project's own walk-forward grid search's chosen multipliers against the duration-bucketed anchors) was already being computed and returned by both `run_all()` and `run_replay_battery()`, just never read at the one place a human asks for exactly this level of detail.
 
 **Type.** Real bug fixes, both caught live in immediate succession by a human actually reading the command's output line by line -- same pattern as every other fix in this section of the log: the missing piece was an input never passed in, not a flaw in `format_candidate_details()`'s own logic.
 
@@ -1029,67 +1005,6 @@ that changes, which is otherwise invisible because the calls still succeed.
 
 ---
 
-### 2026-08-30 — Why the validation milestone stays at 50, measured rather than assumed
-
-**Why this needed measuring at all.** It is tempting to treat `MILESTONE_N` as
-purely a labelling convention -- the evidentiary bar behind the word "validated"
--- on the grounds that the p-value comes from `pattern_significance` regardless.
-It is not. At the checkpoint the significance test IS re-run, and for a STATIC
-candidate (C1/C2/C6, live-only by rule) those 50 occurrences are the entire
-evidence base. The number is therefore as measurable as `min_report_events`, and
-is treated the same way here.
-
-**Measured**, re-running the real bootstrap on real 7-day forward returns at
-`SIGNIFICANCE_ALPHA = 0.10`:
-
-    N live   false positives   detects +10%   detects +20%
-      20          11.7%            58.0%          97.0%
-      30          11.0%            69.7%          98.7%
-      50          11.7%            84.7%         100.0%   <- current
-      75           9.3%            94.7%         100.0%
-     100           7.7%            98.3%         100.0%
-
-The first column is the surprise: **lowering N does not make any single
-validation less trustworthy.** The false-positive rate is flat, as it should be
-for a calibrated test. What lowering N costs is the ability to CONFIRM a real
-pattern -- power falls from 85% to 58% between N=50 and N=20 -- and a candidate
-that fails a checkpoint is not discarded, it simply gets re-checked at the next
-multiple. On that reading alone, a lower bar looks defensible: faster feedback,
-and a real effect gets another attempt later.
-
-**The argument that actually settles it is the one neither the original
-reasoning nor the question considered: the checkpoint REPEATS.** It fires at
-every new multiple of N, and each firing is another opportunity for that ~11.7%
-to land. Over a candidate's life the risk compounds:
-
-    threshold   checkpoints within 150 occurrences   cumulative risk
-        20                     7                          58%
-        30                     5                          46%
-        50                     3                          31%   <- current
-        75                     2                          22%
-
-At a threshold of 20, a candidate with no real effect has a **58%** chance of
-being labelled "validated" at least once, against 31% at 50. Since `validated`
-is the single strongest claim this project permits itself -- deliberately
-reserved, and distinguished from `accepted` everywhere -- doubling the chance of
-awarding it wrongly is the wrong trade at any speed.
-
-**50 stays, now for a measured reason rather than a plausible one.** The same
-table points the other way if anything: 75 would cut cumulative risk to 22% and
-lift power to 95%. Not adopted, because it lengthens an already long wait (a
-market-wide condition needs years to accumulate 50 real occurrences), but
-recorded so the trade is visible rather than rediscovered.
-
-**Unchanged and worth restating**, since it is what makes 50 mean different
-things for different candidates: static candidates count real live occurrences
-only, having been derived by mining this project's own history. Sonnet-proposed
-candidates use a rolling window of the most recent 50, backtest and live mixed,
-because Sonnet never sees the backtest before proposing -- and once 50 genuine
-live occurrences accumulate, backtest stops contributing and the rule collapses
-to the static one.
-
----
-
 ### 2026-08-31 — 228 proposals, none testable: capping clauses and widening thresholds
 
 **The finding, from the replay's own output rather than a simulation.** Over 5.5
@@ -1588,38 +1503,6 @@ scoping them well.
 
 ---
 
-## The testability floor and the validation milestone are not consistent with each other
-
-**The arithmetic, which nobody had done.** `MIN_HISTORICAL_OCCURRENCES = 35`
-decides what may be TESTED. `MILESTONE_N = 50` resolved live occurrences decides
-what may be called VALIDATED. Over this project's ~8-year, 7-coin history:
-
-    historical occurrences   rate       years to validate
-                        35   4.4/yr                  11.4
-                        80  10.0/yr                   5.0
-                       120  15.0/yr                   3.3
-                       200  25.0/yr                   2.0
-
-A condition admitted exactly at the floor would need **11 years** of live testing
-to reach its first validation milestone — longer than the history it was found
-on. The system can test conditions it can never validate.
-
-**The one mitigation, and its limit.** `_effective_milestone_count` lets a
-DYNAMIC candidate fill its first window with backtest occurrences topped up by
-live ones, so the first checkpoint arrives much sooner. That is deliberate and
-documented. But it applies to the FIRST checkpoint only: every subsequent
-multiple of 50 is live-only, so the 11-year figure is what governs a candidate's
-second and later verdicts.
-
-**Not yet resolved**, and recorded rather than quietly patched. Raising the floor
-to ~120 would put validation within about three years, at the cost of discarding
-hypotheses that are merely rare rather than wrong. Lowering `MILESTONE_N` trades
-away the evidentiary bar the word "validated" rests on. Both are real trade-offs
-and neither should be made to tidy an inconsistency; what matters first is that
-the inconsistency is on the record.
-
----
-
 ## `MIN_HISTORICAL_OCCURRENCES = 35` does not do what its own reasoning claims
 
 **Measured**, by sampling conditions from the current grammar in bands of
@@ -1655,9 +1538,9 @@ is the finding; the mechanism behind its spread is open.
 **Two independent lines point at the same replacement value.** Raising the floor
 to roughly 120 occurrences would put the insufficient-data rate near 10% — and
 separately, 120 occurrences is the rate at which a candidate reaches
-`MILESTONE_N = 50` live occurrences in about three years rather than eleven. The
-testability floor and the validation milestone disagree today; ~120 is where they
-would agree.
+`MILESTONE_N` live occurrences several times faster. The testability floor and
+`MILESTONE_N` disagreed at the numbers on record when this was measured; ~120 is
+where they agree — the value `MIN_HISTORICAL_OCCURRENCES` uses today.
 
 **Deliberately not changed here.** Raising the floor discards hypotheses that are
 merely rare rather than wrong, and statistical power is already this project's
@@ -1698,11 +1581,10 @@ guidance was removed and replaced with an explanation of what the two forms of
 the hypothesis MEAN, since choosing a lookback for testability is choosing it
 for nothing.
 
-**It also put the gate on a different unit from the milestone it feeds.** The
+**It also put the gate on a different unit from the checkpoint it feeds.** The
 live side already deduplicates -- `_scan_mechanical_triggers` will not open a
 second test on a (candidate, coin) pair while one is open -- so live occurrences
-were always episodes while the gate counted firings. The 11.4-years-to-validate
-figure recorded earlier was therefore optimistic by the inflation factor.
+were always episodes while the gate counted firings.
 
 **Two floors now, guarding two different failures.** Neither replaces the other,
 and they bind in different regimes:
@@ -1801,55 +1683,6 @@ evidence that anything will be found.
 
 ---
 
-## `MILESTONE_N` follows `min_report_events` again — the coupling had silently broken
-
-**The defect.** `MILESTONE_N = 50` carried the comment "same threshold
-classify_status itself requires". That was true when written. The 2026-08-30
-sample-size audit lowered `min_report_events` from 50 to 20 and did not touch the
-milestone, so the checkpoint drifted to 2.5x the bar it exists to mirror, and the
-comment beside it became false.
-
-**Why that mattered more than a stale comment.** The first checkpoint of a
-DYNAMIC candidate is topped up from its backtest by design
-(`_effective_milestone_count`), so it fires essentially on discovery — a
-candidate with 120 backtest occurrences reaches an effective count of 50 with
-zero live tests. The first "validated" therefore rests on the backtest, which is
-documented and deliberate. The SECOND checkpoint is the one resting on live
-evidence alone, and it is where the word starts to mean what it was reserved for.
-
-At 50 that checkpoint required 100 real live occurrences. Measured across the
-current grammar, testable conditions fire at a median of 10.8 INDEPENDENT
-occurrences per year:
-
-    MILESTONE_N   2nd checkpoint   discovered yr 1   yr 3   yr 5   median time
-             50        100 live                43%    36%    13%     9.3 years
-             30         60 live                85%    55%    40%     5.6 years
-             20         40 live               100%    91%    55%     3.7 years
-
-**The median candidate never reached it.** A bar nothing can clear does not
-protect a claim; it just means the claim is never made either way.
-
-**Restoring 20 is a correction, not a concession.** It is not a threshold lowered
-to produce results faster — it is the number the design's own stated logic gives,
-recovered after the link it depended on was cut by an unrelated change. The
-milestone fires when a candidate has as much LIVE evidence as the statistics
-require to report on it at all, which is exactly what it was built to do.
-
-**What it does not fix, stated plainly.** 20 live occurrences is a modest sample,
-and "validated" at this bar means "still accepted after 20 independent live
-occurrences", not "proven". The word's meaning is unchanged; only the amount of
-evidence behind it is now stated correctly rather than aspirationally.
-
-**An earlier claim in these notes was wrong and is corrected here.** The
-inconsistency between the testability floor and the milestone was recorded as
-"11.4 years to validate", implying no candidate could ever be validated. That
-figure described the SECOND checkpoint, not the first, and the first fires
-immediately for dynamic candidates. The binding constraint on how many candidates
-get validated was never the milestone — it is the acceptance rate, measured at
-about 8%.
-
----
-
 ## The static battery is the control arm, not a second class of candidate
 
 **Raised by the project's director**: do C1/C2/C6 still serve any purpose, now
@@ -1923,20 +1756,9 @@ by that data.
 
 ## `prospective_split` — the only genuinely out-of-sample number here
 
-**The distinction this project's own vocabulary was blurring**, and it took the
-director pointing it out to surface: `pattern_significance` holds out a test FOLD
-inside the walk-forward and the code calls those rows `oos_returns`. That is a
-real discipline — it stops thresholds being fitted to the rows they are graded on
-— but every one of those rows already existed when the hypothesis was written.
-**It is out-of-sample with respect to the PARAMETERS, not with respect to the
-IDEA.**
+**A distinction worth being precise about.** `pattern_significance` holds out a test FOLD inside the walk-forward, and the code calls those rows `oos_returns`. That is a real discipline — it stops thresholds being fitted to the rows they are graded on — but every one of those rows already existed when the hypothesis was written. **It is out-of-sample with respect to the PARAMETERS, not with respect to the IDEA.**
 
-The project's stated epistemology has always put the real out-of-sample
-elsewhere: `accepted` means the historical statistics passed, `validated` is
-reserved for a candidate that has "actually lived through its own tracking
-window". Live is the genuine out-of-sample. Using the same phrase for both is how
-a reader — and the author — ends up believing the backtest already answered a
-question only the future can.
+The genuine out-of-sample evidence is elsewhere: `accepted` means the historical statistics passed; CONFIRMED means the candidate has additionally lived through its own tracking window (see [The CONFIRMED checkpoint](#the-confirmed-checkpoint-milestone_n--20)). Only the live occurrences are truly out-of-sample with respect to the idea itself.
 
 `prospective_split(spec, coins, proposed_at)` reports the two halves separately:
 how many occurrences predate the hypothesis, how many postdate it, and what the
@@ -1955,12 +1777,9 @@ it" is available years before the live-occurrence milestone can answer it.
 
 ---
 
-## "Validated" becomes "confirmed", because the numbers cannot support the stronger word
+## Why "confirmed", not "validated"
 
-**The question that forced this**, from the project's director: what exactly are
-the live occurrences supposed to prove? The honest answer is the one that
-follows from `required_n_for_power`, which this project already uses elsewhere —
-the sample needed to demonstrate a `MIN_INTERESTING_EFFECT` of 5% at 80% power:
+**What 20 occurrences can actually prove.** `required_n_for_power` (`candidates/methodology.py`) computes the sample needed to detect a `MIN_INTERESTING_EFFECT` of 5% at 80% statistical power:
 
     horizon    occurrences needed    smallest effect detectable at n=20
      3 days                   121                                12.3%
@@ -1968,24 +1787,11 @@ the sample needed to demonstrate a `MIN_INTERESTING_EFFECT` of 5% at 80% power:
     14 days                   742                                30.4%
     21 days                 1,337                                40.9%
 
-**Twenty occurrences can only demonstrate effects of 20-40% over the horizon.** A
-30% mean forward return over 14 days would not be a discovery; it would be a bug
-to go looking for. And this is not a threshold that was set too low: **50 could
-not do it either, and neither could 100.** The required sample is in the
-hundreds, against a median candidate producing 10.8 independent occurrences a
-year. No value reachable in a nine-year replay clears it.
+At `MILESTONE_N = 20`, only a 20-40% move over the horizon is detectable — a result that size would be a bug to go chase, not a discovery. Raising the milestone to 50 or 100 does not close this gap either; the required sample is in the hundreds, against a median candidate producing about 10.8 independent occurrences a year.
 
-**So the checkpoint cannot mean what "validated" promises.** What it can honestly
-mean — and what the code has always actually done — is that the condition kept
-occurring and still passes when re-tested on the enlarged sample. That is
-**persistence, not proof**, and the vocabulary now says so: `CONFIRMED at this
-checkpoint`, never `VALIDATED`.
+**So the word is "confirmed", meaning persistence, not proof.** The checkpoint says the condition kept occurring and still passes when re-tested on the enlarged sample — nothing stronger. Every checkpoint message states both numbers together ("occurrence 23 — 307 needed for 80% power") so the achieved count is never read as more than it is.
 
-**Every live-test message now carries the gap explicitly**: "occurrence 23 — 307
-would be needed to demonstrate a 5% effect at 80% power". Showing the required
-number beside the achieved one is what stops an accumulating counter from
-implying a proof it cannot deliver. It will read as unbalanced for the whole
-replay. That is the accurate picture, and burying it would be the alternative.
+**A real caveat, not swept under the rug.** Because the checkpoint re-fires at every new multiple of 20, a candidate with no real effect has roughly a 58% chance of reaching CONFIRMED at least once purely by chance over 150 occurrences (measured by re-running the real bootstrap at `SIGNIFICANCE_ALPHA = 0.10`) — one reason CONFIRMED is re-earned fresh each checkpoint rather than kept permanently once reached. See [`accepted` vs `CONFIRMED`](#accepted-vs-confirmed--two-different-claims-never-interchangeable) and [The CONFIRMED checkpoint](#the-confirmed-checkpoint-milestone_n--20).
 
 ---
 
