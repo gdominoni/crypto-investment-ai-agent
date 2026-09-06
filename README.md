@@ -146,6 +146,9 @@ Bitcoin's volatility has just come out of a 12-day quiet stretch. Sonnet is show
           hawkish signal), and the market was already stretched
           two different ways going into the breakout.
           Sonnet generated 2 testable hypotheses.
+          Two conditions rather than one deeper combination:
+          each extra clause divides historical occurrences by
+          roughly eight. One button approves both.
 
           PROPOSAL 1: hawkish_claims_then_oversold_short
           Status: PROPOSED (Awaiting Human Gating)
@@ -167,8 +170,9 @@ Bitcoin's volatility has just come out of a 12-day quiet stretch. Sonnet is show
           history up to this date, registers both conditions,
           and tracks them forward as observational live tests.
           No capital, ever.
-          [ Don't Test It ] → Dismisses them untested. Nothing
-          is recorded, so the same idea can surface again later.
+          [ Don't Test It ] → Dismisses them untested and
+          resumes the replay. Nothing is recorded, so the same
+          idea can surface again later.
 
 You:     [taps "Test It"]
 
@@ -270,12 +274,16 @@ Rows are ranked by how far a candidate is toward its confirmation count, **never
             universe baseline (56% positive after adjustment)
           • MFE / MAE: +8.90% / -7.12% (Ratio: 1.25)
 
+          --- EXECUTION (HYPEROPT) ---
+          • TP/SL: pending hyperopt cross-check.
+
           ---
           Next Checkpoint: 200 occurrences (re-evaluated fresh
           each time, never a permanent verdict)
           CONFIRMED at this checkpoint. Confirmed, not validated:
           persistence on an enlarged sample, not proof -- a
           conclusive test needs the occurrence count shown above.
+          Assessment: currently accepted
 ```
 
 `hawkish_claims_surprise_then_volume_spike_capitulation` (`44fb`) is the one candidate this project's full replay produced that cleared every gate it has — see the result summary near the top of this README for the full statistical picture, including the multiplicity control it was checked against. That second number, "Power Progress: 180 / 96", is deliberate, not an oversight: at this project's horizons, proving an effect with real statistical confidence needs occurrences in the hundreds, and most tracked candidates never get there. So the system never claims proof — only, once the sample is large enough, that a pattern has kept happening and still holds up. That's why the word here is **CONFIRMED**, not "validated": persistence, honestly labeled as persistence, re-earned fresh at every checkpoint rather than awarded once.
