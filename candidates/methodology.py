@@ -1547,7 +1547,12 @@ def _trigger_summary_line(name: str, row: dict, milestone: dict | None = None) -
     # describing today's status when it's really stale history unrelated to the
     # real reason (already given below via "Why:").
     if row.get("status") == "accepted" and milestone and milestone.get("milestone_reported"):
-        bits.append("VALIDATED" if milestone.get("milestone_cleared") else "not validated")
+        # CONFIRMED, never "validated" -- the same retired word format_candidate_details
+        # above explains, for the same reason: no reachable occurrence count demonstrates
+        # an effect of interesting size, so a checkpoint asserts persistence and nothing
+        # stronger. This line was missed when the word was retired everywhere else, and
+        # kept saying VALIDATED in /summary, the most-read message the bot sends.
+        bits.append("CONFIRMED" if milestone.get("milestone_cleared") else "not confirmed")
     line = f"  <b>{_escape_html(name)}</b> -- {', '.join(bits)}"
     if row.get("status") in ("watch", "rejected"):
         # Without this, a rejected/watch candidate can show a favorable p-value

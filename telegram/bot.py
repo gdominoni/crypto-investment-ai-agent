@@ -777,6 +777,44 @@ def _get_updates(token: str, offset: int | None, timeout: int = 30) -> list[dict
     return resp.json().get("result", [])
 
 
+_NO_BATTERY_YET = (
+    "No battery results stored yet. The weekly re-validation writes them; if this host was just "
+    "deployed, they arrive on its first weekly cycle (or run "
+    "<code>python3 -m scheduler.weekly_revalidation</code> once by hand)."
+)
+
+
+def _as_of_note(asof: str | None) -> str:
+    """Cached numbers must say when they were computed, or a reader cannot tell
+    a current answer from a stale one."""
+    if not asof:
+        return ""
+    return f"\n\n<i>As of {asof[:16].replace('T', ' ')} UTC -- refreshed by the weekly re-validation.</i>"
+
+
+def _last_battery_result() -> tuple[dict, dict, str | None]:
+    """The stored battery result: (live_state, {candidate: row}, generated_at).
+
+    /summary and /details used to call run_all() and recompute the ENTIRE
+    battery, synchronously, inside the Telegram dispatch loop. On a laptop that
+    was a bad-but-survivable 21 seconds per candidate-set; on the deployed host
+    -- one shared ARM core -- a real /summary was measured at 103 minutes, and
+    because the daemon polls and runs jobs in one sequential loop, the bot
+    answered NOTHING for that entire time. It looked dead. This project's whole
+    premise is that a human interacts with it through Telegram, so a command
+    that silences the bot for an hour and a half is not a slow command, it is a
+    broken one.
+
+    Nothing was gained by it either: run_all() is already run by the weekly
+    re-validation, which persists every row it computed (see run_battery's
+    live_state["summary"]). The answer was always on disk.
+    """
+    from execution.signal_store import load_battery_state
+
+    state = load_battery_state() or {}
+    return state, state.get("summary") or {}, state.get("generated_at")
+
+
 def _dispatch_update(update: dict, client: Anthropic) -> None:
     if "callback_query" in update:
         cq = update["callback_query"]
@@ -897,7 +935,6 @@ def _dispatch_update(update: dict, client: Anthropic) -> None:
         return
 
     if text.lower().startswith("/details"):
-        from candidates.run_battery import run_all
         from candidates.status_history import all_latest_statuses
         from execution.live_test_state import load_horizons
         parts = text.split(maxsplit=1)
@@ -905,8 +942,10 @@ def _dispatch_update(update: dict, client: Anthropic) -> None:
             _send("Usage: /details &lt;trigger_name&gt;  (e.g. /details c2_long -- see /summary for the exact names currently tracked)")
             return
         candidate = parts[1].strip()
-        result, live_state, _meta = run_all()
-        status_summary = result.set_index("candidate").to_dict(orient="index") if len(result) else {}
+        live_state, status_summary, _asof = _last_battery_result()
+        if not status_summary:
+            _send(_NO_BATTERY_YET)
+            return
         row = status_summary.get(candidate)
         if row is None:
             from replay import status_history as replay_sh
@@ -924,12 +963,13 @@ def _dispatch_update(update: dict, client: Anthropic) -> None:
         return
 
     if text.lower() == "/summary":
-        from candidates.run_battery import run_all
         from candidates.status_history import all_latest_statuses
-        result, _live_state, _meta = run_all()
-        status_summary = result.set_index("candidate").to_dict(orient="index") if len(result) else {}
+        _live_state, status_summary, asof = _last_battery_result()
+        if not status_summary:
+            _send(_NO_BATTERY_YET)
+            return
         under_test, discarded = format_trigger_summary(status_summary, all_latest_statuses())
-        _send(under_test)
+        _send(under_test + _as_of_note(asof))
         _send(discarded)
         return
 
