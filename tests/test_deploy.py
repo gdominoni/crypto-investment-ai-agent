@@ -224,3 +224,68 @@ class TestTheDeadMansSwitch:
                     "a failed heartbeat ping would now send a Telegram alert")
                 return
         raise AssertionError("no heartbeat job found")
+
+
+class TestTheBootstrapScript:
+    """It exists to remove the hand-editing step from deployment, so the one
+    thing it must never do is drift from the guide it replaces."""
+
+    def _script(self) -> str:
+        return (ROOT / "deploy" / "bootstrap.sh").read_text()
+
+    def test_it_installs_exactly_the_packages_the_guide_names(self):
+        """Two places listing the same dependencies is how a host ends up with
+        a package set nobody actually verified."""
+        import re
+
+        script = self._script()
+        m = re.search(r"HOST_PACKAGES=\(([^)]*)\)", script)
+        assert m, "HOST_PACKAGES is gone -- the script no longer declares what it installs"
+        from_script = set(m.group(1).split())
+
+        guide = DEPLOY_README.read_text()
+        m = re.search(r"pip install (pandas[^\n`]*)", guide)
+        assert m, "the guide no longer shows the manual install line"
+        from_guide = set(m.group(1).split())
+
+        assert from_script == from_guide, (
+            f"bootstrap.sh and deploy/README.md disagree about the host's dependencies: "
+            f"only in script {from_script - from_guide}, only in guide {from_guide - from_script}")
+
+    def test_it_refuses_to_run_as_root(self):
+        script = self._script()
+        assert 'id -u' in script and "-ne 0" in script, (
+            "the script no longer refuses to run as root; the daemon is meant to run unprivileged")
+
+    def test_it_does_not_start_the_daemon(self):
+        """Deliberate: secrets and migrated state both arrive from the human's
+        own machine AFTER this runs, and a daemon started before them looks
+        perfectly healthy while doing nothing useful."""
+        # Only the executable part: the closing heredoc tells the human which
+        # systemctl command to run next, which is instruction, not execution.
+        script = self._script()
+        executable = script.split("cat <<EOF")[0]
+        for forbidden in ("systemctl start", "systemctl enable", "systemctl restart"):
+            assert forbidden not in executable, (
+                f"bootstrap.sh runs `{forbidden}` -- it would start the daemon before "
+                f"the .env and the migrated state exist")
+        assert "daemon-reload" in executable, "the generated unit would not be picked up"
+        assert "systemctl enable" in script, (
+            "the script no longer tells the human how to start it, which leaves them "
+            "at a finished setup with no visible next step")
+
+    def test_it_verifies_the_daemon_imports_before_declaring_success(self):
+        """A missing dependency should surface on the prompt the human is
+        watching, not in a journal they are not."""
+        assert "import scheduler.live_daemon" in self._script()
+
+    def test_the_generated_unit_keeps_what_makes_it_a_service(self):
+        """It rewrites the stock unit with sed. A pattern that silently matched
+        nothing would leave placeholder paths; one that matched too much could
+        drop the restart policy."""
+        script = self._script()
+        for field in ("User=", "WorkingDirectory=", "ExecStart=", "ReadWritePaths="):
+            assert f"s|^{field}" in script, f"the script no longer rewrites {field}"
+        # The fields it must NOT touch are the ones the systemd test pins.
+        for untouched in ("Restart=", "PYTHONUNBUFFERED"):
+            assert f"s|^{untouched}" not in script, f"the script rewrites {untouched}, which must survive"

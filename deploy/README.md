@@ -49,39 +49,45 @@ Two smaller things:
 - **Shape.** `VM.Standard.A1.Flex` (Ampere, ARM) is the better free shape by a wide margin — 4 OCPU and 24 GB against the AMD micro's single core and 1 GB. ARM is fine here: pandas, numpy and pyarrow all ship `aarch64` wheels, and everything else is pure Python. Ask for a small slice (1 OCPU, 6 GB is already luxurious against a 140 MB peak). If you hit **"Out of host capacity"**, that is a well-known A1 shortage in busy regions, not a mistake on your part — try another availability domain, another region, or retry later.
 - **Networking.** Nothing needs to reach this host from outside except your own SSH. The daemon only makes outbound connections (Telegram, Binance, Anthropic), so you can leave the default security list alone and skip opening any port.
 
-The default login user on Oracle's Ubuntu images is `ubuntu`, not `root`. Prefix the commands in step 1 with `sudo`.
+The default login user on Oracle's Ubuntu images is `ubuntu`, not `root`.
 
 ---
 
 ## 1. Create the box
 
-Any provider, smallest tier, **Ubuntu 24.04 LTS**. Add your SSH key during creation rather than using a root password.
+Any provider, smallest tier, **Ubuntu 24.04 LTS**. Add your SSH key during creation rather than using a password.
 
-Then, as root:
-
-```bash
-adduser --disabled-password --gecos "" agent
-rsync --archive --chown=agent:agent ~/.ssh /home/agent/
-apt update && apt install -y python3-venv python3-pip git
-```
-
-The daemon runs as `agent`, not root. It holds two API credentials and polls a public network service; there is no reason for it to be able to touch the rest of the system.
+The daemon runs as your ordinary login user, not as root. On a machine that exists only to run this, a dedicated account buys nothing over the unprivileged user the image already gives you — and the systemd unit narrows it further, allowing writes to the project directory and nowhere else.
 
 ---
 
-## 2. Get the code and its dependencies
+## 2. Set the host up
 
-As `agent` (`ssh agent@<host>`):
+SSH in, then run this once:
 
 ```bash
-git clone https://github.com/gdominoni/crypto-investment-ai-agent.git crypto-agent
-cd crypto-agent
-python3 -m venv .venv
-source .venv/bin/activate
-pip install pandas numpy pyarrow requests anthropic python-dotenv ccxt
+curl -fsSL https://raw.githubusercontent.com/gdominoni/crypto-investment-ai-agent/main/deploy/bootstrap.sh | bash
 ```
 
-That is the deliberate install — the lean one, not `pip install -r requirements.txt`. It omits `freqtrade` and `scipy` for the reason above. If you would rather not think about it, installing everything works fine and just wastes disk.
+It installs the system packages, clones the repo into `~/crypto-agent`, builds a virtualenv, installs the dependencies, verifies the daemon actually imports, and writes a systemd unit with this machine's real user and paths already filled in. It is safe to re-run, and it deliberately does not start anything — steps 3 and 4 still have to happen first.
+
+Piping a script into `bash` deserves a look before you run it, so: [`deploy/bootstrap.sh`](bootstrap.sh), or `curl -fsSLO <url>` and read it locally.
+
+<details>
+<summary>Or do it by hand</summary>
+
+```bash
+sudo apt update && sudo apt install -y python3-venv python3-pip git
+git clone https://github.com/gdominoni/crypto-investment-ai-agent.git ~/crypto-agent
+cd ~/crypto-agent
+python3 -m venv .venv
+.venv/bin/pip install pandas numpy pyarrow requests anthropic python-dotenv ccxt
+```
+
+Then edit `deploy/crypto-agent.service` — `User`, `WorkingDirectory`, `ExecStart`, `ReadWritePaths` — and copy it to `/etc/systemd/system/`. Generating it is what the script does; a wrong `WorkingDirectory` fails in a way that reads like a code bug.
+</details>
+
+That package list is the deliberate one — the lean install, not `pip install -r requirements.txt`. It omits `freqtrade` and `scipy` for the reason above. Installing everything also works and just wastes a few hundred MB.
 
 ---
 
@@ -127,14 +133,14 @@ The runtime state is deliberately **not** in git — it is a live, continuously-
 
 ```bash
 scp candidates/dynamic_candidates.json candidates/status_history.json \
-    agent@<host>:crypto-agent/candidates/
+    ubuntu@<host>:crypto-agent/candidates/
 scp execution/live_tests.json execution/live_battery_state.json \
     execution/confirmation_priors.json execution/parked_proposals.json \
     execution/horizons.json \
-    agent@<host>:crypto-agent/execution/
-scp scheduler/previous_status.json agent@<host>:crypto-agent/scheduler/
-scp llm_pipeline/pending_test.json agent@<host>:crypto-agent/llm_pipeline/
-scp compression_escalated.json llm_usage.json agent@<host>:crypto-agent/
+    ubuntu@<host>:crypto-agent/execution/
+scp scheduler/previous_status.json ubuntu@<host>:crypto-agent/scheduler/
+scp llm_pipeline/pending_test.json ubuntu@<host>:crypto-agent/llm_pipeline/
+scp compression_escalated.json llm_usage.json ubuntu@<host>:crypto-agent/
 ```
 
 Around 12 MB in total, most of it `live_tests.json`. A file that does not exist on your laptop simply has nothing to send yet — `scp` will say so, and that is not an error.
@@ -162,12 +168,11 @@ python3 -m deploy.preflight
 
 ---
 
-## 6. Install the service
+## 6. Start it
+
+The unit is already installed — step 2 wrote it with this machine's real paths. All that is left:
 
 ```bash
-sudo cp deploy/crypto-agent.service /etc/systemd/system/
-sudo nano /etc/systemd/system/crypto-agent.service   # check WorkingDirectory and ExecStart paths
-sudo systemctl daemon-reload
 sudo systemctl enable --now crypto-agent
 ```
 
