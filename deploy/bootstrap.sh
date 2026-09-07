@@ -41,7 +41,15 @@ command -v sudo >/dev/null || die "sudo not found."
 say "1/5  System packages"
 # Oracle's images run unattended-upgrades on first boot, which holds the apt
 # lock for a few minutes. Waiting beats failing with a confusing lock error.
+# Two families, because Oracle Cloud's DEFAULT image is Oracle Linux, not
+# Ubuntu -- and picking the default is the likeliest thing a reader does.
+# They differ in more than the package manager: Oracle Linux 8/9 ship Python
+# 3.9, below this project's 3.11 floor, so there the interpreter has to be
+# installed explicitly and used by name rather than as bare `python3`.
+PY=""
 if command -v apt-get >/dev/null; then
+    # Ubuntu/Debian images run unattended-upgrades on first boot, which holds
+    # the apt lock for a few minutes. Waiting beats a confusing lock error.
     for _ in $(seq 1 30); do
         sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || break
         echo "    waiting for another apt process to finish..."
@@ -49,10 +57,20 @@ if command -v apt-get >/dev/null; then
     done
     sudo apt-get update -qq
     sudo apt-get install -y -qq python3-venv python3-pip git
+    PY=python3
+elif command -v dnf >/dev/null || command -v yum >/dev/null; then
+    PKG=$(command -v dnf >/dev/null && echo dnf || echo yum)
+    echo "    RHEL-family host detected, using $PKG"
+    sudo "$PKG" install -y -q python3.11 python3.11-pip git
+    PY=python3.11
 else
-    die "this script expects a Debian/Ubuntu host (apt-get not found)."
+    die "unsupported host: found neither apt-get (Debian/Ubuntu) nor dnf/yum (RHEL family)."
 fi
-echo "    python3: $(python3 --version), arch: $(uname -m)"
+
+command -v "$PY" >/dev/null || die "$PY was installed but is not on PATH."
+"$PY" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' \
+    || die "$PY is $("$PY" -V 2>&1), but this project needs 3.11 or newer."
+echo "    using $($PY -V 2>&1) at $(command -v "$PY"), arch: $(uname -m)"
 
 say "2/5  Code"
 if [ -d "$TARGET_DIR/.git" ]; then
@@ -65,7 +83,7 @@ fi
 
 say "3/5  Virtualenv and dependencies"
 if [ ! -d "$TARGET_DIR/.venv" ]; then
-    python3 -m venv "$TARGET_DIR/.venv"
+    "$PY" -m venv "$TARGET_DIR/.venv"
 fi
 "$TARGET_DIR/.venv/bin/pip" install --quiet --upgrade pip
 # On ARM (Oracle's A1 shapes) this pulls aarch64 wheels; no compiler needed.
