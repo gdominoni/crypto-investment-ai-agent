@@ -136,17 +136,52 @@ def test_preflight_never_writes_state():
     assert "open(" not in src.replace("shutil.disk_usage", ""), "preflight opens a file for writing"
 
 
+def _unit_sections() -> dict[str, list[str]]:
+    """The unit split into {section: [directive lines]}, comments dropped.
+
+    Placement is checked rather than mere presence because systemd does not
+    error on a directive in the wrong section -- it ignores it, logs one line,
+    and starts a unit that looks healthy while missing the behaviour. An
+    earlier version of this test asserted only that "StartLimitBurst" appeared
+    somewhere in the file, and passed happily while the real host logged
+    `Unknown key name 'StartLimitIntervalSec' in section 'Service', ignoring`
+    and ran with no crash-loop limit at all.
+    """
+    sections: dict[str, list[str]] = {}
+    current = None
+    for line in (ROOT / "deploy" / "crypto-agent.service").read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith((";", "#")):
+            continue
+        if line.startswith("[") and line.endswith("]"):
+            current = line[1:-1]
+            sections[current] = []
+        elif current:
+            sections[current].append(line)
+    return sections
+
+
 def test_the_systemd_unit_restarts_and_logs():
     """The whole reason for systemd over `nohup` is that a process dying at 3am
     comes back. A unit without Restart= silently does not."""
-    unit = (ROOT / "deploy" / "crypto-agent.service").read_text()
-    assert "Restart=always" in unit, "the unit no longer restarts on failure"
-    assert "StartLimitBurst" in unit, "a crash-looping daemon would retry forever"
-    assert "PYTHONUNBUFFERED=1" in unit, (
+    sections = _unit_sections()
+    service = sections.get("Service", [])
+    unit_sec = sections.get("Unit", [])
+
+    assert "Restart=always" in service, "the unit no longer restarts on failure"
+    assert "PYTHONUNBUFFERED=1" in "\n".join(service), (
         "without this Python buffers print() and the journal looks empty -- "
         "indistinguishable from a hung daemon")
-    assert "-m scheduler.live_daemon" in unit
-    assert "WantedBy=multi-user.target" in unit, "the service would not start on boot"
+    assert any(d.startswith("ExecStart=") and "-m scheduler.live_daemon" in d for d in service)
+    assert "WantedBy=multi-user.target" in sections.get("Install", []), (
+        "the service would not start on boot")
+
+    # The pair systemd moved to [Unit]. In [Service] they are a silent no-op.
+    for directive in ("StartLimitBurst", "StartLimitIntervalSec"):
+        assert any(d.startswith(directive) for d in unit_sec), (
+            f"{directive} is not in [Unit] -- a crash-looping daemon would retry forever")
+        assert not any(d.startswith(directive) for d in service), (
+            f"{directive} is in [Service], where systemd ignores it with only a journal line")
 
 
 class TestTheDeadMansSwitch:

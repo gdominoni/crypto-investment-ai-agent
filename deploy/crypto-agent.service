@@ -13,6 +13,20 @@ Description=Crypto pattern-discovery agent (Telegram bot, hourly scans, weekly r
 After=network-online.target
 Wants=network-online.target
 
+; Crash-loop limit: if the service fails 5 times within 10 minutes, stop
+; retrying. A daemon crash-looping on a bad .env or an unreachable Telegram is
+; broken in a way restarting will not fix, and burning API credit or Telegram
+; rate limit against the loop makes it worse.
+;
+; These two live in [Unit], NOT in [Service] where the neighbouring Restart=
+; settings live -- systemd moved them, and a modern systemd IGNORES
+; StartLimitIntervalSec under [Service] with only a line in the journal to say
+; so. Placed wrongly they are not an error, they are a silent no-op: the unit
+; starts, looks healthy, and simply has no rate limit. Caught on the real host
+; by reading the journal after the first start.
+StartLimitBurst=5
+StartLimitIntervalSec=600
+
 [Service]
 Type=simple
 User=agent
@@ -31,11 +45,8 @@ ExecStart=/home/agent/crypto-agent/.venv/bin/python3 -m scheduler.live_daemon
 ; unreachable Telegram) would otherwise spin at full speed forever.
 Restart=always
 RestartSec=30
-; If it fails 5 times within 10 minutes, stop trying. A crash-looping daemon is
-; broken in a way restarting will not fix, and burning API credit or Telegram
-; rate limit on the loop makes it worse.
-StartLimitBurst=5
-StartLimitIntervalSec=600
+; The crash-loop limit that pairs with these lives in [Unit] above -- see the
+; note there for why it cannot sit next to them.
 
 ; Logs go to the journal: `journalctl -u crypto-agent -f` to follow,
 ; `journalctl -u crypto-agent --since "1 hour ago"` to look back.
