@@ -19,18 +19,20 @@ That split is what keeps the host small. `freqtrade` and `scipy` are in `require
 
 ### Sizing
 
-Measured, not estimated — and measured twice, because the two numbers disagree in a way worth knowing about. The weekly battery profiled on its own (159 candidates, every write redirected to a temp dir) peaks at **140 MB RSS** over about 20 minutes. The full daemon on a real host reported peaks of **350–410 MB** to systemd across its first few hourly cycles. The gap is everything the isolated run does not carry: the long-poll loop, the API clients, and the loaded frames held between jobs.
-
-Trust the larger one. It is the figure from the thing you are actually going to run.
+Measured on a real deployment (Oracle A1, 1 OCPU, 6 GB, aarch64), not estimated — and the numbers are worth reading before you pick a shape, because two of them are much larger than a reasonable guess.
 
 | Resource | Needed | Why |
 |---|---|---|
-| RAM | **1 GB** | 350–410 MB observed on a live host during ordinary hourly cycles, before the weekly battery has even run. 512 MB is not the safe choice it looks like; 1 GB costs a euro or two more and removes the question. |
+| RAM | **1 GB minimum, 2 GB comfortable** | The weekly battery in isolation peaks at only ~160 MB, but the long-running daemon reached **619 MB** — the gap is everything the isolated run does not hold: the poll loop, the API clients, the frames kept between jobs. 512 MB would not survive. |
 | Disk | **5 GB** | Repo, data and state are ~1 GB together. The rest is headroom for the venv, the journal, and years of slow market-data growth. |
-| CPU | 1 shared vCPU | The daemon sleeps through most of every hour. The weekly battery is the only sustained burn — ~20 min on a laptop, so budget up to an hour on a small shared vCPU. Once a week, and nothing waits on it. |
+| CPU | **2+ cores strongly preferred** | The battery is single-threaded and long: 21 minutes on a laptop, **103 minutes** on one shared ARM core — and the daemon competes for that same core, each getting about half of it. See the note below. |
 | Bandwidth | Negligible | Incremental Binance fetches and Telegram long-polls. |
 
-Any provider's smallest tier meets this comfortably. The daemon is not latency-sensitive and holds no exchange connection, so the region only matters for your own SSH comfort.
+**On core count.** One core works and nothing breaks: the weekly run is not time-critical and nothing waits on its result. What it costs is that the daemon is a single sequential process, so while the battery runs, the hourly scans do not — a 103-minute battery skips roughly two of them, once a week. A second core removes the contention and roughly halves the wall time. On Oracle's Always Free A1 allowance (up to 4 OCPU and 24 GB, at no cost) there is no reason to ask for one.
+
+The daemon is not latency-sensitive and holds no exchange connection, so the region only matters for your own SSH comfort.
+
+**ARM is fine.** All 159 candidates scored with zero failures on aarch64; pandas, numpy and pyarrow ship `aarch64` wheels and nothing needed compiling.
 
 > **On cost:** the server is the *predictable* expense; the Anthropic API is the variable one. See `PROJECT_MAP.md`'s Cost Optimization for measured per-call figures — calls happen only during compression episodes, so quiet weeks cost nothing.
 
@@ -48,7 +50,7 @@ Whatever you decide, **configure the heartbeat in step 3**. Reclamation is not t
 
 Two smaller things:
 
-- **Shape.** `VM.Standard.A1.Flex` (Ampere, ARM) is the better free shape by a wide margin — 4 OCPU and 24 GB against the AMD micro's single core and 1 GB. ARM is fine here: pandas, numpy and pyarrow all ship `aarch64` wheels, and everything else is pure Python. Ask for a small slice (1 OCPU, 6 GB is already luxurious against a 140 MB peak). If you hit **"Out of host capacity"**, that is a well-known A1 shortage in busy regions, not a mistake on your part — try another availability domain, another region, or retry later.
+- **Shape.** `VM.Standard.A1.Flex` (Ampere, ARM) is the better free shape by a wide margin — 4 OCPU and 24 GB against the AMD micro's single core and 1 GB. ARM is fine here, verified: 159 candidates scored with zero failures on aarch64. **Ask for 2 OCPU and 8 GB or more.** The allowance is free either way, and 1 OCPU was measured to make the weekly battery take 103 minutes while starving the daemon it shares the core with. If you hit **"Out of host capacity"**, that is a well-known A1 shortage in busy regions, not a mistake on your part — try another availability domain, another region, or retry later.
 - **Networking.** Nothing needs to reach this host from outside except your own SSH. The daemon only makes outbound connections (Telegram, Binance, Anthropic), so you can leave the default security list alone and skip opening any port.
 
 The default login user on Oracle's Ubuntu images is `ubuntu`, not `root`.
