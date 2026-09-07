@@ -19,13 +19,13 @@ That split is what keeps the host small. `freqtrade` and `scipy` are in `require
 
 ### Sizing
 
-Measured, not estimated — and measured twice, because the two numbers disagree in a way worth knowing about. The weekly battery profiled on its own (159 candidates, every write redirected to a temp dir) peaks at **140 MB RSS** over about 20 minutes. The full daemon on a real host, after one hourly cycle, reported a **354 MB peak** to systemd. The gap is everything the isolated run does not carry: the long-poll loop, the API clients, and the loaded frames held between jobs.
+Measured, not estimated — and measured twice, because the two numbers disagree in a way worth knowing about. The weekly battery profiled on its own (159 candidates, every write redirected to a temp dir) peaks at **140 MB RSS** over about 20 minutes. The full daemon on a real host reported peaks of **350–410 MB** to systemd across its first few hourly cycles. The gap is everything the isolated run does not carry: the long-poll loop, the API clients, and the loaded frames held between jobs.
 
 Trust the larger one. It is the figure from the thing you are actually going to run.
 
 | Resource | Needed | Why |
 |---|---|---|
-| RAM | **1 GB** | 354 MB observed on a live host during an ordinary hourly cycle, before the weekly battery has even run. 512 MB is not the safe choice it looks like; 1 GB costs a euro or two more and removes the question. |
+| RAM | **1 GB** | 350–410 MB observed on a live host during ordinary hourly cycles, before the weekly battery has even run. 512 MB is not the safe choice it looks like; 1 GB costs a euro or two more and removes the question. |
 | Disk | **5 GB** | Repo, data and state are ~1 GB together. The rest is headroom for the venv, the journal, and years of slow market-data growth. |
 | CPU | 1 shared vCPU | The daemon sleeps through most of every hour. The weekly battery is the only sustained burn — ~20 min on a laptop, so budget up to an hour on a small shared vCPU. Once a week, and nothing waits on it. |
 | Bandwidth | Negligible | Incremental Binance fetches and Telegram long-polls. |
@@ -194,11 +194,14 @@ journalctl -u crypto-agent -f      # follow the log; Ctrl+C stops following, not
 | Follow the log | `journalctl -u crypto-agent -f` |
 | Look back | `journalctl -u crypto-agent --since "2 hours ago"` |
 | Restart | `sudo systemctl restart crypto-agent` |
+| Check for a second bot | `journalctl -u crypto-agent \| grep 409` |
 | Stop | `sudo systemctl stop crypto-agent` |
 | Update the code | `git pull && sudo systemctl restart crypto-agent` |
 | Re-check health | `python3 -m deploy.preflight` |
 
 **Restarting is safe.** Last-run timestamps persist in `scheduler/live_daemon_state.json`, so a restart does not re-fire jobs that already ran, and does not lose the schedule.
+
+**Only one machine may run the bot.** Telegram allows a single poller per token: a second one — the copy still running on the laptop you deployed from, typically — makes both fail with `409 Conflict`, and incoming commands are then split arbitrarily between them, with the stale copy acting on state it no longer owns. The daemon logs the conflict and keeps retrying rather than dying, so the symptom is a bot that answers only sometimes. Stop the other one; `journalctl -u crypto-agent | grep 409` confirms which situation you are in.
 
 **You do not need to watch it.** Every scheduled job is isolated: one failing sends a Telegram alert naming it and is retried on its next normal cycle, without taking the daemon down. If the *process* dies, systemd restarts it after 30 seconds — and gives up after 5 failures in 10 minutes, because a daemon crash-looping on a bad config will not fix itself by trying harder.
 
