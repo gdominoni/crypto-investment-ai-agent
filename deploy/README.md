@@ -19,11 +19,13 @@ That split is what keeps the host small. `freqtrade` and `scipy` are in `require
 
 ### Sizing
 
-Measured, not estimated. The heaviest thing the host ever does is the weekly battery — it loads daily *and* hourly history for all 7 coins and scores every tracked condition — so that run was profiled directly: **159 candidates, peak RSS 140 MB, about 20 minutes.**
+Measured, not estimated — and measured twice, because the two numbers disagree in a way worth knowing about. The weekly battery profiled on its own (159 candidates, every write redirected to a temp dir) peaks at **140 MB RSS** over about 20 minutes. The full daemon on a real host, after one hourly cycle, reported a **354 MB peak** to systemd. The gap is everything the isolated run does not carry: the long-poll loop, the API clients, and the loaded frames held between jobs.
+
+Trust the larger one. It is the figure from the thing you are actually going to run.
 
 | Resource | Needed | Why |
 |---|---|---|
-| RAM | **1 GB** | The measured peak is 140 MB, most of it the Python + pandas baseline rather than the data. 512 MB genuinely works; 1 GB costs a euro or two more and removes the question. |
+| RAM | **1 GB** | 354 MB observed on a live host during an ordinary hourly cycle, before the weekly battery has even run. 512 MB is not the safe choice it looks like; 1 GB costs a euro or two more and removes the question. |
 | Disk | **5 GB** | Repo, data and state are ~1 GB together. The rest is headroom for the venv, the journal, and years of slow market-data growth. |
 | CPU | 1 shared vCPU | The daemon sleeps through most of every hour. The weekly battery is the only sustained burn — ~20 min on a laptop, so budget up to an hour on a small shared vCPU. Once a week, and nothing waits on it. |
 | Bandwidth | Negligible | Incremental Binance fetches and Telegram long-polls. |
